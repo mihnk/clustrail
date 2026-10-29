@@ -1,0 +1,216 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/*
+ * Clustrail design tokens.
+ *
+ * Raw values live in the theme classes below (one block per theme, same
+ * token names), and are exposed to Tailwind as semantic utilities through
+ * `@theme inline`, e.g. `bg-surface-panel`, `text-fg-muted`,
+ * `border-line-strong`, `text-status-critical`, `bg-env-prod-soft`.
+ *
+ * Spec name            -> token
+ * surface.primary      -> surface-app      surface.secondary -> surface-side
+ * surface.elevated     -> surface-elevated (panels: surface-panel)
+ * text.primary         -> fg               text.secondary    -> fg-secondary
+ * text.muted           -> fg-muted
+ * border.default       -> line-strong      border.subtle     -> line / line-row
+ * status.healthy       -> status-healthy   status.warning    -> status-warning
+ * status.critical      -> status-critical  status.unknown    -> status-neutral
+ * environment.*        -> env-prod / env-stg / env-dev
+ */
+
+@custom-variant dark (&:where(.theme-dark, .theme-dark *));
+
+.theme-dark {
+  --surface-app: #0d1013;
+  --surface-side: #111519;
+  --surface-panel: #14181d;
+  --surface-elevated: #1a1f25;
+  --surface-hover: #1a2027;
+  --surface-selected: #112c33;
+  --line-selected: #2a6e78;
+  --line: #20262d;
+  --line-strong: #2e363f;
+  --line-row: #171c21;
+  --fg: #e4e8ec;
+  --fg-secondary: #a6b0ba;
+  --fg-muted: #7f8a96;
+  --accent: #3cc4d0;
+  --accent-ink: #04282c;
+  --accent-soft: #123a40;
+  --status-healthy: #4cc38a;
+  --status-warning: #e8a33d;
+  --status-critical: #f26b61;
+  --status-critical-strong: #e5534b;
+  --status-progressing: #7ea6f6;
+  --status-neutral: #8a96a2;
+  --status-critical-soft: #2e1716;
+  --status-warning-soft: #30230f;
+  --status-progressing-soft: #16223a;
+  --on-status: #0d1013;
+  --env-prod: #f08a3c;
+  --env-prod-ink: #f5a066;
+  --env-prod-soft: #33200f;
+  --env-stg: #b48cf2;
+  --env-dev: #8a96a2;
+  --shadow-menu: 0 12px 32px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+}
+
+.theme-light {
+  --surface-app: #f4f5f7;
+  --surface-side: #eceef1;
+  --surface-panel: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-hover: #eef0f3;
+  --surface-selected: #ddf0f2;
+  --line-selected: #7cc4cb;
+  --line: #e0e3e7;
+  --line-strong: #cbd0d6;
+  --line-row: #eef0f2;
+  --fg: #11161b;
+  --fg-secondary: #46515c;
+  --fg-muted: #5f6a76;
+  --accent: #0b7581;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcf1f3;
+  --status-healthy: #1b7f4c;
+  --status-warning: #a35f07;
+  --status-critical: #c8362b;
+  --status-critical-strong: #b42318;
+  --status-progressing: #3360c8;
+  --status-neutral: #66717d;
+  --status-critical-soft: #fcebea;
+  --status-warning-soft: #fdf2e2;
+  --status-progressing-soft: #e8eefb;
+  --on-status: #ffffff;
+  --env-prod: #bf550d;
+  --env-prod-ink: #9a430a;
+  --env-prod-soft: #fdeee3;
+  --env-stg: #7a4fc4;
+  --env-dev: #66717d;
+  --shadow-menu: 0 12px 32px rgb(17 22 27 / 0.14);
+  color-scheme: light;
+}
+
+/* Table row density: compact 24 / default 28 / comfortable 34. */
+:root {
+  --row-h: 28px;
+}
+.density-compact {
+  --row-h: 24px;
+}
+.density-comfortable {
+  --row-h: 34px;
+}
+
+@theme inline {
+  --color-surface-app: var(--surface-app);
+  --color-surface-side: var(--surface-side);
+  --color-surface-panel: var(--surface-panel);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-selected: var(--surface-selected);
+  --color-line-selected: var(--line-selected);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-line-row: var(--line-row);
+  --color-fg: var(--fg);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-muted: var(--fg-muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-status-healthy: var(--status-healthy);
+  --color-status-warning: var(--status-warning);
+  --color-status-critical: var(--status-critical);
+  --color-status-critical-strong: var(--status-critical-strong);
+  --color-status-progressing: var(--status-progressing);
+  --color-status-neutral: var(--status-neutral);
+  --color-status-critical-soft: var(--status-critical-soft);
+  --color-status-warning-soft: var(--status-warning-soft);
+  --color-status-progressing-soft: var(--status-progressing-soft);
+  --color-on-status: var(--on-status);
+  --color-env-prod: var(--env-prod);
+  --color-env-prod-ink: var(--env-prod-ink);
+  --color-env-prod-soft: var(--env-prod-soft);
+  --color-env-stg: var(--env-stg);
+  --color-env-dev: var(--env-dev);
+  --shadow-menu: var(--shadow-menu);
+  --spacing-row: var(--row-h);
+}
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Type scale from the visual direction board. */
+  --text-2xs: 10.5px;
+  --text-label: 11px;
+  --text-meta: 11.5px;
+  --text-ui: 12px;
+  --text-cell: 12.5px;
+  --text-body: 13px;
+  --text-mono-title: 14px;
+  --text-title: 15px;
+  --text-heading: 18px;
+}
+
+/* Keyboard focus: 2px gap in the surface color, then a 2px accent ring. */
+@utility focus-ring {
+  outline: none;
+  &:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--surface-panel),
+      0 0 0 4px var(--accent);
+  }
+}
+
+/* Uppercase section label ("CLUSTERS", "CONTAINERS"). */
+@utility section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* Native window drag regions (Wails). */
+@utility drag-region {
+  --wails-draggable: drag;
+}
+@utility no-drag {
+  --wails-draggable: no-drag;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--surface-app);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+  input,
+  textarea,
+  .selectable {
+    user-select: text;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
