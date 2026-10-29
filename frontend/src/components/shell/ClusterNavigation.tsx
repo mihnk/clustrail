@@ -32,7 +32,8 @@ const envGroups: { env: Environment; label: string }[] = [
 ];
 
 export function ClusterNavigation() {
-  const { pods } = useWorkspace();
+  const { pods, activeTab, openTab } = useWorkspace();
+  const kind = activeTab?.kind;
   const attention = pods.filter((p) => isAttention(p.health)).length;
 
   return (
@@ -43,8 +44,8 @@ export function ClusterNavigation() {
       <ClusterList />
 
       <NavSection title={<><span className="section-label">Resources</span><Pin className="size-3.5 text-fg-muted" aria-label="Pinned" /></>}>
-        <NavItem icon={<Box />} label="Pods" active trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{pods.length}</NavCount></>} />
-        <NavItem icon={<Layers />} label="Deployments" trailing={<><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
+        <NavItem icon={<Box />} label="Pods" active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{pods.length}</NavCount></>} />
+        <NavItem icon={<Layers />} label="Deployments" active={kind === "deployments"} onClick={() => openTab("deployments-prod-eu-west-1")} trailing={<><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
         <NavItem icon={<Network />} label="Services" trailing={<NavCount>74</NavCount>} />
         <NavItem icon={<Globe />} label="Ingresses" trailing={<NavCount>19</NavCount>} />
         <NavItem icon={<FileText />} label="ConfigMaps" trailing={<NavCount>203</NavCount>} />
@@ -54,7 +55,7 @@ export function ClusterNavigation() {
       </NavSection>
 
       <NavSection title={<span className="section-label">Investigations</span>}>
-        <NavItem icon={<StatusGlyph health="failed" />} label="checkout-api restarts" trailing={<NavCount>12m</NavCount>} />
+        <NavItem icon={<StatusGlyph health="failed" />} label="checkout-api restarts" active={kind === "investigation"} onClick={() => openTab("inv-checkout-api")} trailing={<NavCount>12m</NavCount>} />
         <NavItem icon={<Plus />} label="New investigation" muted />
       </NavSection>
 
@@ -126,17 +127,20 @@ function NavItem({
   trailing,
   active,
   muted,
+  onClick,
 }: {
   icon: ReactNode;
   label: string;
   trailing?: ReactNode;
   active?: boolean;
   muted?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
       aria-current={active ? "page" : undefined}
+      onClick={onClick}
       className={cn(
         "focus-ring flex h-7 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-body leading-none text-fg-secondary hover:bg-surface-hover [&>svg]:size-4 [&>svg]:shrink-0",
         active && "bg-surface-panel font-medium text-fg shadow-[0_0_0_1px_var(--line)] dark:bg-surface-hover dark:shadow-none",

@@ -4,7 +4,8 @@ import { IS_MOCK } from "@/data/mock";
 import { ConnectionDot } from "@/components/status/EnvironmentBadge";
 
 export function StatusBar() {
-  const { selectedClusters } = useWorkspace();
+  const { selectedClusters, activeTab } = useWorkspace();
+  const investigating = activeTab?.kind === "investigation";
   const connected = selectedClusters.filter((c) => c.connection === "connected");
   const protectedCount = selectedClusters.filter((c) => c.protected).length;
   const allConnected = connected.length === selectedClusters.length;
@@ -17,9 +18,14 @@ export function StatusBar() {
           {connected.length}/{selectedClusters.length} connected
         </span>
       </span>
-      <span className="truncate font-mono text-label">
-        {connected.map((c) => `${c.name} ${c.latencyMs}ms`).join(" · ")}
-      </span>
+      {investigating ? (
+        // Investigations keep their own watches on the involved objects.
+        <span className="whitespace-nowrap">Watching 12 objects · live</span>
+      ) : (
+        <span className="truncate font-mono text-label">
+          {connected.map((c) => `${c.name} ${c.latencyMs}ms`).join(" · ")}
+        </span>
+      )}
       <div className="flex-1" />
       {protectedCount > 0 && (
         <span className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">
@@ -27,7 +33,7 @@ export function StatusBar() {
           {protectedCount} production {protectedCount === 1 ? "cluster" : "clusters"} protected
         </span>
       )}
-      <span className="whitespace-nowrap">Metrics: metrics-server</span>
+      {!investigating && <span className="whitespace-nowrap">Metrics: metrics-server</span>}
       {IS_MOCK && (
         <span className="rounded border border-line-strong px-1.5 py-0.5 font-mono text-2xs tracking-[.06em]">MOCK DATA</span>
       )}

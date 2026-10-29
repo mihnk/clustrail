@@ -4,10 +4,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmationProvider } from "@/components/safety/ConfirmationDialog";
 import { WindowToolbar } from "@/components/shell/WindowToolbar";
 import { ClusterNavigation } from "@/components/shell/ClusterNavigation";
+import { NavigationRail } from "@/components/shell/NavigationRail";
 import { StatusBar } from "@/components/shell/StatusBar";
-import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { EmptyState } from "@/components/EmptyState";
 import { PodsWorkspace } from "@/features/pods/PodsWorkspace";
+import { InvestigationWorkspace } from "@/features/investigation/InvestigationWorkspace";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 
 export function App() {
@@ -23,7 +24,7 @@ export function App() {
 }
 
 function AppShell() {
-  const { theme, density, tabs, activeTabId } = useWorkspace();
+  const { theme, density, tabs, activeTabId, activeTab } = useWorkspace();
 
   // Theme and density are document-level so portals (menus, tooltips) match.
   useEffect(() => {
@@ -37,7 +38,8 @@ function AppShell() {
     <div className="flex h-full flex-col overflow-hidden bg-surface-app text-fg">
       <WindowToolbar />
       <div className="flex min-h-0 flex-1">
-        <ClusterNavigation />
+        {/* Investigations need the width: the sidebar collapses to a rail. */}
+        {activeTab?.kind === "investigation" ? <NavigationRail /> : <ClusterNavigation />}
         {/* Inactive tabs stay mounted so filters, sort, scroll and selection survive tab switches. */}
         {tabs.map((tab) => (
           <div key={tab.id} role="tabpanel" hidden={tab.id !== activeTabId} className="min-w-0 flex-1 flex-col [&:not([hidden])]:flex">
@@ -61,10 +63,8 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
         </EmptyState>
       );
     case "investigation":
-      return (
-        <EmptyState className="flex-1" icon={<StatusGlyph health="failed" className="size-5" />} title={tab.title}>
-          The investigation workspace is not implemented in this build.
-        </EmptyState>
-      );
+      return <InvestigationWorkspace />;
+    case "deployments":
+      return null;
   }
 }
