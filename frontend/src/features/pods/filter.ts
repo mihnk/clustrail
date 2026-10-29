@@ -2,10 +2,11 @@ import type { PodRow } from "@/data/types";
 import { isAttention } from "@/data/health";
 
 // Filter text: free words plus `key:value` tokens, e.g.
-//   checkout ns:payments status:attention cluster:prod-eu-west-1 node:ip-10-42
+//   checkout ns:payments status:attention cluster:prod-eu-west-1 label:tier=backend
 // Tokens with the same key are OR'ed, different keys are AND'ed.
 
 const KEYS: Record<string, keyof PodRow | "status"> = {
+  label: "labels",
   ns: "namespace",
   namespace: "namespace",
   cluster: "cluster",
@@ -30,9 +31,18 @@ export function parseFilter(text: string): ParsedFilter {
   return { words, tokens };
 }
 
+/** "key=value" matches that pair, a bare "key" matches any value. Keys are case-insensitive. */
+export function matchesLabel(labels: Record<string, string>, selector: string): boolean {
+  const [k, v] = selector.split("=", 2) as [string, string | undefined];
+  return Object.entries(labels).some(
+    ([lk, lv]) => lk.toLowerCase() === k.toLowerCase() && (v === undefined || lv.toLowerCase() === v.toLowerCase()),
+  );
+}
+
 export function matchesFilter(pod: PodRow, f: ParsedFilter): boolean {
   for (const [key, values] of f.tokens) {
     const ok = values.some((v) => {
+      if (key === "labels") return matchesLabel(pod.labels, v);
       if (key === "status") {
         return v === "attention" ? isAttention(pod.health) : pod.status.toLowerCase().startsWith(v) || pod.reason.toLowerCase().includes(v);
       }

@@ -10,16 +10,29 @@ const badgeClass: Record<Environment, string> = {
 };
 
 /** Environment tag. Environments are never conveyed by color alone. */
-export function EnvironmentBadge({ env, className }: { env: Environment; className?: string }) {
+export function EnvironmentBadge({
+  env,
+  size = "md",
+  label,
+  className,
+}: {
+  env: Environment;
+  /** sm: inside tabs and menu headers. */
+  size?: "sm" | "md";
+  /** Override the short label, e.g. "PRODUCTION". */
+  label?: string;
+  className?: string;
+}) {
   return (
     <span
       className={cn(
-        "inline-flex h-[18px] shrink-0 items-center gap-1 rounded px-1.5 font-mono text-2xs font-semibold leading-none tracking-[.05em]",
+        "inline-flex shrink-0 items-center gap-1 rounded px-1.5 font-mono font-semibold leading-none tracking-[.05em]",
+        size === "sm" ? "h-4 text-[10px]" : "h-[18px] text-2xs",
         badgeClass[env],
         className,
       )}
     >
-      {badgeLabel[env]}
+      {label ?? badgeLabel[env]}
     </span>
   );
 }
@@ -56,7 +69,7 @@ export function ConnectionDot({ state, className }: { state: ConnectionState; cl
       className={cn(
         "inline-block size-1.5 shrink-0 rounded-full",
         state === "connected" && "bg-status-healthy",
-        state === "reconnecting" && "bg-status-warning",
+        state === "reconnecting" && "shadow-[inset_0_0_0_1.5px_var(--status-warning)]",
         state === "disconnected" && "shadow-[inset_0_0_0_1.5px_var(--fg-muted)]",
         className,
       )}

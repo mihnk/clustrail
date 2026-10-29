@@ -25,6 +25,8 @@ export interface Cluster {
   protected: boolean;
   connection: ConnectionState;
   latencyMs: number | null;
+  /** From server version and node labels, e.g. "EKS 1.30 · eu-west-1". Unknown until connected. */
+  summary: string | null;
 }
 
 export interface PodRow {
@@ -48,6 +50,24 @@ export interface PodRow {
   memoryMiB: number | null;
   ageSeconds: number;
   owner: { kind: string; name: string } | null;
+  labels: Record<string, string>;
+}
+
+export interface DeploymentRow {
+  id: string;
+  name: string;
+  namespace: string;
+  cluster: string;
+  env: Environment;
+  health: Health;
+  /** Available · Degraded · Progressing */
+  status: string;
+  readyReplicas: number;
+  replicas: number;
+  updatedReplicas: number;
+  availableReplicas: number;
+  strategy: { type: "RollingUpdate"; maxSurge: string; maxUnavailable: string } | { type: "Recreate" };
+  ageSeconds: number;
 }
 
 export interface ContainerStatus {
@@ -67,6 +87,8 @@ export interface ResourceEvent {
   message: string;
   count: number;
   lastSeen: string;
+  /** Involved object relative to the inspected one: "pod" or e.g. "deploy/checkout-api". */
+  object: string;
 }
 
 export interface MetricSeries {

@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import {
   Box,
   Check,
-  ChevronDown,
   Copy,
   ExternalLink,
   Layers,
@@ -15,7 +14,8 @@ import {
 import type { Cluster, ContainerStatus, Health, PodDetail, ResourceEvent } from "@/data/types";
 import { Button, IconButton } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabCount } from "@/components/ui/tabs";
-import { Tooltip } from "@/components/ui/tooltip";
+import { Segmented } from "@/components/ui/segmented";
+import { ModifyMenuButton, type ResourceAction } from "@/components/resource-actions/ResourceActions";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph, healthTone } from "@/components/status/StatusGlyph";
 import { MetricsChart } from "@/components/charts/MetricsChart";
@@ -31,6 +31,7 @@ export function PodInspector({
   tab,
   onTabChange,
   onClose,
+  actions,
   onInvestigate,
   onOpenOwner,
   themeKey,
@@ -40,6 +41,7 @@ export function PodInspector({
   tab: InspectorTab;
   onTabChange: (tab: InspectorTab) => void;
   onClose: () => void;
+  actions: ResourceAction[];
   onInvestigate: (target: string) => void;
   onOpenOwner: (kind: string, name: string) => void;
   themeKey: string;
@@ -95,20 +97,11 @@ export function PodInspector({
             Owner
           </Button>
           <div className="flex-1" />
-          {cluster?.protected ? (
-            <Tooltip content={`${pod.cluster} is protected. Unlock to restart or delete.`}>
-              <Button variant="locked" aria-disabled="true">
-                <Lock aria-hidden />
-                Modify
-                <ChevronDown aria-hidden />
-              </Button>
-            </Tooltip>
-          ) : (
-            <Button>
-              Modify
-              <ChevronDown aria-hidden />
-            </Button>
-          )}
+          <ModifyMenuButton
+            actions={actions}
+            target={{ env: pod.env, protected: cluster?.protected ?? false }}
+            cluster={pod.cluster}
+          />
         </div>
       </div>
 
@@ -144,7 +137,7 @@ export function PodInspector({
                   All {detail.events.length}
                 </button>
               </div>
-              <EventList events={detail.events.slice(0, 3)} />
+              <EventList events={detail.events.filter((e) => e.object === "pod").slice(0, 3)} />
             </section>
           )}
           {detail.ownerChain.length > 0 && (
@@ -181,15 +174,9 @@ export function PodInspector({
           <ContainerList containers={detail.containers} />
         </TabPanel>
 
-        <TabPanel value="events">
-          {detail.events.length > 0 ? (
-            <EventList events={detail.events} />
-          ) : (
-            <EmptyState title="No events">
-              The API server keeps events for a limited time (1 hour by default), so older events may be gone.
-            </EmptyState>
-          )}
-        </TabPanel>
+        <TabsContent value="events" className="focus-ring flex min-h-0 flex-1 flex-col">
+          <EventsPanel events={detail.events} />
+        </TabsContent>
 
         {(["logs", "yaml", "metrics", "related"] as const).map((t) => (
           <TabPanel key={t} value={t}>
@@ -294,6 +281,69 @@ function KV({ k, v }: { k: string; v: ReactNode }) {
   );
 }
 
+/** Events of the pod, optionally with its owners', newest first. */
+function EventsPanel({ events }: { events: ResourceEvent[] }) {
+  const [type, setType] = useState<"all" | "warnings">("all");
+  const [includeOwners, setIncludeOwners] = useState(true);
+  const warnings = events.filter((e) => e.type === "Warning" && (includeOwners || e.object === "pod")).length;
+  const shown = events.filter(
+    (e) => (includeOwners || e.object === "pod") && (type === "all" || e.type === "Warning"),
+  );
+  return (
+    <>
+      <div className="flex items-center gap-1.5 px-3.5 pb-1.5 pt-2.5">
+        <Segmented
+          aria-label="Event type"
+          value={type}
+          onValueChange={setType}
+          options={[
+            { value: "all", label: "All" },
+            { value: "warnings", label: <>Warnings <span className="font-mono">{warnings}</span></> },
+          ]}
+        />
+        <div className="flex-1" />
+        <button
+          type="button"
+          aria-pressed={includeOwners}
+          onClick={() => setIncludeOwners(!includeOwners)}
+          className={cn(
+            "focus-ring flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-transparent px-2 text-ui text-fg",
+            includeOwners && "border-line-selected bg-accent-soft",
+          )}
+        >
+          {includeOwners && <Check className="size-3" aria-hidden />}
+          Include owners
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3.5">
+        {shown.length === 0 ? (
+          <EmptyState title="No events">
+            The API server keeps events for a limited time (1 hour by default), so older events may be gone.
+          </EmptyState>
+        ) : (
+          shown.map((e) => (
+            <div
+              key={e.object + e.reason + e.message}
+              className="grid grid-cols-[44px_14px_minmax(0,1fr)] gap-x-2 border-t border-line-row py-2 text-ui first:border-t-0"
+            >
+              <span className="font-mono text-meta text-fg-muted">{e.lastSeen}</span>
+              <StatusGlyph health={e.type === "Warning" ? "warning" : "completed"} className="mt-0.5" />
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <div className="flex items-baseline gap-1.5">
+                  <b className="font-semibold">{e.reason}</b>
+                  <span className="truncate font-mono text-label text-fg-muted">{e.object}</span>
+                  {e.count > 1 && <span className="ml-auto font-mono text-label text-fg-muted">×{e.count}</span>}
+                </div>
+                <span className="selectable text-fg-secondary">{e.message}</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+
 function EventList({ events }: { events: ResourceEvent[] }) {
   return (
     <div>
@@ -303,7 +353,8 @@ function EventList({ events }: { events: ResourceEvent[] }) {
           className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-start gap-x-2 border-t border-line-row py-[7px] text-ui"
         >
           <StatusGlyph health={e.type === "Warning" ? "warning" : "completed"} className="mt-0.5" />
-          <span>
+          {/* One line each in the overview; the Events tab shows full messages. */}
+          <span className="truncate" title={e.message}>
             <b className="font-semibold">{e.reason}</b> <span className="text-fg-secondary">{e.message}</span>
           </span>
           <span className="whitespace-nowrap font-mono text-meta text-fg-muted">

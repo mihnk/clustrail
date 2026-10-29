@@ -15,7 +15,9 @@ const buttonVariants = cva(
         locked: "cursor-not-allowed border-dashed border-line-strong bg-transparent text-fg-muted",
       },
       size: {
+        sm: "h-6 px-2 text-ui",
         md: "h-7 px-2.5 text-cell",
+        /** Dialog actions. */
         lg: "h-8 px-3.5 text-body",
       },
     },

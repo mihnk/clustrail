@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Layers } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ConfirmationProvider } from "@/components/safety/ConfirmationDialog";
 import { WindowToolbar } from "@/components/shell/WindowToolbar";
 import { ClusterNavigation } from "@/components/shell/ClusterNavigation";
 import { StatusBar } from "@/components/shell/StatusBar";
@@ -13,7 +14,9 @@ export function App() {
   return (
     <WorkspaceProvider>
       <TooltipProvider delayDuration={400}>
-        <AppShell />
+        <ConfirmationProvider>
+          <AppShell />
+        </ConfirmationProvider>
       </TooltipProvider>
     </WorkspaceProvider>
   );

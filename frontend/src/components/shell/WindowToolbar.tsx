@@ -53,7 +53,7 @@ function WorkspaceTabs() {
               key={tab.id}
               className={cn(
                 "flex h-7 min-w-0 items-center rounded-md text-fg-secondary",
-                active && "bg-surface-hover text-fg shadow-[inset_0_0_0_1px_var(--line-strong)]",
+                active && "bg-surface-panel text-fg shadow-[inset_0_0_0_1px_var(--line-strong)] dark:bg-surface-hover",
               )}
             >
               <button

@@ -56,6 +56,8 @@
   --env-stg: #b48cf2;
   --env-dev: #8a96a2;
   --shadow-menu: 0 12px 32px rgb(0 0 0 / 0.35);
+  --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(0 0 0 / 0.2);
+  --scrim: rgb(5 7 9 / 0.62);
   color-scheme: dark;
 }
 
@@ -92,6 +94,8 @@
   --env-stg: #7a4fc4;
   --env-dev: #66717d;
   --shadow-menu: 0 12px 32px rgb(17 22 27 / 0.14);
+  --shadow-dialog: 0 24px 64px rgb(17 22 27 / 0.18), 0 0 0 1px rgb(17 22 27 / 0.06);
+  --scrim: rgb(17 22 27 / 0.38);
   color-scheme: light;
 }
 
@@ -138,7 +142,9 @@
   --color-env-prod-soft: var(--env-prod-soft);
   --color-env-stg: var(--env-stg);
   --color-env-dev: var(--env-dev);
+  --color-scrim: var(--scrim);
   --shadow-menu: var(--shadow-menu);
+  --shadow-dialog: var(--shadow-dialog);
   --spacing-row: var(--row-h);
 }
 
@@ -175,6 +181,11 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--fg-muted);
+}
+
+/* Production hatching: the band on protected contexts, never color alone. */
+@utility hatch-prod {
+  background: repeating-linear-gradient(-45deg, var(--env-prod) 0 4px, transparent 4px 8px);
 }
 
 /* Native window drag regions (Wails). */

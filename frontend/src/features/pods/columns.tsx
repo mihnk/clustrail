@@ -46,10 +46,11 @@ export const podColumns = [
     ),
   }),
   col.accessor("node", {
-    meta: { label: "Node", width: 236, priority: 30, sortNote: "node" },
+    meta: { label: "Node", width: 112, priority: 30, sortNote: "node" },
+    // Short host name; the full node name is in the tooltip and the inspector.
     cell: ({ getValue }) => (
-      <span className="block truncate font-mono text-ui" title={getValue()}>
-        {getValue()}
+      <span className="block truncate font-mono text-meta" title={getValue()}>
+        {getValue().split(".")[0]}
       </span>
     ),
   }),

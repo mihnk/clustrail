@@ -139,7 +139,7 @@ function NavItem({
       aria-current={active ? "page" : undefined}
       className={cn(
         "focus-ring flex h-7 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-body leading-none text-fg-secondary hover:bg-surface-hover [&>svg]:size-4 [&>svg]:shrink-0",
-        active && "bg-surface-hover font-medium text-fg",
+        active && "bg-surface-panel font-medium text-fg shadow-[0_0_0_1px_var(--line)] dark:bg-surface-hover dark:shadow-none",
         muted && "text-fg-muted",
       )}
     >

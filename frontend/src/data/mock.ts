@@ -2,17 +2,17 @@
 // backend once the cluster connection manager exists. The status bar shows
 // a "MOCK DATA" badge while this module is the data source.
 
-import type { Cluster, Environment, Health, PodDetail, PodRow } from "./types";
+import type { Cluster, DeploymentRow, Environment, Health, PodDetail, PodRow } from "./types";
 
 export const IS_MOCK = true;
 
 export const clusters: Cluster[] = [
-  { id: "prod-eu-west-1", name: "prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38 },
-  { id: "prod-us-east-1", name: "prod-us-east-1", env: "prod", protected: true, connection: "connected", latencyMs: 112 },
-  { id: "staging-eu-1", name: "staging-eu-1", env: "stg", protected: false, connection: "connected", latencyMs: 64 },
-  { id: "staging-perf", name: "staging-perf", env: "stg", protected: false, connection: "disconnected", latencyMs: null },
-  { id: "dev-shared", name: "dev-shared", env: "dev", protected: false, connection: "disconnected", latencyMs: null },
-  { id: "kind-local", name: "kind-local", env: "dev", protected: false, connection: "disconnected", latencyMs: null },
+  { id: "prod-eu-west-1", name: "prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38, summary: "EKS 1.30 · eu-west-1" },
+  { id: "prod-us-east-1", name: "prod-us-east-1", env: "prod", protected: true, connection: "connected", latencyMs: 112, summary: "EKS 1.30 · us-east-1" },
+  { id: "staging-eu-1", name: "staging-eu-1", env: "stg", protected: false, connection: "connected", latencyMs: 64, summary: "GKE 1.31 · europe-west4" },
+  { id: "staging-perf", name: "staging-perf", env: "stg", protected: false, connection: "disconnected", latencyMs: null, summary: null },
+  { id: "dev-shared", name: "dev-shared", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null },
+  { id: "kind-local", name: "kind-local", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null },
 ];
 
 export const initialSelectedClusters = ["prod-eu-west-1", "prod-us-east-1", "staging-eu-1"];
@@ -81,6 +81,9 @@ function prng(seed: number) {
 }
 
 function nodeFor(cluster: string, n: number) {
+  if (cluster.startsWith("staging")) {
+    return `gke-stg-pool-${n % 2 ? "b" : "a"}-${alphabet.slice(n % 20, (n % 20) + 4)}`;
+  }
   return `ip-10-${nodeNet[cluster] ?? "90"}-${(n % 12) + 1}-${17 + ((n * 7) % 200)}.${nodeDomain[cluster] ?? "internal"}`;
 }
 
@@ -113,7 +116,15 @@ function toRow(seed: Seed, n: number): PodRow {
     memoryMiB: mem,
     ageSeconds: age,
     owner: ownerOf(name),
+    labels: labelsFor(name, namespace),
   };
+}
+
+/** Recommended app labels plus a tier, derived from the workload name. */
+function labelsFor(name: string, namespace: string): Record<string, string> {
+  const app = name.replace(/-[a-z0-9]{8,10}-[a-z0-9]{5}$|-\d{8}-[a-z0-9]{5}$|-\d+$/, "");
+  const tier = /redis|store|indexer/.test(app) ? "data" : /-web$|storefront-web/.test(app) ? "frontend" : "backend";
+  return { "app.kubernetes.io/name": app, "app.kubernetes.io/part-of": namespace, tier };
 }
 
 const fillerApps: [string, string, number, number][] = [
@@ -172,6 +183,68 @@ function generateFiller(count: number): PodRow[] {
 export const pods: PodRow[] = [...seeds.map(toRow), ...generateFiller(412 - seeds.length)];
 
 // ---------------------------------------------------------------------------
+// Deployments (payments namespace on prod-eu-west-1)
+
+type DeploySeed = [string, number, number, number, number, DeploymentRow["strategy"], number];
+const rolling = (maxSurge: string, maxUnavailable: string): DeploymentRow["strategy"] => ({
+  type: "RollingUpdate",
+  maxSurge,
+  maxUnavailable,
+});
+const Y = 365 * D;
+
+const deploySeeds: DeploySeed[] = [
+  // name, ready, replicas, up-to-date, available, strategy, age
+  ["checkout-api", 2, 4, 4, 2, rolling("1", "1"), 212 * D],
+  ["payments-gateway", 3, 3, 3, 3, rolling("25%", "25%"), Y],
+  ["fraud-scorer", 2, 2, 2, 2, rolling("1", "0"), 144 * D],
+  ["ledger-sync", 2, 2, 2, 2, { type: "Recreate" }, 96 * D],
+  ["refunds-api", 2, 2, 2, 2, rolling("25%", "25%"), 301 * D],
+  ["payouts-scheduler", 1, 1, 1, 1, { type: "Recreate" }, 88 * D],
+  ["currency-rates", 2, 2, 2, 2, rolling("25%", "25%"), Y],
+  ["webhook-dispatcher", 3, 3, 3, 3, rolling("1", "0"), 57 * D],
+  ["tax-calculator", 2, 2, 2, 2, rolling("25%", "25%"), 230 * D],
+];
+
+export const deployments: DeploymentRow[] = deploySeeds.map(([name, ready, replicas, upd, avail, strategy, age]) => ({
+  id: `prod-eu-west-1/payments/${name}`,
+  name,
+  namespace: "payments",
+  cluster: "prod-eu-west-1",
+  env: "prod",
+  health: ready < replicas ? "failed" : "healthy",
+  status: ready < replicas ? "Degraded" : "Available",
+  readyReplicas: ready,
+  replicas,
+  updatedReplicas: upd,
+  availableReplicas: avail,
+  strategy,
+  ageSeconds: age,
+}));
+
+/** Total Deployments across all namespaces of the cluster, for "9 of 86". */
+export const deploymentTotal = 86;
+
+/** Facts the restart dialog shows for a Deployment. */
+export function getDeploymentState(d: DeploymentRow): { health: Health; text: string; mono?: string }[] {
+  if (d.name !== "checkout-api") {
+    return [{ health: "healthy", text: `All ${d.replicas} pods are ready.` }];
+  }
+  return [
+    {
+      health: "failed",
+      text: "2 of 4 pods are unhealthy (CrashLoopBackOff, OOMKilled). A restart does not change the 256Mi memory limit.",
+    },
+    {
+      health: "warning",
+      text: "allows 0 disruptions. Rollouts are not blocked by PDBs, so ready capacity can drop during replacement.",
+      mono: "PodDisruptionBudget checkout-api",
+    },
+    { health: "warning", text: "has 2 of 4 endpoints ready.", mono: "Service checkout-api" },
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // Inspector details
 
 const NOW = Math.floor(Date.UTC(2026, 9, 29, 10, 52, 0) / 1000);
@@ -223,9 +296,13 @@ export function getPodDetail(pod: PodRow): PodDetail {
         { name: "envoy", health: "healthy", state: "Running · ready", ready: true, restarts: 0 },
       ],
       events: [
-        { type: "Warning", reason: "BackOff", message: "Back-off restarting failed container api", count: 42, lastSeen: "1m" },
-        { type: "Warning", reason: "Unhealthy", message: "Readiness probe failed: HTTP 503", count: 9, lastSeen: "3m" },
-        { type: "Normal", reason: "Pulled", message: "Container image already present on machine", count: 14, lastSeen: "4m" },
+        { type: "Warning", reason: "BackOff", object: "pod", count: 42, lastSeen: "1m", message: "Back-off restarting failed container api in pod checkout-api-7d9f8b6c4-x2kqp" },
+        { type: "Warning", reason: "Killing", object: "pod", count: 14, lastSeen: "2m", message: "Container api exceeded its memory limit (256Mi): OOMKilled, exit code 137" },
+        { type: "Warning", reason: "Unhealthy", object: "pod", count: 9, lastSeen: "3m", message: "Readiness probe failed: HTTP probe failed with statuscode: 503" },
+        { type: "Normal", reason: "Pulled", object: "pod", count: 14, lastSeen: "4m", message: 'Container image "ghcr.io/acme/checkout-api:v2.31.0" already present on machine' },
+        { type: "Normal", reason: "Started", object: "pod", count: 15, lastSeen: "4m", message: "Started container api" },
+        { type: "Normal", reason: "ScalingReplicaSet", object: "deploy/checkout-api", count: 1, lastSeen: "3d", message: "Scaled up replica set checkout-api-7d9f8b6c4 to 4 (revision 14)" },
+        { type: "Normal", reason: "Scheduled", object: "pod", count: 1, lastSeen: "3d", message: "Successfully assigned payments/checkout-api-7d9f8b6c4-x2kqp to ip-10-42-3-17" },
       ],
       memory: {
         container: "api",

@@ -18,7 +18,7 @@ export function Checkbox({
       checked={checked}
       onCheckedChange={(v) => onCheckedChange(v === true)}
       className={cn(
-        "focus-ring no-drag inline-flex size-3.5 shrink-0 items-center justify-center rounded border border-line-strong bg-transparent p-0 text-accent-ink",
+        "focus-ring no-drag inline-flex size-3.5 shrink-0 items-center justify-center rounded border border-line-strong bg-surface-panel p-0 text-accent-ink dark:bg-transparent",
         "data-[state=checked]:border-accent data-[state=checked]:bg-accent",
         className,
       )}
