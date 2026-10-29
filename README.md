@@ -29,15 +29,20 @@ through Wails bindings.
 
 ```text
 main.go                       Wails application and window
+build/                        App icon (source SVG and 1024px PNG)
 frontend/
   src/styles/index.css        Design tokens (dark + light) and Tailwind theme
   src/app/                    App shell, workspace state, preferences
-  src/components/ui/          Button, Tabs, Segmented, DropdownMenu, Tooltip, …
+  src/components/ui/          Button, Tabs, Segmented, menus, TextField, Banner, …
   src/components/status/      StatusGlyph, ResourceStatus, EnvironmentBadge, …
-  src/components/shell/       WindowToolbar, ClusterNavigation, StatusBar
-  src/components/resource-table/  Virtualized ResourceTable
+  src/components/shell/       WindowToolbar, ClusterNavigation, NavigationRail, StatusBar
+  src/components/resource-table/    Virtualized ResourceTable (grouping, row menus)
+  src/components/resource-actions/  Observe / Modify action menus
+  src/components/safety/      ConfirmationDialog, ProtectedContextBar
   src/components/charts/      MetricsChart (uPlot)
   src/features/pods/          Pods explorer and inspector
+  src/features/deployments/   Deployments list and restart flow
+  src/features/investigation/ Investigation workspace
   src/data/                   View-model types and mock data
 ```
 

@@ -15,10 +15,17 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// App icon (1024px, from build/appicon.svg). Used for the window and dock on
+// Linux and Windows; packaged builds also derive platform icons from it.
+//
+//go:embed build/appicon.png
+var appIcon []byte
+
 func main() {
 	app := application.New(application.Options{
 		Name:        "Clustrail",
 		Description: "Kubernetes desktop workspace",
+		Icon:        appIcon,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
