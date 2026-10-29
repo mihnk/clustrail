@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/context-menu";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { cn } from "@/lib/cn";
+import { formatShortcut } from "@/lib/shortcuts";
 
 export interface ResourceAction {
   id: string;
@@ -123,7 +124,7 @@ function ActionGroups({ actions, target, kind }: { actions: ResourceAction[]; ta
       >
         {a.icon}
         {a.label}
-        {a.shortcut && <DropdownMenuShortcut>{a.shortcut}</DropdownMenuShortcut>}
+        {a.shortcut && <DropdownMenuShortcut>{formatShortcut(a.shortcut)}</DropdownMenuShortcut>}
       </Item>
     ));
 

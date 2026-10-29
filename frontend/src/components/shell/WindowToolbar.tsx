@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
+import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { cn } from "@/lib/cn";
 import { isMac, modKey } from "@/lib/platform";
 import { Logo } from "./Logo";
@@ -42,7 +43,7 @@ export function WindowToolbar() {
 }
 
 function WorkspaceTabs() {
-  const { tabs, activeTabId, setActiveTabId, closeTab, selectedClusterIds } = useWorkspace();
+  const { tabs, activeTabId, setActiveTabId, closeTab, selectedClusterIds, clusterById } = useWorkspace();
   return (
     <nav aria-label="Workspace tabs" className="no-drag flex min-w-0 items-center gap-1">
       <div role="tablist" className="flex min-w-0 items-center gap-1">
@@ -66,9 +67,12 @@ function WorkspaceTabs() {
                   active && tabs.length > 1 ? "pr-1" : "pr-2.5",
                 )}
               >
+                {tab.cluster && <EnvironmentBadge env={clusterById(tab.cluster)?.env ?? "dev"} size="sm" />}
                 <TabIcon tab={tab} />
                 <span className="truncate">{tab.title}</span>
-                {tab.kind === "pods" ? (
+                {tab.cluster ? (
+                  <span className="font-mono text-label text-fg-muted">{tab.cluster}</span>
+                ) : tab.kind === "pods" ? (
                   <span className="font-mono text-label text-fg-muted">
                     {selectedClusterIds.length} {selectedClusterIds.length === 1 ? "cluster" : "clusters"}
                   </span>
@@ -97,6 +101,7 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
     case "pods":
       return <Box className="size-3.5 shrink-0" aria-hidden />;
     case "resource":
+    case "deployments":
       return <Layers className="size-3.5 shrink-0" aria-hidden />;
     case "investigation":
       return <StatusGlyph health="failed" />;

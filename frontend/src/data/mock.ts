@@ -2,17 +2,17 @@
 // backend once the cluster connection manager exists. The status bar shows
 // a "MOCK DATA" badge while this module is the data source.
 
-import type { Cluster, DeploymentRow, Environment, Health, PodDetail, PodRow } from "./types";
+import type { AccessSummary, Cluster, DeploymentRow, Environment, Health, PodDetail, PodRow } from "./types";
 
 export const IS_MOCK = true;
 
 export const clusters: Cluster[] = [
-  { id: "prod-eu-west-1", name: "prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38, summary: "EKS 1.30 · eu-west-1" },
-  { id: "prod-us-east-1", name: "prod-us-east-1", env: "prod", protected: true, connection: "connected", latencyMs: 112, summary: "EKS 1.30 · us-east-1" },
-  { id: "staging-eu-1", name: "staging-eu-1", env: "stg", protected: false, connection: "connected", latencyMs: 64, summary: "GKE 1.31 · europe-west4" },
-  { id: "staging-perf", name: "staging-perf", env: "stg", protected: false, connection: "disconnected", latencyMs: null, summary: null },
-  { id: "dev-shared", name: "dev-shared", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null },
-  { id: "kind-local", name: "kind-local", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null },
+  { id: "prod-eu-west-1", name: "prod-eu-west-1", context: "arn:aws:eks:eu-west-1:482100000000:cluster/prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38, summary: "EKS 1.30 · eu-west-1" },
+  { id: "prod-us-east-1", name: "prod-us-east-1", context: "arn:aws:eks:us-east-1:482100000000:cluster/prod-us-east-1", env: "prod", protected: true, connection: "connected", latencyMs: 112, summary: "EKS 1.30 · us-east-1" },
+  { id: "staging-eu-1", name: "staging-eu-1", context: "gke_acme-staging_europe-west4_staging-eu-1", env: "stg", protected: false, connection: "connected", latencyMs: 64, summary: "GKE 1.31 · europe-west4" },
+  { id: "staging-perf", name: "staging-perf", context: "gke_acme-staging_europe-west4_staging-perf", env: "stg", protected: false, connection: "disconnected", latencyMs: null, summary: null },
+  { id: "dev-shared", name: "dev-shared", context: "dev-shared", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null },
+  { id: "kind-local", name: "kind-local", context: "kind-kind-local", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null },
 ];
 
 export const initialSelectedClusters = ["prod-eu-west-1", "prod-us-east-1", "staging-eu-1"];
@@ -221,6 +221,11 @@ export const deployments: DeploymentRow[] = deploySeeds.map(([name, ready, repli
   strategy,
   ageSeconds: age,
 }));
+
+/** What the kubeconfig user may do here (SelfSubjectAccessReview). */
+export function getAccessSummary(cluster: string, namespace: string, resource: string, verb: string): AccessSummary {
+  return { user: cluster.startsWith("prod") ? "sre-oncall" : "developer", verb, resource, namespace, allowed: true };
+}
 
 /** Total Deployments across all namespaces of the cluster, for "9 of 86". */
 export const deploymentTotal = 86;

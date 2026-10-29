@@ -17,9 +17,11 @@ export type Health =
   | "unknown";
 
 export interface Cluster {
-  /** kubeconfig context name. */
+  /** Stable id; also the display name. */
   id: string;
   name: string;
+  /** kubeconfig context this cluster is reached through. */
+  context: string;
   env: Environment;
   /** Clustrail protection (client-side). Never a substitute for RBAC. */
   protected: boolean;
@@ -51,6 +53,15 @@ export interface PodRow {
   ageSeconds: number;
   owner: { kind: string; name: string } | null;
   labels: Record<string, string>;
+}
+
+/** Result of SelfSubjectAccessReview for the current view, shown in the status bar. */
+export interface AccessSummary {
+  user: string;
+  verb: string;
+  resource: string;
+  namespace: string;
+  allowed: boolean;
 }
 
 export interface DeploymentRow {

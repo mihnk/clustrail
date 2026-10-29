@@ -9,6 +9,8 @@ import { StatusBar } from "@/components/shell/StatusBar";
 import { EmptyState } from "@/components/EmptyState";
 import { PodsWorkspace } from "@/features/pods/PodsWorkspace";
 import { InvestigationWorkspace } from "@/features/investigation/InvestigationWorkspace";
+import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspace";
+import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 
 export function App() {
@@ -24,7 +26,10 @@ export function App() {
 }
 
 function AppShell() {
-  const { theme, density, tabs, activeTabId, activeTab } = useWorkspace();
+  const { theme, density, tabs, activeTabId, activeTab, clusterById } = useWorkspace();
+  const scopedCluster = activeTab?.cluster ? clusterById(activeTab.cluster) : undefined;
+  // Single-cluster workspaces and investigations need the width: the sidebar collapses to a rail.
+  const railNav = activeTab?.kind === "investigation" || activeTab?.kind === "deployments";
 
   // Theme and density are document-level so portals (menus, tooltips) match.
   useEffect(() => {
@@ -37,9 +42,9 @@ function AppShell() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-app text-fg">
       <WindowToolbar />
+      {scopedCluster?.protected && <ProtectedContextBar cluster={scopedCluster} />}
       <div className="flex min-h-0 flex-1">
-        {/* Investigations need the width: the sidebar collapses to a rail. */}
-        {activeTab?.kind === "investigation" ? <NavigationRail /> : <ClusterNavigation />}
+        {railNav ? <NavigationRail /> : <ClusterNavigation />}
         {/* Inactive tabs stay mounted so filters, sort, scroll and selection survive tab switches. */}
         {tabs.map((tab) => (
           <div key={tab.id} role="tabpanel" hidden={tab.id !== activeTabId} className="min-w-0 flex-1 flex-col [&:not([hidden])]:flex">
@@ -65,6 +70,6 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
     case "investigation":
       return <InvestigationWorkspace />;
     case "deployments":
-      return null;
+      return <DeploymentsWorkspace cluster={tab.cluster ?? ""} namespace="payments" />;
   }
 }

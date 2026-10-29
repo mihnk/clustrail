@@ -18,6 +18,7 @@ import {
   type ResourceAction,
 } from "@/components/resource-actions/ResourceActions";
 import { cn } from "@/lib/cn";
+import { matchesShortcut } from "@/lib/shortcuts";
 
 declare module "@tanstack/react-table" {
   interface ColumnMeta<TData extends RowData, TValue> {
@@ -178,8 +179,15 @@ export function ResourceTable<T>({
       case "Escape":
         onDismiss?.();
         break;
-      default:
-        return;
+      default: {
+        // Action shortcuts shown in the row menus (L, ⇧R, ⌘⌫, …) act on the selected row.
+        const action =
+          selectedId && rowActions
+            ? rowActions(selectedId)?.actions.find((a) => a.shortcut && !a.disabled && matchesShortcut(e, a.shortcut))
+            : undefined;
+        if (!action?.onSelect) return;
+        action.onSelect();
+      }
     }
     e.preventDefault();
   };

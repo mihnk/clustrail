@@ -54,6 +54,7 @@ const initialTabs: WorkspaceTab[] = [
   { id: "pods", kind: "pods", title: "Pods" },
   { id: "deploy-checkout-api", kind: "resource", title: "checkout-api", subtitle: "Deployment" },
   { id: "inv-checkout-api", kind: "investigation", title: "Investigation · checkout-api" },
+  { id: "deployments-prod-eu-west-1", kind: "deployments", title: "Deployments", cluster: "prod-eu-west-1" },
 ];
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
