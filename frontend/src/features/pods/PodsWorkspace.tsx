@@ -70,6 +70,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     reveal,
     toggleCluster,
     openView,
+    revealResource,
   } = useWorkspace();
   const { confirm } = useConfirm();
   const { clusterPickerOpen, setClusterPickerOpen } = useOverlays();
@@ -180,6 +181,10 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           restartDeployment,
           openTab,
           hasTab: (tabId) => tabs.some((t) => t.id === tabId),
+          openShell: (p) => {
+            openView({ id: "shell", kind: "shell", title: "Shell", cluster: p.cluster });
+            revealResource("session", `${p.cluster}/${p.namespace}/${p.name}/${p.owner ? "api" : "app"}`);
+          },
           openLogs: (p) =>
             openView({
               kind: "logs",
@@ -194,7 +199,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
         actions: pod.staleSeconds !== undefined ? actions.map((a) => ({ ...a, disabled: true })) : actions,
       };
     },
-    [pods, clusterById, deployments, confirm, deletePod, restartDeployment, openTab, openView, tabs],
+    [pods, clusterById, deployments, confirm, deletePod, restartDeployment, openTab, openView, revealResource, tabs],
   );
 
   // "/" focuses the filter while this tab is active.

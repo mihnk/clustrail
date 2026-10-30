@@ -13,6 +13,7 @@ interface PodActionDeps {
   openTab: (id: string) => boolean;
   hasTab: (id: string) => boolean;
   openLogs: (pod: PodRow) => void;
+  openShell: (pod: PodRow) => void;
 }
 
 /** Owning Deployment name for a ReplicaSet-owned pod ("app-7d9f8b6c4" -> "app"). */
@@ -31,7 +32,16 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
   return [
     // Observe: nothing here changes the cluster.
     { id: "logs", group: "observe", label: "Logs", icon: <ScrollText />, shortcut: "L", onSelect: () => deps.openLogs(pod) },
-    { id: "shell", group: "observe", label: "Shell", icon: <SquareTerminal />, shortcut: "S", disabled: true },
+    {
+      id: "shell",
+      group: "observe",
+      label: deps.cluster?.readOnly ? "Shell · read-only context" : "Shell…",
+      icon: <SquareTerminal />,
+      shortcut: "S",
+      // A shell can change the workload: it confirms like a mutation and is blocked in read-only contexts.
+      disabled: deps.cluster?.readOnly || pod.readyContainers === 0,
+      onSelect: () => deps.confirm(shellRequest(pod, deps.cluster, () => deps.openShell(pod))),
+    },
     { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", disabled: true },
     {
       id: "owner",
@@ -65,6 +75,29 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       onSelect: () => deps.confirm(deletePodRequest(pod, deps.cluster, () => deps.deletePod(pod.id))),
     },
   ];
+}
+
+function shellRequest(pod: PodRow, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {
+  return {
+    action: "Open a shell in",
+    targetName: pod.name,
+    icon: <SquareTerminal />,
+    env: pod.env,
+    cluster: pod.cluster,
+    namespace: pod.namespace,
+    meta: "container app",
+    protected: cluster?.protected ?? false,
+    destructive: false,
+    whatHappens: (
+      <>
+        Starts <span className="font-mono text-ui">/bin/sh</span> in the container through the API server (pods/exec). Commands run as the
+        container’s user; Clustrail does not filter or undo them, and protected mode does not apply inside the shell.
+      </>
+    ),
+    command: `kubectl --context ${pod.cluster} -n ${pod.namespace} exec -it ${pod.name} -- /bin/sh`,
+    confirmLabel: "Open shell",
+    onConfirm,
+  };
 }
 
 function deletePodRequest(pod: PodRow, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {

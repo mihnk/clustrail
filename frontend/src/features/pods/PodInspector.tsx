@@ -88,7 +88,10 @@ export function PodInspector({
             <ScrollText aria-hidden />
             Logs
           </Button>
-          <Button>
+          <Button
+            disabled={actions.find((a) => a.id === "shell")?.disabled}
+            onClick={() => actions.find((a) => a.id === "shell")?.onSelect?.()}
+          >
             <SquareTerminal aria-hidden />
             Shell
           </Button>

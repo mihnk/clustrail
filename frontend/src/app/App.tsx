@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Layers } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
@@ -15,6 +15,9 @@ import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
 import { LogsWorkspace } from "@/features/logs/LogsWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
+
+// xterm.js only loads when a Shell tab renders.
+const ShellWorkspace = lazy(() => import("@/features/terminal/ShellWorkspace").then((m) => ({ default: m.ShellWorkspace })));
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
 
@@ -80,6 +83,12 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <NodesWorkspace active={active} />;
     case "logs":
       return <LogsWorkspace tab={tab} active={active} />;
+    case "shell":
+      return (
+        <Suspense fallback={<EmptyState className="flex-1" title="Loading terminal…" />}>
+          <ShellWorkspace tab={tab} active={active} />
+        </Suspense>
+      );
     case "resource":
       return (
         <EmptyState className="flex-1" icon={<Layers />} title={`${tab.title} · ${tab.subtitle}`}>

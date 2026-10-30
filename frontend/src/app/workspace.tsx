@@ -69,7 +69,7 @@ export interface BackgroundJob {
 /** A request from another view (command palette, links) to select a resource in its explorer. */
 export interface RevealRequest {
   /** "filter": id is "<view kind>:<filter text>", e.g. "pods:cluster:prod-eu-west-1". */
-  kind: "pod" | "deployment" | "node" | "cluster" | "filter";
+  kind: "pod" | "deployment" | "node" | "cluster" | "filter" | "session";
   id: string;
   seq: number;
 }
@@ -138,6 +138,7 @@ const initialTabs: WorkspaceTab[] = [
   { id: "pods", kind: "pods", title: "Pods" },
   { id: "deploy-checkout-api", kind: "resource", title: "checkout-api", subtitle: "Deployment" },
   { id: "inv-checkout-api", kind: "investigation", title: "Investigation · checkout-api" },
+  { id: "shell", kind: "shell", title: "Shell · 9rkzd", cluster: "prod-eu-west-1" },
   {
     id: "deployments-prod-eu-west-1",
     kind: "deployments",
