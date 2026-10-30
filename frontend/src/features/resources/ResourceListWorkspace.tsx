@@ -331,7 +331,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
               onConfirm: () => {
                 if (!backend) return;
                 backend
-                  .deleteResource(r.cluster, kind, r.namespace ?? "", r.name)
+                  .deleteResource(r.cluster, kind, r.namespace ?? "", r.name, r.uid ?? "")
                   .then(() => {
                     setDeleted((s) => new Set(s).add(r.id));
                     toast.show({ kind: "success", title: `${kindName(kind)} deleted`, target: `${r.name} · ${r.cluster}`, env: r.env });

@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"sync"
@@ -278,41 +279,66 @@ func nodeShellPod(req NodeShellRequest) *corev1.Pod {
 	}
 }
 
-// DeleteNodeShell deletes a node shell pod Clustrail started.
+// DeleteNodeShell deletes a node shell pod Clustrail started. The pod stays
+// tracked until the API server confirms it is gone, so a failed delete is
+// retried at quit instead of leaving a privileged pod behind.
 func (m *Manager) DeleteNodeShell(cluster, ns, pod string) error {
+	key := cluster + "/" + ns + "/" + pod
 	m.shells.mu.Lock()
-	_, ok := m.shells.pods[cluster+"/"+ns+"/"+pod]
-	delete(m.shells.pods, cluster+"/"+ns+"/"+pod)
+	_, ok := m.shells.pods[key]
 	m.shells.mu.Unlock()
 	if !ok {
 		return fmt.Errorf("%s/%s is not a node shell Clustrail started", ns, pod)
 	}
 	c, err := m.conn(cluster)
 	if err != nil {
-		return err
+		return fmt.Errorf("node shell pod %s/%s not deleted: %w", ns, pod, err)
 	}
 	ctx, cancel := actionCtx()
 	defer cancel()
 	var grace int64
 	err = c.client.CoreV1().Pods(ns).Delete(ctx, pod, metav1.DeleteOptions{GracePeriodSeconds: &grace})
-	if apierrors.IsNotFound(err) {
-		return nil
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("node shell pod %s/%s not deleted: %w", ns, pod, err)
 	}
-	return err
+	m.shells.mu.Lock()
+	delete(m.shells.pods, key)
+	m.shells.mu.Unlock()
+	return nil
 }
 
-// CleanupNodeShells deletes every node shell pod still running, at quit.
+// nodeShellRetry is the pause between attempts to delete node shells at quit.
+var nodeShellRetry = time.Second
+
+// CleanupNodeShells deletes every node shell pod still running, at quit,
+// trying three times; pods it could not delete are logged with the command
+// that removes them.
 func (m *Manager) CleanupNodeShells() {
-	m.shells.mu.Lock()
-	keys := make([]string, 0, len(m.shells.pods))
-	for k := range m.shells.pods {
-		keys = append(keys, k)
-	}
-	m.shells.mu.Unlock()
-	for _, k := range keys {
-		parts := strings.SplitN(k, "/", 3)
-		if len(parts) == 3 {
-			_ = m.DeleteNodeShell(parts[0], parts[1], parts[2])
+	for attempt := 0; attempt < 3; attempt++ {
+		m.shells.mu.Lock()
+		keys := make([]string, 0, len(m.shells.pods))
+		for k := range m.shells.pods {
+			keys = append(keys, k)
 		}
+		m.shells.mu.Unlock()
+		if len(keys) == 0 {
+			return
+		}
+		if attempt > 0 {
+			time.Sleep(nodeShellRetry)
+		}
+		for _, k := range keys {
+			parts := strings.SplitN(k, "/", 3)
+			if len(parts) == 3 {
+				_ = m.DeleteNodeShell(parts[0], parts[1], parts[2])
+			}
+		}
+	}
+	m.shells.mu.Lock()
+	defer m.shells.mu.Unlock()
+	for k := range m.shells.pods {
+		parts := strings.SplitN(k, "/", 3)
+		slog.Error("node shell pod left running: delete it by hand", "cluster", parts[0], "pod", parts[1]+"/"+parts[2],
+			"command", fmt.Sprintf("kubectl --context %s -n %s delete pod %s", parts[0], parts[1], parts[2]))
 	}
 }

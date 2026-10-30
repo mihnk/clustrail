@@ -322,7 +322,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
         .join(" && "),
       confirmLabel: tt("Delete {n} pods", { n }),
       onConfirm: () => {
-        checkedPods.forEach((p) => deletePod(p.id));
+        checkedPods.forEach((p) => deletePod(p.id, p.uid));
         setChecked(new Set());
       },
     });

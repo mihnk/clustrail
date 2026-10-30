@@ -172,6 +172,7 @@ func ToPodRow(p *corev1.Pod, cluster string, env Environment, usage *Usage, owne
 	}
 	row := PodRow{
 		ID:              cluster + "/" + p.Namespace + "/" + p.Name,
+		UID:             string(p.UID),
 		Name:            p.Name,
 		Namespace:       p.Namespace,
 		Cluster:         cluster,
@@ -276,6 +277,7 @@ func ToDeploymentRow(d *appsv1.Deployment, cluster string, env Environment, rset
 	}
 	row := DeploymentRow{
 		ID:                cluster + "/" + d.Namespace + "/" + d.Name,
+		UID:               string(d.UID),
 		Name:              d.Name,
 		Namespace:         d.Namespace,
 		Cluster:           cluster,

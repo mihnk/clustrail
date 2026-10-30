@@ -209,14 +209,15 @@ func TestNamespaceFallbackWhenClusterWideDenied(t *testing.T) {
 }
 
 func managerWith(c *clusterConn, readOnly bool) *Manager {
-	m := &Manager{state: map[string]*Cluster{c.id: {ID: c.id, ReadOnly: readOnly}}, conns: map[string]*clusterConn{c.id: c}, emit: c.emit, ctx: context.Background()}
+	m := &Manager{state: map[string]*Cluster{c.id: {ID: c.id, ReadOnly: readOnly}}, conns: map[string]*clusterConn{c.id: c}, emit: c.emit, ctx: context.Background(),
+		attempts: map[string]int{}, pending: map[string]*connectAttempt{}}
 	return m
 }
 
 func TestReadOnlyBlocksChanges(t *testing.T) {
 	c, _, _ := newFakeConn(t, pod("a", nil))
 	m := managerWith(c, true)
-	if err := m.DeletePod("test", "payments", "a"); err != ErrReadOnly {
+	if err := m.DeletePod("test", "payments", "a", ""); err != ErrReadOnly {
 		t.Fatalf("err = %v", err)
 	}
 	if _, err := m.StartExec(ExecRequest{Cluster: "test"}); err != ErrReadOnly {
@@ -251,17 +252,30 @@ func TestRestartScaleRollback(t *testing.T) {
 		t.Fatal("restart did not stamp the pod template")
 	}
 
-	if err := m.RollbackDeployment("test", "payments", "checkout-api", 13); err != nil {
+	// Revision 14 (current) added a sidecar; revision 13 had only "api".
+	got.Annotations = map[string]string{"deployment.kubernetes.io/revision": "14"}
+	got.Spec.Template.Spec.Containers = append(got.Spec.Template.Spec.Containers, corev1.Container{Name: "debug-sidecar", Image: "busybox"})
+	if _, err := client.AppsV1().Deployments("payments").Update(ctx, got, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	// The user confirmed while it was at revision 12: it moved on, nothing changes.
+	if err := m.RollbackDeployment("test", "payments", "checkout-api", 13, 12); err == nil || !strings.Contains(err.Error(), "is at revision 14 now") {
+		t.Fatalf("stale confirmation err = %v", err)
+	}
+	if err := m.RollbackDeployment("test", "payments", "checkout-api", 13, 14); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = client.AppsV1().Deployments("payments").Get(ctx, "checkout-api", metav1.GetOptions{})
-	if img := got.Spec.Template.Spec.Containers[0].Image; img != "ghcr.io/acme/checkout-api:v2.30.4" {
-		t.Fatalf("image after rollback = %s", img)
+	if cs := got.Spec.Template.Spec.Containers; len(cs) != 1 || cs[0].Image != "ghcr.io/acme/checkout-api:v2.30.4" {
+		t.Fatalf("containers after rollback = %+v (the sidecar added later must go)", cs)
+	}
+	if got.Annotations["kubernetes.io/change-cause"] != "rollback to revision 13 (Clustrail)" {
+		t.Fatalf("annotations = %v", got.Annotations)
 	}
 	if _, ok := got.Spec.Template.Labels[appsv1.DefaultDeploymentUniqueLabelKey]; ok {
 		t.Fatal("pod-template-hash must not be copied into the Deployment")
 	}
-	if err := m.RollbackDeployment("test", "payments", "checkout-api", 9); err == nil || !strings.Contains(err.Error(), "revision 9") {
+	if err := m.RollbackDeployment("test", "payments", "checkout-api", 9, 0); err == nil || !strings.Contains(err.Error(), "revision 9") {
 		t.Fatalf("missing revision err = %v", err)
 	}
 }
@@ -303,6 +317,8 @@ func TestDrainPlanAndPDBRetry(t *testing.T) {
 	c.ctx = context.Background()
 	defer func(d time.Duration) { evictRetry = d }(evictRetry)
 	evictRetry = 50 * time.Millisecond
+	defer func(d time.Duration) { drainPoll = d }(drainPoll)
+	drainPoll = 20 * time.Millisecond
 	refused := 0
 	client.PrependReactor("create", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
 		if a.GetSubresource() != "eviction" {
@@ -312,6 +328,8 @@ func TestDrainPlanAndPDBRetry(t *testing.T) {
 			refused++
 			return true, nil, apierrors.NewTooManyRequests("Cannot evict pod as it would violate the pod's disruption budget.", 1)
 		}
+		// Like the API server: an accepted eviction deletes the pod.
+		_ = client.Tracker().Delete(corev1.SchemeGroupVersion.WithResource("pods"), a.GetNamespace(), a.(k8stesting.CreateAction).GetObject().(*policyv1.Eviction).Name)
 		return true, &policyv1.Eviction{}, nil
 	})
 	m := managerWith(c, false)

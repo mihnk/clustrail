@@ -187,6 +187,11 @@ function ClusterList() {
                 >
                   <Checkbox checked={on} onCheckedChange={(v) => toggleCluster(c.id, v)} aria-label={t("Include {name}", { name: c.name })} />
                   <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                  {c.targetChanged && (
+                    <span role="img" title={t("Points to another API server: changes locked until confirmed in Connections")} aria-label={t("Points to another API server: changes locked until confirmed in Connections")}>
+                      <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-status-warning" />
+                    </span>
+                  )}
                   <ConnectionDot state={c.connection} />
                 </label>
               );

@@ -16,7 +16,7 @@ export interface DeploymentActionDeps {
   confirm: (r: ConfirmationRequest) => void;
   restartDeployment: (id: string) => void;
   setDeploymentPaused: (id: string, paused: boolean) => void;
-  deleteDeployment: (id: string) => void;
+  deleteDeployment: (id: string, uid?: string) => void;
   /** Inspector navigation: History tab, scale stepper. */
   showHistory: () => void;
   focusScale: () => void;
@@ -73,7 +73,7 @@ export function deploymentActions(d: DeploymentRow, deps: DeploymentActionDeps):
       label: t("Delete…"),
       icon: <Trash2 />,
       shortcut: "⌘⌫",
-      onSelect: () => deps.confirm(deleteDeploymentRequest(d, deps.cluster, () => deps.deleteDeployment(d.id))),
+      onSelect: () => deps.confirm(deleteDeploymentRequest(d, deps.cluster, () => deps.deleteDeployment(d.id, d.uid))),
     },
   ];
 }

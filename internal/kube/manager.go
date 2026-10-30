@@ -2,6 +2,9 @@ package kube
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -27,6 +30,9 @@ type Manager struct {
 	conns    map[string]*clusterConn
 	hidden   map[string]bool
 	attempts map[string]int
+	// pending is the connection attempt in flight per context; Disconnect
+	// cancels it, and an attempt that is no longer pending never registers.
+	pending  map[string]*connectAttempt
 	streams  streams
 	forwards forwards
 	shells   nodeShells
@@ -39,7 +45,7 @@ type Manager struct {
 func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
 	m := &Manager{
 		store: store, emit: emit, ctx: ctx,
-		state: map[string]*Cluster{}, conns: map[string]*clusterConn{}, hidden: map[string]bool{}, attempts: map[string]int{},
+		state: map[string]*Cluster{}, conns: map[string]*clusterConn{}, hidden: map[string]bool{}, attempts: map[string]int{}, pending: map[string]*connectAttempt{},
 		streams: streams{logs: map[string]*logStream{}, exec: map[string]*execSession{}},
 	}
 	m.reload()
@@ -48,22 +54,34 @@ func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
 	return m
 }
 
-// reload re-reads the kubeconfig files and refreshes the context list. Known
-// contexts keep their connection; removed ones are disconnected.
+// reload re-reads the kubeconfig files and refreshes the context list. A
+// context whose connection inputs changed (server, certificate authority,
+// credentials, namespace) is reconnected; one whose server changed is
+// disconnected and its changes locked until the new server is confirmed,
+// since its environment and protection are stored by name. Removed contexts
+// are disconnected.
 func (m *Manager) reload() {
 	kc := LoadKubeconfig(m.store.ExtraKubeconfigs())
 	names := make([]string, 0, len(kc.Contexts))
+	servers := map[string]string{}
 	for _, c := range kc.Contexts {
 		names = append(names, c.Name)
+		servers[c.Name] = c.Server
 	}
 	if !m.store.FirstRunDone() {
 		_ = m.store.MarkKnown(names)
 	}
+	_ = m.store.RecordServers(servers)
 
 	m.mu.Lock()
 	m.kc = kc
 	present := map[string]bool{}
 	ids := clusterIDs(kc.Contexts)
+	type change struct {
+		id     string
+		target bool
+	}
+	var changed []change
 	for _, c := range kc.Contexts {
 		id := ids[c.Name]
 		present[id] = true
@@ -80,11 +98,26 @@ func (m *Manager) reload() {
 		st.Env, st.Protected, st.ReadOnly = cs.Env, cs.Protected, cs.ReadOnly
 		st.Server, st.Auth, st.Source, st.Namespace = c.Server, c.Auth, c.Source, c.Namespace
 		m.hidden[id] = cs.Hidden
+		if confirmed := m.store.ConfirmedServer(c.Name); confirmed != "" && confirmed != c.Server {
+			st.TargetChanged = &TargetChange{From: confirmed, To: c.Server}
+		} else {
+			st.TargetChanged = nil
+		}
+		// A connection (or an attempt) built from other inputs is stale.
+		fp, _ := contextFingerprint(kc.Merged, c.Name)
+		switch {
+		case m.conns[id] != nil && m.conns[id].fingerprint != fp, m.pending[id] != nil && m.pending[id].fingerprint != fp:
+			changed = append(changed, change{id, st.TargetChanged != nil})
+		}
 	}
 	var gone []*clusterConn
 	for name := range m.state {
 		if !present[name] && !m.synthetic[name] {
 			delete(m.state, name)
+			if a := m.pending[name]; a != nil {
+				a.cancel()
+				delete(m.pending, name)
+			}
 			if conn := m.conns[name]; conn != nil {
 				gone = append(gone, conn)
 				delete(m.conns, name)
@@ -95,7 +128,67 @@ func (m *Manager) reload() {
 	for _, c := range gone {
 		c.stop()
 	}
+	for _, ch := range changed {
+		m.Disconnect(ch.id)
+		if ch.target {
+			slog.Warn("context points to another server: disconnected, changes locked", "cluster", ch.id)
+			m.emit.Emit(EventNotice, Notice{Kind: "warning", Title: ch.id + " points to another server",
+				Detail: "Its kubeconfig changed the API server. It was disconnected, and changes stay locked until you confirm its environment and protection in Connections."})
+			continue
+		}
+		slog.Info("kubeconfig changed: reconnecting", "cluster", ch.id)
+		m.emit.Emit(EventNotice, Notice{Kind: "info", Title: "Reconnected " + ch.id,
+			Detail: "Its kubeconfig changed (credentials, certificate authority or namespace); open logs, shells and port forwards were closed."})
+		m.Connect(ch.id)
+	}
 	m.emitClusters()
+}
+
+// contextFingerprint hashes everything in the kubeconfig that a connection to
+// the context is built from, and returns its server. "" when the context is missing.
+func contextFingerprint(cfg *clientcmdapi.Config, name string) (string, string) {
+	if cfg == nil {
+		return "", ""
+	}
+	kctx, ok := cfg.Contexts[name]
+	if !ok {
+		return "", ""
+	}
+	in := struct {
+		Cluster   *clientcmdapi.Cluster
+		Auth      *clientcmdapi.AuthInfo
+		Namespace string
+	}{Namespace: kctx.Namespace}
+	server := ""
+	if cl := cfg.Clusters[kctx.Cluster]; cl != nil {
+		c := *cl
+		c.LocationOfOrigin, c.Extensions = "", nil
+		in.Cluster, server = &c, cl.Server
+	}
+	if au := cfg.AuthInfos[kctx.AuthInfo]; au != nil {
+		a := *au
+		a.LocationOfOrigin, a.Extensions = "", nil
+		in.Auth = &a
+	}
+	raw, _ := json.Marshal(in)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), server
+}
+
+// ConfirmTarget accepts the server a context now points at: changes are
+// allowed again with its current environment and protection.
+func (m *Manager) ConfirmTarget(id string) error {
+	m.mu.Lock()
+	st := m.state[id]
+	m.mu.Unlock()
+	if st == nil {
+		return fmt.Errorf("unknown context %q", id)
+	}
+	if err := m.store.ConfirmServer(st.Context, st.Server); err != nil {
+		return err
+	}
+	m.setState(id, func(c *Cluster) { c.TargetChanged = nil })
+	return nil
 }
 
 // slug makes an ID the frontend can join with "/" (EKS context names are ARNs containing "/").
@@ -200,6 +293,12 @@ func (m *Manager) setState(id string, f func(c *Cluster)) {
 }
 
 func (m *Manager) restConfig(id string) (*rest.Config, *clientcmdapi.AuthInfo, error) {
+	cfg, auth, _, err := m.restConfigFP(id)
+	return cfg, auth, err
+}
+
+// restConfigFP also returns the fingerprint of the kubeconfig inputs the config was built from.
+func (m *Manager) restConfigFP(id string) (*rest.Config, *clientcmdapi.AuthInfo, string, error) {
 	m.mu.Lock()
 	kc := m.kc
 	name := ""
@@ -209,13 +308,14 @@ func (m *Manager) restConfig(id string) (*rest.Config, *clientcmdapi.AuthInfo, e
 	m.mu.Unlock()
 	ctx, ok := kc.Merged.Contexts[name]
 	if !ok {
-		return nil, nil, fmt.Errorf("context %q not found in kubeconfig", id)
+		return nil, nil, "", fmt.Errorf("context %q not found in kubeconfig", id)
 	}
+	fp, _ := contextFingerprint(kc.Merged, name)
 	id = name
 	auth := kc.Merged.AuthInfos[ctx.AuthInfo]
 	cfg, err := clientcmd.NewNonInteractiveClientConfig(*kc.Merged, id, &clientcmd.ConfigOverrides{}, nil).ClientConfig()
 	if err != nil {
-		return nil, auth, err
+		return nil, auth, fp, err
 	}
 	if cfg.ExecProvider != nil {
 		// Never prompt: expired credentials surface as an error with the command to run.
@@ -224,7 +324,7 @@ func (m *Manager) restConfig(id string) (*rest.Config, *clientcmdapi.AuthInfo, e
 	// No cfg.Timeout: client-go applies it to the whole HTTP request, which would
 	// cut watches and followed logs. Calls carry context deadlines instead, and
 	// discovery uses its own client with a timeout (newClusterConn).
-	return cfg, auth, nil
+	return cfg, auth, fp, nil
 }
 
 // contextNamespace is the namespace the kubeconfig context sets, else "default".
@@ -243,21 +343,51 @@ func (m *Manager) contextNamespace(id string) string {
 	return "default"
 }
 
+// connectAttempt is one Connect in flight. Disconnect cancels it; only the
+// attempt still pending for its context may register its connection.
+type connectAttempt struct {
+	ctx         context.Context
+	cancel      context.CancelFunc
+	fingerprint string
+}
+
 // Connect connects a context in the background; progress arrives as cluster events.
 func (m *Manager) Connect(id string) {
 	m.mu.Lock()
-	if _, ok := m.state[id]; !ok || m.conns[id] != nil || m.synthetic[id] {
+	if _, ok := m.state[id]; !ok || m.conns[id] != nil || m.pending[id] != nil || m.synthetic[id] {
 		m.mu.Unlock()
 		return
 	}
+	actx, cancel := context.WithCancel(m.ctx)
+	a := &connectAttempt{ctx: actx, cancel: cancel}
+	m.pending[id] = a
 	m.mu.Unlock()
 	m.setState(id, func(c *Cluster) { c.Connection, c.Error, c.AuthHint = Connecting, "", nil })
-	go m.connect(id)
+	go m.connect(id, a)
 }
 
-func (m *Manager) connect(id string) {
-	cfg, auth, err := m.restConfig(id)
+// current reports whether a is still the attempt pending for id.
+func (m *Manager) current(id string, a *connectAttempt) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.pending[id] == a
+}
+
+func (m *Manager) connect(id string, a *connectAttempt) {
+	defer a.cancel()
+	cfg, auth, fp, err := m.restConfigFP(id)
+	m.mu.Lock()
+	a.fingerprint = fp
+	m.mu.Unlock()
 	fail := func(err error) {
+		m.mu.Lock()
+		if m.pending[id] != a {
+			// Disconnected (or superseded) meanwhile: its state is not this attempt's to set.
+			m.mu.Unlock()
+			return
+		}
+		delete(m.pending, id)
+		m.mu.Unlock()
 		state := classifyError(err)
 		slog.Warn("connect failed", "cluster", id, "state", state, "error", err)
 		m.setState(id, func(c *Cluster) {
@@ -284,9 +414,10 @@ func (m *Manager) connect(id string) {
 		fail(err)
 		return
 	}
+	conn.fingerprint = fp
 	conn.fallbackNS = m.contextNamespace(id)
 	conn.streamPods = m.StreamPods
-	ctx, cancel := context.WithTimeout(m.ctx, 25*time.Second)
+	ctx, cancel := context.WithTimeout(a.ctx, 25*time.Second)
 	info, err := conn.probe(ctx)
 	cancel()
 	if err != nil {
@@ -294,20 +425,33 @@ func (m *Manager) connect(id string) {
 		return
 	}
 	m.mu.Lock()
-	if m.conns[id] != nil { // connected twice
+	if m.pending[id] != a || m.conns[id] != nil {
+		// Disconnected while probing, or connected twice: this attempt does not register.
 		m.mu.Unlock()
 		return
 	}
+	delete(m.pending, id)
 	m.conns[id] = conn
 	m.mu.Unlock()
 	if err := conn.start(m.ctx, info.Identity, info.Metrics); err != nil {
 		conn.stop()
 		m.mu.Lock()
-		delete(m.conns, id)
+		if m.conns[id] == conn {
+			delete(m.conns, id)
+		}
 		m.mu.Unlock()
-		fail(err)
+		slog.Warn("connect failed", "cluster", id, "error", err)
+		m.setState(id, func(c *Cluster) { c.Connection, c.Error, c.LatencyMs = classifyError(err), errText(err), nil })
 		return
 	}
+	m.mu.Lock()
+	if m.conns[id] != conn {
+		// Disconnected while the informers started.
+		m.mu.Unlock()
+		conn.stop()
+		return
+	}
+	m.mu.Unlock()
 	go conn.probeLoop(conn.ctx, func(ms int, err error) { m.onProbe(id, ms, err) })
 	slog.Info("connected", "cluster", id, "version", info.Version, "identity", info.Identity, "latencyMs", info.LatencyMs, "metrics", info.Metrics,
 		"poll", pollMode.Load(), "forbidden", len(conn.forbidden))
@@ -383,12 +527,25 @@ func (m *Manager) onProbe(id string, ms int, err error) {
 		}
 		return
 	}
+	// The API server answering does not make the caches current: stale rows
+	// stay marked until every failed watch has caught up.
+	behind := 0
+	m.mu.Lock()
+	if conn := m.conns[id]; conn != nil {
+		behind = conn.health.behind()
+	}
+	m.mu.Unlock()
 	if wasStale || (cur != nil && (cur.LatencyMs == nil || *cur.LatencyMs != ms)) {
 		m.setState(id, func(c *Cluster) {
 			c.LatencyMs = ptr(ms)
-			if c.Connection == Reconnecting {
-				c.Connection, c.Stale, c.Error = Connected, nil, ""
+			if c.Connection != Reconnecting {
+				return
 			}
+			if behind > 0 {
+				c.Error = fmt.Sprintf("API server answers; %d watches are catching up, rows may be out of date", behind)
+				return
+			}
+			c.Connection, c.Stale, c.Error = Connected, nil, ""
 		})
 	}
 }
@@ -398,6 +555,10 @@ func (m *Manager) Disconnect(id string) {
 	slog.Info("disconnect", "cluster", id)
 	m.stopForwardsOf(id)
 	m.mu.Lock()
+	if a := m.pending[id]; a != nil {
+		a.cancel()
+		delete(m.pending, id)
+	}
 	conn := m.conns[id]
 	delete(m.conns, id)
 	m.mu.Unlock()
@@ -521,6 +682,10 @@ func (m *Manager) Snapshot() Snapshot {
 func (m *Manager) Shutdown() {
 	m.stopAllForwards()
 	m.mu.Lock()
+	for id, a := range m.pending {
+		a.cancel()
+		delete(m.pending, id)
+	}
 	conns := m.conns
 	m.conns = map[string]*clusterConn{}
 	m.mu.Unlock()

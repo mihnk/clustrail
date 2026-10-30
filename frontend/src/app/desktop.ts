@@ -206,9 +206,9 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
         a.setSelectedClusterIds([...a.selectedClusterIds, c.id]);
         api.addCluster(c.id, c.env, c.protected, c.readOnly).catch(fail("Adding the context failed", c.name));
       },
-      deletePod: (id) => {
+      deletePod: (id, uid) => {
         const p = pod(id);
-        if (p) api.deletePod(p.cluster, p.namespace, p.name).then(done("Pod deleted", `${p.name} · ${p.cluster}`, p.env), fail("Delete failed", p.name));
+        if (p) api.deletePod(p.cluster, p.namespace, p.name, uid ?? "").then(done("Pod deleted", `${p.name} · ${p.cluster}`, p.env), fail("Delete failed", p.name));
       },
       restartDeployment: (id) => {
         const d = dep(id);
@@ -218,17 +218,17 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
         const d = dep(id);
         if (d) api.scaleDeployment(d.cluster, d.namespace, d.name, replicas).then(done(`Scaled to ${replicas}`, `${d.name} · ${d.cluster}`, d.env), fail("Scale failed", d.name));
       },
-      rollbackDeployment: (id, rev) => {
+      rollbackDeployment: (id, rev, fromRev) => {
         const d = dep(id);
-        if (d) api.rollbackDeployment(d.cluster, d.namespace, d.name, rev).then(done(`Rolled back to revision ${rev}`, `${d.name} · ${d.cluster}`, d.env), fail("Rollback failed", d.name));
+        if (d) api.rollbackDeployment(d.cluster, d.namespace, d.name, rev, fromRev ?? 0).then(done(`Rolled back to revision ${rev}`, `${d.name} · ${d.cluster}`, d.env), fail("Rollback failed", d.name));
       },
       setDeploymentPaused: (id, paused) => {
         const d = dep(id);
         if (d) api.setDeploymentPaused(d.cluster, d.namespace, d.name, paused).then(done(paused ? "Rollout paused" : "Rollout resumed", `${d.name} · ${d.cluster}`, d.env), fail("Update failed", d.name));
       },
-      deleteDeployment: (id) => {
+      deleteDeployment: (id, uid) => {
         const d = dep(id);
-        if (d) api.deleteDeployment(d.cluster, d.namespace, d.name).then(done("Deployment deleted", `${d.name} · ${d.cluster}`, d.env), fail("Delete failed", d.name));
+        if (d) api.deleteDeployment(d.cluster, d.namespace, d.name, uid ?? "").then(done("Deployment deleted", `${d.name} · ${d.cluster}`, d.env), fail("Delete failed", d.name));
       },
       setNodeCordoned: (id, cordoned) => {
         const n = a.nodes.find((x) => x.id === id);

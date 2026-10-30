@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,8 +44,12 @@ type ApplyResult struct {
 	Warnings []string `json:"warnings"`
 }
 
+// kindIndex is the cluster's discovery, refreshed every kindsTTL. A failed
+// discovery is retried after kindsRetry, never kept for the connection's life,
+// and a kind not found triggers one refresh (a CRD installed since).
 type kindIndex struct {
-	once       sync.Once
+	mu         sync.Mutex
+	loaded     time.Time
 	byKind     map[string]schema.GroupVersionResource
 	namespaced map[string]bool
 	// listable is every kind (preferred version) this cluster can list, for ⌘J.
@@ -52,57 +57,99 @@ type kindIndex struct {
 	err      error
 }
 
-// resolve maps a Kind (optionally "group/Kind") to a resource using discovery.
-func (c *clusterConn) resolve(kind string) (schema.GroupVersionResource, bool, error) {
-	c.kinds.once.Do(func() {
-		c.kinds.byKind, c.kinds.namespaced = map[string]schema.GroupVersionResource{}, map[string]bool{}
-		// Partial discovery failures (an unavailable aggregated API) still return the rest.
-		groups, lists, err := c.disc.ServerGroupsAndResources()
-		if err != nil && len(lists) == 0 {
-			c.kinds.err = err
+var (
+	kindsTTL   = 5 * time.Minute
+	kindsRetry = 10 * time.Second
+)
+
+// loadKinds runs discovery when the index is missing, old, or failed a while ago.
+// Call with c.kinds.mu held.
+func (c *clusterConn) loadKinds(force bool) {
+	k := &c.kinds
+	age := time.Since(k.loaded)
+	fresh := !k.loaded.IsZero() && ((k.err == nil && age < kindsTTL) || (k.err != nil && age < kindsRetry))
+	if fresh && !force {
+		return
+	}
+	k.loaded = time.Now()
+	// Partial discovery failures (an unavailable aggregated API) still return the rest.
+	groups, lists, err := c.disc.ServerGroupsAndResources()
+	if err != nil && len(lists) == 0 {
+		if k.byKind == nil {
+			// Nothing to fall back on: report the error, retry after kindsRetry.
+			k.err = err
 			return
 		}
-		preferred := map[string]string{}
-		for _, g := range groups {
-			preferred[g.Name] = g.PreferredVersion.Version
-		}
-		for _, l := range lists {
-			gv, err := schema.ParseGroupVersion(l.GroupVersion)
-			if err != nil {
-				continue
-			}
-			if v, ok := preferred[gv.Group]; ok && v != "" && v != gv.Version {
-				continue
-			}
-			for _, r := range l.APIResources {
-				if strings.Contains(r.Name, "/") {
-					continue
-				}
-				gvr := gv.WithResource(r.Name)
-				if hasVerb(r.Verbs, "list") {
-					c.kinds.listable = append(c.kinds.listable, KindInfo{
-						Kind: r.Kind, Group: gv.Group, Version: gv.Version, Resource: r.Name,
-						Namespaced: r.Namespaced, ShortNames: r.ShortNames, Delete: hasVerb(r.Verbs, "delete"),
-					})
-				}
-				for _, key := range []string{r.Kind, gv.Group + "/" + r.Kind} {
-					// Core and apps win over aggregated APIs that reuse a Kind name.
-					if _, dup := c.kinds.byKind[key]; !dup || gv.Group == "" || gv.Group == "apps" {
-						c.kinds.byKind[key] = gvr
-						c.kinds.namespaced[key] = r.Namespaced
-					}
-				}
-			}
-		}
-	})
-	if c.kinds.err != nil {
-		return schema.GroupVersionResource{}, false, c.kinds.err
+		// Keep the last good index and retry after kindsRetry.
+		k.loaded = time.Now().Add(-kindsTTL + kindsRetry)
+		return
 	}
-	gvr, ok := c.kinds.byKind[kind]
+	byKind, namespaced, listable := map[string]schema.GroupVersionResource{}, map[string]bool{}, []KindInfo{}
+	preferred := map[string]string{}
+	for _, g := range groups {
+		preferred[g.Name] = g.PreferredVersion.Version
+	}
+	for _, l := range lists {
+		gv, err := schema.ParseGroupVersion(l.GroupVersion)
+		if err != nil {
+			continue
+		}
+		if v, ok := preferred[gv.Group]; ok && v != "" && v != gv.Version {
+			continue
+		}
+		for _, r := range l.APIResources {
+			if strings.Contains(r.Name, "/") {
+				continue
+			}
+			gvr := gv.WithResource(r.Name)
+			if hasVerb(r.Verbs, "list") {
+				listable = append(listable, KindInfo{
+					Kind: r.Kind, Group: gv.Group, Version: gv.Version, Resource: r.Name,
+					Namespaced: r.Namespaced, ShortNames: r.ShortNames, Delete: hasVerb(r.Verbs, "delete"),
+				})
+			}
+			for _, key := range []string{r.Kind, gv.Group + "/" + r.Kind} {
+				// Core and apps win over aggregated APIs that reuse a Kind name.
+				if _, dup := byKind[key]; !dup || gv.Group == "" || gv.Group == "apps" {
+					byKind[key] = gvr
+					namespaced[key] = r.Namespaced
+				}
+			}
+		}
+	}
+	k.byKind, k.namespaced, k.listable, k.err = byKind, namespaced, listable, nil
+}
+
+// resolve maps a Kind (optionally "group/Kind") to a resource using discovery.
+func (c *clusterConn) resolve(kind string) (schema.GroupVersionResource, bool, error) {
+	k := &c.kinds
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	c.loadKinds(false)
+	gvr, ok := k.byKind[kind]
+	if !ok && time.Since(k.loaded) >= kindsRetry {
+		c.loadKinds(true) // installed since the last discovery?
+		gvr, ok = k.byKind[kind]
+	}
 	if !ok {
+		if k.err != nil {
+			return gvr, false, k.err
+		}
 		return gvr, false, fmt.Errorf("kind %q is not served by this cluster", kind)
 	}
-	return gvr, c.kinds.namespaced[kind], nil
+	return gvr, k.namespaced[kind], nil
+}
+
+// listableKinds is every kind the cluster can list, from fresh enough discovery.
+func (c *clusterConn) listableKinds() ([]KindInfo, error) {
+	k := &c.kinds
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	c.loadKinds(false)
+	if k.byKind == nil && k.err != nil {
+		return nil, k.err
+	}
+	return append([]KindInfo(nil), k.listable...), nil
 }
 
 // GetObject returns the live object as YAML with field ownership and GitOps owner.

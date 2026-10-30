@@ -76,6 +76,14 @@ type Cluster struct {
 	Namespace string `json:"namespace,omitempty"`
 	// Paused: disconnected while the app was in the background; it reconnects on return.
 	Paused bool `json:"paused,omitempty"`
+	// TargetChanged: the kubeconfig now points this context at another server
+	// than the one confirmed. Changes are refused until it is confirmed again.
+	TargetChanged *TargetChange `json:"targetChanged,omitempty"`
+}
+
+type TargetChange struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // RowID is the row's stable identity (cluster/namespace/name) for streaming.
@@ -87,7 +95,9 @@ type OwnerRef struct {
 }
 
 type PodRow struct {
-	ID              string            `json:"id"`
+	ID string `json:"id"`
+	// UID identifies the object the user saw: deletes carry it as a precondition.
+	UID             string            `json:"uid,omitempty"`
 	Name            string            `json:"name"`
 	Namespace       string            `json:"namespace"`
 	Cluster         string            `json:"cluster"`
@@ -135,6 +145,7 @@ type Strategy struct {
 
 type DeploymentRow struct {
 	ID                string           `json:"id"`
+	UID               string           `json:"uid,omitempty"`
 	Name              string           `json:"name"`
 	Namespace         string           `json:"namespace"`
 	Cluster           string           `json:"cluster"`

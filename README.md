@@ -37,7 +37,10 @@ through one Wails service (`internal/app.Workspace`) and its events.
   `~/.kube/config` plus files added in Clustrail, merged with kubectl's
   first-file-wins rule. Files are polled for changes; contexts that appear
   later show as *New* and are never connected automatically. The kubeconfig is
-  never written.
+  never written. A connected context whose credentials change reconnects; one
+  that now names another API server is disconnected and its changes are locked
+  until you confirm its environment and protection for the new server in
+  Connections (also checked at start and before every change).
 - **First-run setup** (`setup.go`): a fresh install starts with five steps:
   the kubeconfig files found (or, when there are none, choosing, pasting or
   creating one), the contexts to show, environment and protection (suggested
@@ -59,7 +62,8 @@ through one Wails service (`internal/app.Workspace`) and its events.
   `default`) is watched instead and the UI says so. Exec
   plugins never prompt: expired credentials surface with the command to run in
   your own terminal. A lost watch marks the cluster *reconnecting* with stale
-  rows until a probe succeeds.
+  rows until a probe succeeds and every watch has caught up again. Disconnect
+  cancels a connect still in progress.
 - **Rows** (`convert.go`): pod, deployment and node rows follow kubectl's status
   logic. Changes are sent to the UI as deltas at most every 250 ms
   (`clustrail:delta`), never as full lists. Informer indexes (pods by node,
@@ -75,17 +79,25 @@ through one Wails service (`internal/app.Workspace`) and its events.
 - **Secrets** (`secrets.go`): like Lens, keys and sizes are shown and values
   stay hidden until you reveal one key; the log records who revealed which
   key, never the value. In YAML each value reads `(hidden, N bytes)`; an edit
-  that keeps the placeholder keeps the live value.
+  that keeps the placeholder keeps the live value. The copy in the
+  `last-applied-configuration` annotation and Secrets in Helm manifests are
+  masked the same way.
 - **Other kinds** (`generic.go`): any kind the cluster serves, CRDs included,
   is listed with the API server's own table columns (what `kubectl get`
-  prints), deleted with background propagation, or created from YAML.
+  prints), deleted with background propagation, or created from YAML. The kind
+  list is refreshed every 5 minutes and when a kind is not found, so CRDs
+  installed later appear without a restart.
 - **Metrics** (`cluster.go`, `samples.go`): metrics-server is polled every 15 s
   (Settings). It has no history, so Clustrail keeps its own samples for 2 hours
   in the user cache directory, across restarts, and charts say where they come
   from.
-- **Actions** (`actions.go`, `yaml.go`, `helm_actions.go`): delete, rollout
-  restart, scale, rollback (like `kubectl rollout undo`), pause, cordon, drain
-  through the Eviction API (PDBs respected, refused evictions retried),
+- **Actions** (`actions.go`, `yaml.go`, `helm_actions.go`): delete (with the
+  UID seen when you confirmed as a precondition, so an object recreated under
+  the same name is not deleted), rollout restart, scale, rollback (like
+  `kubectl rollout undo`: the whole pod template, refused if the Deployment
+  rolled out again meanwhile), pause, cordon, drain through the Eviction API
+  (PDBs respected, refused evictions retried, done only when the evicted pods
+  are gone),
   server-side apply with dry run and resourceVersion conflicts, Helm rollback
   with the Helm SDK, Argo CD refresh/sync and Flux reconcile/suspend.
 - **Log sources** (`logsources.go`): a Logs tab follows a workload, a label
@@ -96,8 +108,9 @@ through one Wails service (`internal/app.Workspace`) and its events.
 - **Streams** (`streams.go`, `portforward.go`): follow logs per container
   (reconnecting across container restarts), interactive exec over WebSocket
   with SPDY fallback (a dropped shell reconnects with backoff), and port
-  forwards to a pod, or a ready pod behind a Service or Deployment, that
-  re-resolve the pod and keep their local port when it goes away.
+  forwards to a pod, or a ready pod behind a Service or Deployment (matched by
+  the whole selector, `matchExpressions` included), that re-resolve the pod and
+  keep their local port when it goes away.
 - **Workloads** (`workloads.go`): StatefulSets and DaemonSets restart like
   `kubectl rollout restart`; StatefulSets scale through the scale
   subresource; a CronJob runs now (`kubectl create job --from`, owned by the

@@ -304,14 +304,17 @@ func (w *listWatch) watch(ctx context.Context, rv string) error {
 	go func() { errc <- w.stream(wctx, rv, events); close(events) }()
 	t := time.NewTicker(500 * time.Millisecond)
 	defer t.Stop()
-	pending := ListUpdate{ID: w.id, Cluster: w.cluster, Namespaced: w.namespaced, Shown: w.shown, Upserts: []GenericRow{}, Deletes: []string{}}
+	// One entry per object per batch, its last event: an update then a delete
+	// in the same 500 ms must not reach the UI as both (the UI applies deletes
+	// before upserts and would bring the object back).
+	batch := newRowBatch()
 	flush := func() {
-		if len(pending.Upserts) == 0 && len(pending.Deletes) == 0 {
+		if batch.empty() {
 			return
 		}
-		pending.Mode = w.mode()
-		w.emit.Emit(EventList, pending)
-		pending = ListUpdate{ID: w.id, Cluster: w.cluster, Namespaced: w.namespaced, Shown: w.shown, Upserts: []GenericRow{}, Deletes: []string{}}
+		u := ListUpdate{ID: w.id, Cluster: w.cluster, Namespaced: w.namespaced, Shown: w.shown, Mode: w.mode()}
+		u.Upserts, u.Deletes = batch.take()
+		w.emit.Emit(EventList, u)
 	}
 	for {
 		select {
@@ -323,10 +326,10 @@ func (w *listWatch) watch(ctx context.Context, rv string) error {
 			w.rowID(&ev.Row)
 			if ev.Deleted {
 				delete(w.rows, ev.Row.ID)
-				pending.Deletes = append(pending.Deletes, ev.Row.ID)
+				batch.delete(ev.Row.ID)
 			} else {
 				w.rows[ev.Row.ID] = ev.Row
-				pending.Upserts = append(pending.Upserts, ev.Row)
+				batch.upsert(ev.Row)
 			}
 		case <-t.C:
 			flush()
@@ -420,7 +423,7 @@ func (w *listWatch) streamDynamic(ctx context.Context, ns, rv string, out chan<-
 			if !ok {
 				continue
 			}
-			r := GenericRow{Namespace: o.GetNamespace(), Name: o.GetName(), Labels: o.GetLabels(), Created: rfc3339(o.GetCreationTimestamp()), Cells: []string{}}
+			r := GenericRow{UID: string(o.GetUID()), Namespace: o.GetNamespace(), Name: o.GetName(), Labels: o.GetLabels(), Created: rfc3339(o.GetCreationTimestamp()), Cells: []string{}}
 			select {
 			case out <- GenericRowEvent{Row: r, Deleted: ev.Type == watch.Deleted}:
 			case <-ctx.Done():
@@ -428,4 +431,49 @@ func (w *listWatch) streamDynamic(ctx context.Context, ns, rv string, out chan<-
 			}
 		}
 	}
+}
+
+// rowBatch collects watch events between flushes, keeping each object's last one.
+type rowBatch struct {
+	order   []string
+	upserts map[string]GenericRow
+	deletes map[string]bool
+}
+
+func newRowBatch() *rowBatch {
+	return &rowBatch{upserts: map[string]GenericRow{}, deletes: map[string]bool{}}
+}
+
+func (b *rowBatch) seen(id string) {
+	if _, ok := b.upserts[id]; !ok && !b.deletes[id] {
+		b.order = append(b.order, id)
+	}
+}
+
+func (b *rowBatch) upsert(r GenericRow) {
+	b.seen(r.ID)
+	delete(b.deletes, r.ID)
+	b.upserts[r.ID] = r
+}
+
+func (b *rowBatch) delete(id string) {
+	b.seen(id)
+	delete(b.upserts, id)
+	b.deletes[id] = true
+}
+
+func (b *rowBatch) empty() bool { return len(b.order) == 0 }
+
+// take returns the batch in arrival order and starts a new one.
+func (b *rowBatch) take() ([]GenericRow, []string) {
+	ups, dels := []GenericRow{}, []string{}
+	for _, id := range b.order {
+		if r, ok := b.upserts[id]; ok {
+			ups = append(ups, r)
+		} else if b.deletes[id] {
+			dels = append(dels, id)
+		}
+	}
+	*b = *newRowBatch()
+	return ups, dels
 }

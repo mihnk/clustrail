@@ -69,6 +69,8 @@ export interface Cluster {
   namespace?: string;
   /** Disconnected while Clustrail was in the background; reconnects on return (desktop). */
   paused?: boolean;
+  /** Desktop: the kubeconfig now points this context at another API server than the one confirmed; changes are locked. */
+  targetChanged?: { from: string; to: string };
 }
 
 export interface PodRow {
@@ -93,6 +95,8 @@ export interface PodRow {
   ageSeconds: number;
   owner: { kind: string; name: string } | null;
   labels: Record<string, string>;
+  /** The object's UID (desktop): deletes carry it so a pod recreated under the same name is not deleted. */
+  uid?: string;
   /** Set while the cluster reconnects: seconds since the last update. */
   staleSeconds?: number;
 }
@@ -125,6 +129,7 @@ export interface DeploymentRow {
   hpa?: { name: string; min: number; max: number };
   argoApp?: string;
   revisions: { rev: number; image: string; age: string; sync?: string }[];
+  uid?: string;
   usage?: { cpuMilli: number; cpuRequestMilli: number; memoryMiB: number; memoryLimitMiB: number };
   readyReplicas: number;
   replicas: number;

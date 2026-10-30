@@ -252,7 +252,7 @@ func resolveForwardTarget(ctx context.Context, c *clusterConn, req PortForwardRe
 		if sp == nil {
 			return "", 0, fmt.Errorf("service %s has no port %d", svc.Name, req.Port)
 		}
-		pod, err := readyPod(ctx, c, req.Namespace, svc.Spec.Selector)
+		pod, err := readyPod(ctx, c, req.Namespace, labels.SelectorFromSet(svc.Spec.Selector))
 		if err != nil {
 			return "", 0, err
 		}
@@ -266,7 +266,12 @@ func resolveForwardTarget(ctx context.Context, c *clusterConn, req PortForwardRe
 		if d.Spec.Selector == nil {
 			return "", 0, fmt.Errorf("deployment %s has no selector", d.Name)
 		}
-		pod, err := readyPod(ctx, c, req.Namespace, d.Spec.Selector.MatchLabels)
+		// The whole selector: matchLabels and matchExpressions.
+		sel, err := metav1.LabelSelectorAsSelector(d.Spec.Selector)
+		if err != nil {
+			return "", 0, fmt.Errorf("deployment %s: %w", d.Name, err)
+		}
+		pod, err := readyPod(ctx, c, req.Namespace, sel)
 		if err != nil {
 			return "", 0, err
 		}
@@ -276,8 +281,12 @@ func resolveForwardTarget(ctx context.Context, c *clusterConn, req PortForwardRe
 }
 
 // readyPod picks a ready pod for the selector, newest first, like kubectl.
-func readyPod(ctx context.Context, c *clusterConn, ns string, selector map[string]string) (*corev1.Pod, error) {
-	list, err := c.client.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(selector).String()})
+// An empty selector would match every pod in the namespace: it is refused.
+func readyPod(ctx context.Context, c *clusterConn, ns string, sel labels.Selector) (*corev1.Pod, error) {
+	if sel == nil || sel.Empty() {
+		return nil, fmt.Errorf("empty selector: it would match every pod in %s; forward to a pod instead", ns)
+	}
+	list, err := c.client.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: sel.String()})
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +294,8 @@ func readyPod(ctx context.Context, c *clusterConn, ns string, selector map[strin
 	sort.Slice(pods, func(i, j int) bool { return pods[j].CreationTimestamp.Before(&pods[i].CreationTimestamp) })
 	for i := range pods {
 		p := &pods[i]
-		if p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning {
+		// The API server applied the selector; check again so a client that ignores it cannot pick another pod.
+		if !sel.Matches(labels.Set(p.Labels)) || p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning {
 			continue
 		}
 		for _, cond := range p.Status.Conditions {
@@ -294,7 +304,7 @@ func readyPod(ctx context.Context, c *clusterConn, ns string, selector map[strin
 			}
 		}
 	}
-	return nil, fmt.Errorf("no ready pod matches %s", labels.SelectorFromSet(selector))
+	return nil, fmt.Errorf("no ready pod matches %s", sel)
 }
 
 func containerPort(p *corev1.Pod, target intstr.IntOrString, servicePort int) (int, error) {

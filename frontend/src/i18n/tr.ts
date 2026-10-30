@@ -1725,4 +1725,13 @@ export const tr: Record<string, string> = {
   "Network policies block the ingress controller from {v0} on {v1}": "Network policy'ler ingress controller'ın {v0} servisine {v1} portundan erişimini engelliyor",
   "Every link looks right": "Zincirin her halkası doğru görünüyor",
   "if it still answers 503, the application or the ingress controller's own configuration does": "hâlâ 503 dönüyorsa, bunu uygulamanın kendisi ya da ingress controller'ın kendi yapılandırması yapıyor",
+  "Points to another API server: changes locked until confirmed in Connections": "Başka bir API server'ı gösteriyor: Bağlantılar'da onaylanana kadar değişiklikler kilitli",
+  "Review": "İncele",
+  "New server confirmed": "Yeni sunucu onaylandı",
+  "Not confirmed": "Onaylanmadı",
+  "Keep {env} · {protection} and allow changes": "{env} · {protection} ayarını koru ve değişikliklere izin ver",
+  "read-only": "salt okunur",
+  "protected": "korumalı",
+  "standard": "standart",
+  "now points to {to} (was {from}). Its environment and protection were set for the old server, so changes are locked until you confirm them for the new one.": "artık {to} adresini gösteriyor (önceden {from}). Ortamı ve koruması eski sunucu için ayarlanmıştı; yeni sunucu için onaylayana kadar değişiklikler kilitli.",
 };

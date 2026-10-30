@@ -41,6 +41,7 @@ type TableColumn struct {
 // GenericRow is one object of a generic list.
 type GenericRow struct {
 	ID        string            `json:"id"`
+	UID       string            `json:"uid,omitempty"`
 	Cluster   string            `json:"cluster"`
 	Namespace string            `json:"namespace,omitempty"`
 	Name      string            `json:"name"`
@@ -81,10 +82,10 @@ func (m *Manager) ResourceKinds(cluster string) ([]KindInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := c.resolve("Pod"); err != nil && c.kinds.err != nil {
-		return nil, c.kinds.err
+	out, err := c.listableKinds()
+	if err != nil {
+		return nil, err
 	}
-	out := append([]KindInfo(nil), c.kinds.listable...)
 	rank := func(g string) int {
 		switch g {
 		case "":
@@ -204,7 +205,7 @@ func tableRows(rows []metav1.TableRow, keep []int) []GenericRow {
 		if len(r.Object.Raw) > 0 {
 			_ = json.Unmarshal(r.Object.Raw, &meta)
 		}
-		row := GenericRow{Namespace: meta.Namespace, Name: meta.Name, Labels: meta.Labels, Cells: make([]string, 0, len(keep))}
+		row := GenericRow{UID: string(meta.UID), Namespace: meta.Namespace, Name: meta.Name, Labels: meta.Labels, Cells: make([]string, 0, len(keep))}
 		if !meta.CreationTimestamp.IsZero() {
 			row.Created = meta.CreationTimestamp.UTC().Format(time.RFC3339)
 		}
@@ -259,7 +260,7 @@ func (c *clusterConn) listPlain(ctx context.Context, gvr schema.GroupVersionReso
 		if e == nil {
 			out.Truncated = l.GetContinue() != ""
 			for _, o := range l.Items {
-				items = append(items, GenericRow{Namespace: o.GetNamespace(), Name: o.GetName(), Labels: o.GetLabels(), Created: rfc3339(o.GetCreationTimestamp()), Cells: []string{}})
+				items = append(items, GenericRow{UID: string(o.GetUID()), Namespace: o.GetNamespace(), Name: o.GetName(), Labels: o.GetLabels(), Created: rfc3339(o.GetCreationTimestamp()), Cells: []string{}})
 			}
 		}
 	} else {
@@ -268,7 +269,7 @@ func (c *clusterConn) listPlain(ctx context.Context, gvr schema.GroupVersionReso
 		if e == nil {
 			out.Truncated = l.GetContinue() != ""
 			for _, o := range l.Items {
-				items = append(items, GenericRow{Name: o.GetName(), Labels: o.GetLabels(), Created: rfc3339(o.GetCreationTimestamp()), Cells: []string{}})
+				items = append(items, GenericRow{UID: string(o.GetUID()), Name: o.GetName(), Labels: o.GetLabels(), Created: rfc3339(o.GetCreationTimestamp()), Cells: []string{}})
 			}
 		}
 	}
@@ -290,7 +291,9 @@ func rfc3339(t metav1.Time) string {
 }
 
 // DeleteResource deletes any object; dependents go with background propagation, like kubectl.
-func (m *Manager) DeleteResource(cluster, kind, ns, name string) error {
+// uid, when set, is the object the user confirmed: an object recreated under
+// the same name since then is not deleted.
+func (m *Manager) DeleteResource(cluster, kind, ns, name, uid string) error {
 	c, err := m.writable(cluster)
 	if err != nil {
 		return err
@@ -301,12 +304,13 @@ func (m *Manager) DeleteResource(cluster, kind, ns, name string) error {
 	}
 	ctx, cancel := actionCtx()
 	defer cancel()
-	bg := metav1.DeletePropagationBackground
-	opts := metav1.DeleteOptions{PropagationPolicy: &bg}
+	opts := deleteOptions(uid, metav1.DeletePropagationBackground)
 	if namespaced {
-		return c.dynamic.Resource(gvr).Namespace(ns).Delete(ctx, name, opts)
+		err = c.dynamic.Resource(gvr).Namespace(ns).Delete(ctx, name, opts)
+	} else {
+		err = c.dynamic.Resource(gvr).Delete(ctx, name, opts)
 	}
-	return c.dynamic.Resource(gvr).Delete(ctx, name, opts)
+	return replacedError(err, uid, kindLabel(kind), name)
 }
 
 // CreateResult is the outcome for one document of a manifest.

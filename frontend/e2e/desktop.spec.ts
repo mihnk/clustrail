@@ -331,3 +331,16 @@ test("service chain explains why a Service has nothing to route to", async ({ pa
   await expect(visible(page, "0 ready · 1 not ready")).toBeVisible();
   expect(backend.argsOf("ServiceChain")[0]).toEqual(["prod-eu-west-1", "payments", "Service", "checkout-api"]);
 });
+
+test("a context that now points to another server locks changes until confirmed", async ({ page, context }) => {
+  await page.close();
+  const p = await context.newPage();
+  const b = await openDesktop(p, { targetChanged: { "prod-eu-west-1": { from: "https://10.0.0.1:6443", to: "https://10.9.9.9:6443" } } });
+  await expect(p.locator("nav, aside").getByTitle(/Points to another API server/).first()).toBeVisible();
+  await palette(p, "Connections");
+  await expect(p.getByText(/now points to https:\/\/10\.9\.9\.9:6443 \(was https:\/\/10\.0\.0\.1:6443\)/)).toBeVisible();
+  await p.getByRole("button", { name: "Keep PROD · protected and allow changes" }).click();
+  await expect(p.getByText("New server confirmed")).toBeVisible();
+  expect(b.argsOf("ConfirmTarget")).toEqual([["prod-eu-west-1"]]);
+  expect(b.errors).toEqual([]);
+});

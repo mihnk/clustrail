@@ -157,12 +157,14 @@ export interface WorkspaceState {
 
   // Mock mutations. In the desktop build these are requests to the Go backend;
   // the UI then follows the resulting watch events.
-  deletePod: (id: string) => void;
+  /** uid: the pod the user confirmed (desktop). */
+  deletePod: (id: string, uid?: string) => void;
   restartDeployment: (id: string) => void;
   scaleDeployment: (id: string, replicas: number) => void;
-  rollbackDeployment: (id: string, rev: number) => void;
+  /** fromRev: the revision the user saw when confirming (desktop). */
+  rollbackDeployment: (id: string, rev: number, fromRev?: number) => void;
   setDeploymentPaused: (id: string, paused: boolean) => void;
-  deleteDeployment: (id: string) => void;
+  deleteDeployment: (id: string, uid?: string) => void;
   setNodeCordoned: (id: string, cordoned: boolean) => void;
   /** Cordons the node and evicts its pods in the background. */
   drainNode: (id: string, opts: { force: boolean; deleteEmptyDir: boolean; timeoutSec: number }) => void;

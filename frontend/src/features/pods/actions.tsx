@@ -12,7 +12,7 @@ interface PodActionDeps {
   cluster: Cluster | undefined;
   deployments: DeploymentRow[];
   confirm: (r: ConfirmationRequest) => void;
-  deletePod: (id: string) => void;
+  deletePod: (id: string, uid?: string) => void;
   restartDeployment: (id: string) => void;
   /** Opens a resource detail tab (created when missing). */
   openResource: (cluster: string, kind: string, namespace: string, name: string) => void;
@@ -100,7 +100,7 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       shortcut: "⌘⌫",
       danger: true,
       disabled: pod.health === "terminating",
-      onSelect: () => deps.confirm(deletePodRequest(pod, deps.cluster, () => deps.deletePod(pod.id))),
+      onSelect: () => deps.confirm(deletePodRequest(pod, deps.cluster, () => deps.deletePod(pod.id, pod.uid))),
     },
   ];
 }

@@ -167,6 +167,35 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
           <Button onClick={() => clusters.forEach(runTest)}>
             <Play aria-hidden />{tt("Test all")}</Button>
         </div>
+        {clusters
+          .filter((c) => c.targetChanged)
+          .map((c) => (
+            <Banner
+              key={`target:${c.id}`}
+              tone="warning"
+              title={c.name}
+              className="mx-3.5 mt-2.5 items-start text-ui"
+              action={
+                <span className="flex shrink-0 gap-1.5">
+                  <Button size="sm" onClick={() => setSelectedId(c.id)}>{tt("Review")}</Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() =>
+                      backend
+                        ?.confirmTarget(c.id)
+                        .then(() => toast.show({ kind: "success", title: tt("New server confirmed"), target: c.name, env: c.env }))
+                        .catch((e) => toast.show({ kind: "error", title: tt("Not confirmed"), target: c.name, detail: errorText(e) }))
+                    }
+                  >
+                    {tt("Keep {env} · {protection} and allow changes", { env: c.env.toUpperCase(), protection: c.readOnly ? tt("read-only") : c.protected ? tt("protected") : tt("standard") })}
+                  </Button>
+                </span>
+              }
+            >
+              {tt("now points to {to} (was {from}). Its environment and protection were set for the old server, so changes are locked until you confirm them for the new one.", { to: c.targetChanged!.to, from: c.targetChanged!.from })}
+            </Banner>
+          ))}
         <div className={cn(grid, "h-9 shrink-0 border-b border-line text-ui text-fg-muted")}>
           <span>{tt("Context · server")}</span>
           <span className="max-[1360px]:hidden">{tt("Auth")}</span>

@@ -85,6 +85,10 @@ type clusterConn struct {
 	helm      *helmWatcher
 	gitops    *gitopsWatcher
 	forbidden []Forbidden
+	// fingerprint of the kubeconfig inputs this connection was built from (manager.go).
+	fingerprint string
+	// health tracks watches (and poll loops) that failed and have not caught up yet.
+	health watchHealth
 	// fallbackNS is the namespace listed instead when RBAC denies a resource
 	// cluster-wide: the context's namespace, or "default".
 	fallbackNS string
@@ -292,19 +296,22 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 	// object), and they are often the largest part of an object.
 	c.factory = informers.NewSharedInformerFactoryWithOptions(c.client, 0, informers.WithTransform(stripManagedFields))
 
-	watchErr := func(_ *cache.Reflector, err error) {
-		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-			return
-		}
-		// Expired resourceVersions and closed watches are routine: the reflector re-lists on its own.
-		if apierrors.IsResourceExpired(err) || apierrors.IsGone(err) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-			return
-		}
-		c.onState(Reconnecting, err)
-	}
 	add := func(inf cache.SharedIndexInformer, onChange func(obj any)) {
 		c.syncFns = append(c.syncFns, inf.HasSynced)
-		_ = inf.SetWatchErrorHandler(watchErr)
+		key := fmt.Sprintf("watch-%p", inf)
+		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				return
+			}
+			// Expired resourceVersions and closed watches are routine: the reflector re-lists on its own.
+			if apierrors.IsResourceExpired(err) || apierrors.IsGone(err) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				return
+			}
+			// The cache is behind until this informer lists or watches past where it stopped.
+			rv := inf.LastSyncResourceVersion()
+			c.health.fail(key, func() bool { return inf.LastSyncResourceVersion() != rv })
+			c.onState(Reconnecting, err)
+		})
 		_, _ = inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    onChange,
 			UpdateFunc: func(_, obj any) { onChange(obj) },
@@ -913,6 +920,7 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 	}
 	idx := cache.NewIndexer(cache.MetaNamespaceKeyFunc, indexers)
 	every := pollEvery
+	key := fmt.Sprintf("poll-%p", idx)
 	var synced atomic.Bool
 	go func() {
 		for {
@@ -923,8 +931,10 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 				if ctx.Err() != nil {
 					return
 				}
+				c.health.fail(key, nil) // behind until a list succeeds
 				c.onState(Reconnecting, err)
 			} else {
+				c.health.ok(key)
 				old := map[string]any{}
 				for _, o := range idx.List() {
 					if k, err := cache.MetaNamespaceKeyFunc(o); err == nil {
@@ -968,4 +978,42 @@ func resourceVersion(obj any) string {
 		return a.GetResourceVersion()
 	}
 	return ""
+}
+
+// watchHealth says whether the caches are current. A failed watch is behind
+// until its informer syncs past the resourceVersion it stopped at; a failed
+// poll is behind until a list succeeds. An API server that answers proves
+// neither.
+type watchHealth struct {
+	mu     sync.Mutex
+	broken map[string]func() bool // key → caught up?
+}
+
+func (h *watchHealth) fail(key string, caughtUp func() bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.broken == nil {
+		h.broken = map[string]func() bool{}
+	}
+	if _, ok := h.broken[key]; !ok {
+		h.broken[key] = caughtUp
+	}
+}
+
+func (h *watchHealth) ok(key string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.broken, key)
+}
+
+// behind drops the sources that caught up and counts the rest.
+func (h *watchHealth) behind() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for k, caughtUp := range h.broken {
+		if caughtUp != nil && caughtUp() {
+			delete(h.broken, k)
+		}
+	}
+	return len(h.broken)
 }

@@ -130,6 +130,7 @@ export interface TableColumn {
 
 export interface GenericRow {
   id: string;
+  uid?: string;
   cluster: string;
   namespace?: string;
   name: string;
@@ -680,12 +681,15 @@ export const backendApi = {
 
   podDetail: (cluster: string, ns: string, name: string) => call<PodDetail>("PodDetail", cluster, ns, name),
   events: (cluster: string, ns: string, kind: string, name: string) => call<ResourceEvent[]>("Events", cluster, ns, kind, name),
-  deletePod: (cluster: string, ns: string, name: string) => call<void>("DeletePod", cluster, ns, name),
+  /** uid: the object the user confirmed; one recreated under the same name is not deleted. */
+  deletePod: (cluster: string, ns: string, name: string, uid: string) => call<void>("DeletePod", cluster, ns, name, uid),
   restartDeployment: (cluster: string, ns: string, name: string) => call<void>("RestartDeployment", cluster, ns, name),
   scaleDeployment: (cluster: string, ns: string, name: string, replicas: number) => call<void>("ScaleDeployment", cluster, ns, name, replicas),
-  rollbackDeployment: (cluster: string, ns: string, name: string, rev: number) => call<void>("RollbackDeployment", cluster, ns, name, rev),
+  /** fromRev: the revision the user saw when confirming; nothing changes if it moved on. */
+  rollbackDeployment: (cluster: string, ns: string, name: string, rev: number, fromRev: number) => call<void>("RollbackDeployment", cluster, ns, name, rev, fromRev),
   setDeploymentPaused: (cluster: string, ns: string, name: string, paused: boolean) => call<void>("SetDeploymentPaused", cluster, ns, name, paused),
-  deleteDeployment: (cluster: string, ns: string, name: string) => call<void>("DeleteDeployment", cluster, ns, name),
+  deleteDeployment: (cluster: string, ns: string, name: string, uid: string) => call<void>("DeleteDeployment", cluster, ns, name, uid),
+  confirmTarget: (id: string) => call<void>("ConfirmTarget", id),
   setNodeCordoned: (cluster: string, node: string, cordoned: boolean) => call<void>("SetNodeCordoned", cluster, node, cordoned),
   previewDrain: (cluster: string, node: string, opts: DrainOptions) => call<DrainPlan>("PreviewDrain", cluster, node, opts),
   drainNode: (cluster: string, node: string, opts: DrainOptions) => call<string>("DrainNode", cluster, node, opts),
@@ -698,7 +702,7 @@ export const backendApi = {
 
   resourceKinds: (cluster: string) => call<KindInfo[]>("ResourceKinds", cluster),
   listResources: (cluster: string, kind: string, namespace: string) => call<GenericList>("ListResources", cluster, kind, namespace),
-  deleteResource: (cluster: string, kind: string, ns: string, name: string) => call<void>("DeleteResource", cluster, kind, ns, name),
+  deleteResource: (cluster: string, kind: string, ns: string, name: string, uid: string) => call<void>("DeleteResource", cluster, kind, ns, name, uid),
   startListWatch: (cluster: string, kind: string, namespace: string) => call<string>("StartListWatch", cluster, kind, namespace),
   stopListWatch: (id: string) => call<void>("StopListWatch", id),
   createObjects: (cluster: string, text: string, dryRun: boolean) => call<CreateResult[]>("CreateObjects", cluster, text, dryRun),

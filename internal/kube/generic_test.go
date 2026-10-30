@@ -83,10 +83,10 @@ func TestListResourcesKindsAndDelete(t *testing.T) {
 	}
 
 	ro := managerWith(c, true)
-	if err := ro.DeleteResource("test", "Service", "payments", "checkout-api"); err != ErrReadOnly {
+	if err := ro.DeleteResource("test", "Service", "payments", "checkout-api", ""); err != ErrReadOnly {
 		t.Fatalf("read-only delete err = %v", err)
 	}
-	if err := m.DeleteResource("test", "Service", "payments", "checkout-api"); err != nil {
+	if err := m.DeleteResource("test", "Service", "payments", "checkout-api", ""); err != nil {
 		t.Fatal(err)
 	}
 	if l, _ := m.ListResources("test", "Service", "payments"); len(l.Rows) != 0 {

@@ -445,7 +445,7 @@ func (m *Manager) GetHelmRevision(cluster, ns, name string, rev int) (HelmRevisi
 	}
 	d := HelmRevisionDetail{
 		Rev:      rev,
-		Manifest: r.Manifest,
+		Manifest: maskSecretsInManifest(r.Manifest),
 		Values:   toYAML(r.Config, "# no user-supplied values (chart defaults)\n"),
 		Computed: toYAML(mergeValues(r.Chart.Values, r.Config), "# the chart has no values\n"),
 		Hooks:    []HelmHook{},

@@ -339,7 +339,7 @@ function Revisions({ d, cluster, limit }: { d: DeploymentRow; cluster: Cluster |
                 size="sm"
                 variant={locked ? "locked" : "default"}
                 disabled={cluster?.readOnly}
-                onClick={() => confirm(rollbackDeploymentRequest(d, cluster, r.rev, () => ws.rollbackDeployment(d.id, r.rev)))}
+                onClick={() => confirm(rollbackDeploymentRequest(d, cluster, r.rev, () => ws.rollbackDeployment(d.id, r.rev, d.revisions[0]?.rev)))}
               >
                 {locked && <Lock aria-hidden />}{tt("Roll back")}</Button>
             </span>

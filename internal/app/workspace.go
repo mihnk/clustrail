@@ -80,6 +80,11 @@ func (w *Workspace) SetSelected(ids []string) error              { return w.m.Se
 func (w *Workspace) AutoConnect()                                { w.m.AutoConnect() }
 func (w *Workspace) Namespaces(cluster string) ([]string, error) { return w.m.ListNamespaces(cluster) }
 
+// ConfirmTarget accepts the API server a context now points at.
+func (w *Workspace) ConfirmTarget(id string) error {
+	return audit("confirm new API server", id, "", w.m.ConfirmTarget(id))
+}
+
 func (w *Workspace) UpdateCluster(id string, env kube.Environment, protected, readOnly bool) error {
 	return w.m.UpdateSettings(id, env, protected, readOnly)
 }
@@ -98,8 +103,9 @@ func (w *Workspace) Events(cluster, ns, kind, name string) ([]kube.ResourceEvent
 	return w.m.EventsFor(cluster, ns, kind, name)
 }
 
-func (w *Workspace) DeletePod(cluster, ns, name string) error {
-	return audit("delete pod", cluster, target(ns, name), w.m.DeletePod(cluster, ns, name))
+// uid is the object the user confirmed; "" deletes whatever has the name.
+func (w *Workspace) DeletePod(cluster, ns, name, uid string) error {
+	return audit("delete pod", cluster, target(ns, name), w.m.DeletePod(cluster, ns, name, uid))
 }
 
 func (w *Workspace) RestartDeployment(cluster, ns, name string) error {
@@ -110,16 +116,17 @@ func (w *Workspace) ScaleDeployment(cluster, ns, name string, replicas int32) er
 	return audit(fmt.Sprintf("scale deployment to %d", replicas), cluster, target(ns, name), w.m.ScaleDeployment(cluster, ns, name, replicas))
 }
 
-func (w *Workspace) RollbackDeployment(cluster, ns, name string, revision int64) error {
-	return audit(fmt.Sprintf("roll back deployment to revision %d", revision), cluster, target(ns, name), w.m.RollbackDeployment(cluster, ns, name, revision))
+// fromRevision is the revision the user saw when confirming (0: not checked).
+func (w *Workspace) RollbackDeployment(cluster, ns, name string, revision, fromRevision int64) error {
+	return audit(fmt.Sprintf("roll back deployment to revision %d", revision), cluster, target(ns, name), w.m.RollbackDeployment(cluster, ns, name, revision, fromRevision))
 }
 
 func (w *Workspace) SetDeploymentPaused(cluster, ns, name string, paused bool) error {
 	return audit(fmt.Sprintf("set deployment paused=%t", paused), cluster, target(ns, name), w.m.SetDeploymentPaused(cluster, ns, name, paused))
 }
 
-func (w *Workspace) DeleteDeployment(cluster, ns, name string) error {
-	return audit("delete deployment", cluster, target(ns, name), w.m.DeleteDeployment(cluster, ns, name))
+func (w *Workspace) DeleteDeployment(cluster, ns, name, uid string) error {
+	return audit("delete deployment", cluster, target(ns, name), w.m.DeleteDeployment(cluster, ns, name, uid))
 }
 
 func (w *Workspace) SetNodeCordoned(cluster, node string, cordoned bool) error {
@@ -326,8 +333,8 @@ func (w *Workspace) StartListWatch(cluster, kind, namespace string) (string, err
 
 func (w *Workspace) StopListWatch(id string) { w.m.StopListWatch(id) }
 
-func (w *Workspace) DeleteResource(cluster, kind, ns, name string) error {
-	return audit("delete "+kind, cluster, target(ns, name), w.m.DeleteResource(cluster, kind, ns, name))
+func (w *Workspace) DeleteResource(cluster, kind, ns, name, uid string) error {
+	return audit("delete "+kind, cluster, target(ns, name), w.m.DeleteResource(cluster, kind, ns, name, uid))
 }
 
 func (w *Workspace) ApplyYAML(cluster, text, openedVersion string, dryRun, force bool) (kube.ApplyResult, error) {

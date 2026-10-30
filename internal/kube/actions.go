@@ -21,15 +21,34 @@ import (
 // Clustrail. It is a guard against mistakes, not a substitute for RBAC.
 var ErrReadOnly = errors.New("this context is read-only in Clustrail")
 
+// ErrTargetChanged is returned for any change on a context whose kubeconfig
+// now points at another server than the one confirmed in Clustrail.
+var ErrTargetChanged = errors.New("this context now points to another API server; confirm it in Connections before making changes")
+
 func (m *Manager) writable(id string) (*clusterConn, error) {
+	// A kubeconfig edited in the last seconds is read now, so the change goes
+	// where the context points, never through a connection built for an old target.
+	m.mu.Lock()
+	changed := m.kc != nil && m.kc.Changed(m.store.ExtraKubeconfigs())
+	m.mu.Unlock()
+	if changed {
+		m.reload()
+	}
 	m.mu.Lock()
 	st := m.state[id]
+	var target *TargetChange
+	if st != nil {
+		target = st.TargetChanged
+	}
 	m.mu.Unlock()
 	if st == nil {
 		return nil, fmt.Errorf("unknown context %q", id)
 	}
 	if st.ReadOnly {
 		return nil, ErrReadOnly
+	}
+	if target != nil {
+		return nil, ErrTargetChanged
 	}
 	return m.conn(id)
 }
@@ -43,14 +62,37 @@ var fieldManager = metav1.PatchOptions{FieldManager: "clustrail"}
 // evictRetry is how long a drain waits before retrying evictions a PodDisruptionBudget refused.
 var evictRetry = 5 * time.Second
 
-func (m *Manager) DeletePod(cluster, ns, name string) error {
+// deleteOptions carries the UID of the object the user confirmed as a
+// precondition, so an object recreated under the same name (a StatefulSet
+// pod, a re-applied manifest) is not deleted in its place.
+func deleteOptions(uid string, propagation metav1.DeletionPropagation) metav1.DeleteOptions {
+	opts := metav1.DeleteOptions{}
+	if propagation != "" {
+		opts.PropagationPolicy = &propagation
+	}
+	if uid != "" {
+		u := types.UID(uid)
+		opts.Preconditions = &metav1.Preconditions{UID: &u}
+	}
+	return opts
+}
+
+// replacedError explains a failed UID precondition.
+func replacedError(err error, uid, kind, name string) error {
+	if err != nil && uid != "" && apierrors.IsConflict(err) && strings.Contains(err.Error(), "UID") {
+		return fmt.Errorf("%s %s was replaced by a new object with the same name after you confirmed; nothing was deleted", kind, name)
+	}
+	return err
+}
+
+func (m *Manager) DeletePod(cluster, ns, name, uid string) error {
 	c, err := m.writable(cluster)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := actionCtx()
 	defer cancel()
-	return c.client.CoreV1().Pods(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	return replacedError(c.client.CoreV1().Pods(ns).Delete(ctx, name, deleteOptions(uid, "")), uid, "pod", name)
 }
 
 // RestartDeployment does what `kubectl rollout restart` does: it stamps the pod template.
@@ -93,20 +135,24 @@ func (m *Manager) SetDeploymentPaused(cluster, ns, name string, paused bool) err
 	return err
 }
 
-func (m *Manager) DeleteDeployment(cluster, ns, name string) error {
+func (m *Manager) DeleteDeployment(cluster, ns, name, uid string) error {
 	c, err := m.writable(cluster)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := actionCtx()
 	defer cancel()
-	fg := metav1.DeletePropagationForeground
-	return c.client.AppsV1().Deployments(ns).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &fg})
+	err = c.client.AppsV1().Deployments(ns).Delete(ctx, name, deleteOptions(uid, metav1.DeletePropagationForeground))
+	return replacedError(err, uid, "deployment", name)
 }
 
-// RollbackDeployment does what `kubectl rollout undo --to-revision` does: it
-// copies the pod template of that revision's ReplicaSet into the Deployment.
-func (m *Manager) RollbackDeployment(cluster, ns, name string, revision int64) error {
+// RollbackDeployment does what `kubectl rollout undo --to-revision` does: the
+// pod template of that revision's ReplicaSet replaces the Deployment's whole
+// template (containers added since then go too). fromRevision is the revision
+// the user saw when confirming (0: not checked): if the Deployment moved on
+// since, nothing is changed. The update carries the resourceVersion it read, so
+// a change in between is refused too.
+func (m *Manager) RollbackDeployment(cluster, ns, name string, revision, fromRevision int64) error {
 	c, err := m.writable(cluster)
 	if err != nil {
 		return err
@@ -116,6 +162,9 @@ func (m *Manager) RollbackDeployment(cluster, ns, name string, revision int64) e
 	d, err := c.client.AppsV1().Deployments(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return err
+	}
+	if cur := revisionOf(d); fromRevision > 0 && cur != fromRevision {
+		return fmt.Errorf("%s is at revision %d now, not %d as when you confirmed; nothing was rolled back", name, cur, fromRevision)
 	}
 	sel, err := metav1.LabelSelectorAsSelector(d.Spec.Selector)
 	if err != nil {
@@ -137,14 +186,15 @@ func (m *Manager) RollbackDeployment(cluster, ns, name string, revision int64) e
 	}
 	tmpl := target.Spec.Template.DeepCopy()
 	delete(tmpl.Labels, appsv1.DefaultDeploymentUniqueLabelKey)
-	patch, err := json.Marshal(map[string]any{
-		"metadata": map[string]any{"annotations": map[string]any{"deployment.kubernetes.io/change-cause": fmt.Sprintf("rollback to revision %d (Clustrail)", revision)}},
-		"spec":     map[string]any{"template": tmpl},
-	})
-	if err != nil {
-		return err
+	d.Spec.Template = *tmpl
+	if d.Annotations == nil {
+		d.Annotations = map[string]string{}
 	}
-	_, err = c.client.AppsV1().Deployments(ns).Patch(ctx, name, types.StrategicMergePatchType, patch, fieldManager)
+	d.Annotations["kubernetes.io/change-cause"] = fmt.Sprintf("rollback to revision %d (Clustrail)", revision)
+	_, err = c.client.AppsV1().Deployments(ns).Update(ctx, d, metav1.UpdateOptions{FieldManager: "clustrail"})
+	if apierrors.IsConflict(err) {
+		return fmt.Errorf("%s changed while rolling back; nothing was rolled back, try again", name)
+	}
 	return err
 }
 
@@ -232,9 +282,11 @@ func drainPlan(pods []corev1.Pod, opts DrainOptions) DrainPlan {
 	return p
 }
 
-// DrainNode cordons the node and evicts its pods through the Eviction API, so
-// PodDisruptionBudgets are respected; evictions refused by a PDB are retried
-// until the timeout. Progress is reported as Job events.
+// DrainNode cordons the node, evicts its pods through the Eviction API (so
+// PodDisruptionBudgets are respected; refused evictions are retried) and waits
+// until the evicted pods are gone, like kubectl drain: an accepted eviction
+// only starts a pod's termination (grace period, preStop hooks, finalizers).
+// Progress is reported as Job events; Done means the pods have left the node.
 func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string) (string, error) {
 	c, err := m.writable(cluster)
 	if err != nil {
@@ -250,9 +302,14 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 	if plan.Blocked != "" {
 		return "", errors.New("drain refused: " + plan.Blocked)
 	}
+	// A pod recreated under the same name (StatefulSet) is a new pod: compare UIDs.
+	uids := map[string]types.UID{}
+	for i := range pods.Items {
+		uids[pods.Items[i].Namespace+"/"+pods.Items[i].Name] = pods.Items[i].UID
+	}
 	jobID := fmt.Sprintf("drain-%s-%s-%d", cluster, node, time.Now().UnixMilli())
 	short := strings.SplitN(node, ".", 2)[0]
-	timeout := time.Duration(max(opts.TimeoutSec, 30)) * time.Second
+	timeout := max(time.Duration(opts.TimeoutSec)*time.Second, drainMinTimeout)
 	go func() {
 		ctx, cancel := context.WithTimeout(c.ctx, timeout)
 		defer cancel()
@@ -261,44 +318,111 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 			report(Job{Done: true, Error: err.Error()})
 			return
 		}
-		pending := append([]string(nil), plan.Evict...)
-		total := len(pending)
-		for len(pending) > 0 {
-			var blocked []string
-			var lastErr error
-			for _, key := range pending {
+		total := len(plan.Evict)
+		pending := append([]string(nil), plan.Evict...) // not evicted yet
+		var evicted []string                            // eviction accepted, pod not gone yet
+		gone := 0
+		var lastEvict time.Time
+		var pdbErr error
+		for {
+			// Stage 1: evict, retrying PDB refusals every evictRetry.
+			if len(pending) > 0 && time.Since(lastEvict) >= evictRetry {
+				lastEvict = time.Now()
+				var blocked []string
+				for _, key := range pending {
+					ns, name, _ := strings.Cut(key, "/")
+					err := c.client.PolicyV1().Evictions(ns).Evict(ctx, &policyv1.Eviction{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}})
+					switch {
+					case err == nil, apierrors.IsNotFound(err):
+						evicted = append(evicted, key)
+					case apierrors.IsTooManyRequests(err):
+						blocked = append(blocked, key) // a PodDisruptionBudget allows no disruption now
+						pdbErr = err
+					default:
+						report(Job{Done: true, Error: fmt.Sprintf("evicting %s: %v", key, err)})
+						return
+					}
+				}
+				pending = blocked
+			}
+			// Stage 2: wait for evicted pods to be deleted (or replaced by a new pod of the same name).
+			var terminating []string
+			for _, key := range evicted {
 				ns, name, _ := strings.Cut(key, "/")
-				err := c.client.PolicyV1().Evictions(ns).Evict(ctx, &policyv1.Eviction{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}})
+				p, err := c.client.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{})
 				switch {
-				case err == nil, apierrors.IsNotFound(err):
-				case apierrors.IsTooManyRequests(err):
-					blocked = append(blocked, key) // a PodDisruptionBudget allows no disruption now
-					lastErr = err
-				default:
-					report(Job{Done: true, Error: fmt.Sprintf("evicting %s: %v", key, err)})
-					return
+				case apierrors.IsNotFound(err), err == nil && p.UID != uids[key]:
+					gone++
+				case err != nil && ctx.Err() == nil:
+					terminating = append(terminating, key) // transient read error: look again
+				case err == nil:
+					terminating = append(terminating, key+terminationNote(p))
 				}
 			}
-			done := total - len(blocked)
-			detail := fmt.Sprintf("%d of %d evicted", done, total)
-			if len(blocked) > 0 {
-				detail += fmt.Sprintf(" · %d waiting for PodDisruptionBudget", len(blocked))
+			evicted = stripNotes(terminating)
+			accepted := total - len(pending)
+			detail := fmt.Sprintf("%d of %d evicted · %d gone", accepted, total, gone)
+			if len(pending) > 0 {
+				detail += fmt.Sprintf(" · %d waiting for PodDisruptionBudget", len(pending))
 			}
-			report(Job{Progress: float64(done) / float64(max(total, 1)), Detail: detail})
-			pending = blocked
-			if len(pending) == 0 {
-				break
+			if len(evicted) > 0 {
+				detail += fmt.Sprintf(" · %d terminating", len(evicted))
 			}
+			if len(pending) == 0 && len(evicted) == 0 {
+				report(Job{Done: true, Progress: 1, Detail: fmt.Sprintf("%d pods evicted and gone · node stays cordoned", total)})
+				return
+			}
+			report(Job{Progress: float64(accepted+gone) / float64(2*max(total, 1)), Detail: detail})
 			select {
 			case <-ctx.Done():
-				report(Job{Done: true, Error: fmt.Sprintf("timed out after %s: %d pods not evicted (%v)", timeout, len(pending), lastErr)})
+				var parts []string
+				if len(pending) > 0 {
+					parts = append(parts, fmt.Sprintf("%d not evicted (%v)", len(pending), pdbErr))
+				}
+				if len(terminating) > 0 {
+					parts = append(parts, fmt.Sprintf("%d still terminating: %s", len(terminating), strings.Join(firstN(terminating, 5), ", ")))
+				}
+				report(Job{Done: true, Error: fmt.Sprintf("timed out after %s: %s · the node is cordoned but not empty", timeout, strings.Join(parts, "; "))})
 				return
-			case <-time.After(evictRetry):
+			case <-time.After(drainPoll):
 			}
 		}
-		report(Job{Done: true, Progress: 1, Detail: fmt.Sprintf("%d pods evicted · node stays cordoned", total)})
 	}()
 	return jobID, nil
+}
+
+// drainPoll is how often a drain checks whether evicted pods are gone.
+var drainPoll = 2 * time.Second
+
+// drainMinTimeout is the shortest drain timeout accepted.
+var drainMinTimeout = 30 * time.Second
+
+// terminationNote says why a pod is still there: " (finalizers: a, b)", " (terminating, grace 300s)".
+func terminationNote(p *corev1.Pod) string {
+	switch {
+	case p.DeletionTimestamp != nil && len(p.Finalizers) > 0:
+		return " (finalizers: " + strings.Join(p.Finalizers, ", ") + ")"
+	case p.DeletionTimestamp != nil && p.DeletionGracePeriodSeconds != nil:
+		return fmt.Sprintf(" (terminating, grace %ds)", *p.DeletionGracePeriodSeconds)
+	case p.DeletionTimestamp != nil:
+		return " (terminating)"
+	}
+	return " (not deleted yet)"
+}
+
+func stripNotes(keys []string) []string {
+	out := make([]string, len(keys))
+	for i, k := range keys {
+		out[i], _, _ = strings.Cut(k, " (")
+	}
+	return out
+}
+
+func firstN(xs []string, n int) []string {
+	if len(xs) > n {
+		return append(append([]string{}, xs[:n]...), fmt.Sprintf("+%d more", len(xs)-n))
+	}
+	return xs
 }
 
 // PreviewDrain returns the drain plan without changing anything.

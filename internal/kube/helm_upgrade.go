@@ -516,3 +516,31 @@ func containsLine(text, line string) bool {
 	}
 	return false
 }
+
+// maskSecretsInManifest hides the values of every Secret in a rendered
+// manifest (Helm revision views); other documents are kept as they are.
+func maskSecretsInManifest(manifest string) string {
+	parts := strings.Split(manifest, "\n---")
+	for i, part := range parts {
+		docs := splitManifest(part, "")
+		for _, d := range docs {
+			if d.secret == nil {
+				continue
+			}
+			// Keep Helm's "# Source:" comment, which the re-encoded YAML would lose.
+			var head []string
+			for _, line := range strings.Split(strings.TrimLeft(part, "\n"), "\n") {
+				if !strings.HasPrefix(line, "#") {
+					break
+				}
+				head = append(head, line)
+			}
+			masked := maskManifestSecret(d, nil)
+			if len(head) > 0 {
+				masked = strings.Join(head, "\n") + "\n" + masked
+			}
+			parts[i] = "\n" + masked + "\n"
+		}
+	}
+	return strings.Join(parts, "\n---")
+}

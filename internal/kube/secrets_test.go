@@ -64,3 +64,49 @@ func TestSecretsAreHiddenUntilRevealed(t *testing.T) {
 		t.Fatal("a placeholder for a key the Secret does not have must be refused")
 	}
 }
+
+func TestLastAppliedCopyOfASecretIsMasked(t *testing.T) {
+	applied := `{"apiVersion":"v1","data":{"password":"aHVudGVyMg=="},"kind":"Secret","metadata":{"name":"db","namespace":"payments"},"stringData":{"token":"s3cret"},"type":"Opaque"}`
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "payments", Annotations: map[string]string{lastApplied: applied, "team": "billing"}},
+		Type:       corev1.SecretTypeOpaque,
+		Data:       map[string][]byte{"password": []byte("hunter2")},
+	}
+	c, client, _ := newFakeConn(t, secret)
+	client.Fake.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{{Name: "secrets", Kind: "Secret", Namespaced: true, Verbs: []string{"get", "list"}}}}}
+	c.dynamic = dynamicfake.NewSimpleDynamicClient(scheme.Scheme, secret.DeepCopy())
+	m := managerWith(c, false)
+
+	live, err := m.GetObject("test", "Secret", "payments", "db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leak := range []string{"hunter2", "aHVudGVyMg", "s3cret"} {
+		if strings.Contains(live.YAML, leak) {
+			t.Fatalf("%q leaked into YAML:\n%s", leak, live.YAML)
+		}
+	}
+	if !strings.Contains(live.YAML, `{"apiVersion":"v1","data":{"password":"(hidden,`) || !strings.Contains(live.YAML, "team: billing") {
+		t.Fatalf("masked annotation:\n%s", live.YAML)
+	}
+
+	// Saving the YAML as shown keeps the live last-applied copy, not placeholders.
+	edited := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Secret",
+		"metadata": map[string]any{"name": "db", "namespace": "payments", "annotations": map[string]any{lastApplied: `{"data":{"password":"(hidden, 7 bytes)"}}`}},
+		"data":     map[string]any{"password": "(hidden, 7 bytes)"},
+	}}
+	if err := unmaskSecret(c, edited); err != nil {
+		t.Fatal(err)
+	}
+	if got := edited.GetAnnotations()[lastApplied]; got != applied {
+		t.Fatalf("annotation after save = %q", got)
+	}
+
+	// Unreadable copies are hidden whole.
+	broken := &unstructured.Unstructured{Object: map[string]any{"metadata": map[string]any{"annotations": map[string]any{lastApplied: "{not json hunter2"}}}}
+	maskLastApplied(broken)
+	if strings.Contains(broken.GetAnnotations()[lastApplied], "hunter2") {
+		t.Fatal("an unreadable copy must not be shown")
+	}
+}

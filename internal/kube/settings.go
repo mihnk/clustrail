@@ -29,6 +29,10 @@ type settingsFile struct {
 	// SetupDone: first-run setup was finished or skipped. Missing in files
 	// written before setup existed, whose users are past it.
 	SetupDone *bool `json:"setupDone,omitempty"`
+	// Servers is the API server each context was last confirmed to point at.
+	// Environment and protection are stored by context name; when the name
+	// starts pointing elsewhere they must be confirmed again.
+	Servers map[string]string `json:"servers,omitempty"`
 }
 
 // Store persists context settings as JSON in the user config directory
@@ -199,5 +203,47 @@ func (s *Store) SetKnown(contexts []string) error {
 	defer s.mu.Unlock()
 	s.data.Known = append([]string(nil), contexts...)
 	s.data.FirstRunDone = true
+	return s.save()
+}
+
+// ConfirmedServer is the server a context was last confirmed to point at ("" if never recorded).
+func (s *Store) ConfirmedServer(context string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data.Servers[context]
+}
+
+// RecordServers stores the server of contexts that have none recorded yet
+// (first sight); it never overwrites a confirmed one.
+func (s *Store) RecordServers(servers map[string]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for ctx, server := range servers {
+		if server == "" {
+			continue
+		}
+		if s.data.Servers == nil {
+			s.data.Servers = map[string]string{}
+		}
+		if _, ok := s.data.Servers[ctx]; !ok {
+			s.data.Servers[ctx] = server
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return s.save()
+}
+
+// ConfirmServer records that the user accepted the context's new server.
+func (s *Store) ConfirmServer(context, server string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.Servers == nil {
+		s.data.Servers = map[string]string{}
+	}
+	s.data.Servers[context] = server
 	return s.save()
 }

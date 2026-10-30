@@ -333,6 +333,8 @@ export interface FakeOptions {
   pods?: (cluster: string) => unknown[];
   /** Clusters as the backend lists them (default: the fixture's). */
   clusters?: unknown[];
+  /** Contexts whose kubeconfig now names another API server, by id. */
+  targetChanged?: Record<string, { from: string; to: string }>;
 }
 
 /** Opens the app in desktop mode against the fake backend, with fresh local storage. */
@@ -344,6 +346,7 @@ export async function openDesktop(page: Page, opts: FakeOptions = {}): Promise<F
     d.list.forbidden = [];
     (d as { clusters: unknown[] }).clusters = opts.clusters;
   }
+  for (const c of d.clusters as { id: string; targetChanged?: unknown }[]) if (opts.targetChanged?.[c.id]) c.targetChanged = opts.targetChanged[c.id];
   const calls: string[] = [];
   const callArgs: { method: string; args: unknown[] }[] = [];
   const errors: string[] = [];
