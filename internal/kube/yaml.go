@@ -45,7 +45,9 @@ type kindIndex struct {
 	once       sync.Once
 	byKind     map[string]schema.GroupVersionResource
 	namespaced map[string]bool
-	err        error
+	// listable is every kind (preferred version) this cluster can list, for ⌘J.
+	listable []KindInfo
+	err      error
 }
 
 // resolve maps a Kind (optionally "group/Kind") to a resource using discovery.
@@ -75,6 +77,12 @@ func (c *clusterConn) resolve(kind string) (schema.GroupVersionResource, bool, e
 					continue
 				}
 				gvr := gv.WithResource(r.Name)
+				if hasVerb(r.Verbs, "list") {
+					c.kinds.listable = append(c.kinds.listable, KindInfo{
+						Kind: r.Kind, Group: gv.Group, Version: gv.Version, Resource: r.Name,
+						Namespaced: r.Namespaced, ShortNames: r.ShortNames, Delete: hasVerb(r.Verbs, "delete"),
+					})
+				}
 				for _, key := range []string{r.Kind, gv.Group + "/" + r.Kind} {
 					// Core and apps win over aggregated APIs that reuse a Kind name.
 					if _, dup := c.kinds.byKind[key]; !dup || gv.Group == "" || gv.Group == "apps" {
@@ -257,6 +265,17 @@ func (m *Manager) ApplyYAML(cluster, text, openedVersion string, dryRun, force b
 	unstructured.RemoveNestedField(obj.Object, "status")
 	if openedVersion != "" {
 		obj.SetResourceVersion(openedVersion)
+	}
+	if obj.GetName() == "" {
+		return res, fmt.Errorf("metadata.name is required")
+	}
+	if namespaced && obj.GetNamespace() == "" {
+		// Like kubectl: the context's namespace.
+		ns := c.fallbackNS
+		if ns == "" {
+			ns = "default"
+		}
+		obj.SetNamespace(ns)
 	}
 	body, err := json.Marshal(obj.Object)
 	if err != nil {

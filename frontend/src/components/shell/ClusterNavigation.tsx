@@ -2,6 +2,9 @@ import type { ReactNode } from "react";
 import {
   Activity,
   Box,
+  Clock,
+  Copy,
+  Database,
   FileText,
   GitBranch,
   Globe,
@@ -11,11 +14,14 @@ import {
   Lock,
   Network,
   Pin,
+  Play,
   Plus,
   Route,
   Server,
 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
+import { useOverlays } from "@/app/shortcuts";
+import { LISTED_KINDS } from "@/features/resources/kinds";
 import type { Environment } from "@/data/types";
 import { isAttention } from "@/data/health";
 import { IS_MOCK } from "@/data/mock";
@@ -36,6 +42,21 @@ const envGroups: { env: Environment; label: string }[] = [
 export function ClusterNavigation() {
   const { pods, activeTab, openTab, openView, clusters, pins, deployments, nodes, helmReleases, gitops, selectedClusterIds } = useWorkspace();
   const kind = activeTab?.kind;
+  const { openKinds } = useOverlays();
+  const listKind = kind === "list" ? activeTab?.params?.kind : undefined;
+  const list = (key: string, icon: ReactNode, mockCount?: ReactNode) => {
+    const label = LISTED_KINDS.find((k) => k.key === key)!.label;
+    return (
+      <NavItem
+        key={key}
+        icon={icon}
+        label={label}
+        active={listKind === key}
+        onClick={() => openView({ kind: "list", title: label, params: { kind: key } })}
+        trailing={real ? undefined : mockCount}
+      />
+    );
+  };
   const attention = pods.filter((p) => isAttention(p.health)).length;
   // Mock: the design's numbers. Desktop: counts over the selected clusters; kinds Clustrail does not list yet show none.
   const inSel = <T extends { cluster: string }>(rows: T[]) => rows.filter((r) => selectedClusterIds.includes(r.cluster));
@@ -65,12 +86,20 @@ export function ClusterNavigation() {
         <NavItem icon={<Network />} label="Overview" active={kind === "clusters"} onClick={() => openView({ kind: "clusters", title: "Clusters" })} trailing={<NavCount>{clusters.length}</NavCount>} />
         <NavItem icon={<Box />} label="Pods" active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{pods.length}</NavCount></>} />
         <NavItem icon={<Layers />} label="Deployments" active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })} trailing={real ? count(depsAttention, deps.length, "warning") : <><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
-        <NavItem icon={<Network />} label="Services" muted={real} trailing={real ? undefined : <NavCount>74</NavCount>} />
-        <NavItem icon={<Globe />} label="Ingresses" muted={real} trailing={real ? undefined : <NavCount>19</NavCount>} />
-        <NavItem icon={<FileText />} label="ConfigMaps" muted={real} trailing={real ? undefined : <NavCount>203</NavCount>} />
-        <NavItem icon={<Activity />} label="Events" muted={real} trailing={real ? undefined : <CountPill tone="warning" className="ml-auto">23</CountPill>} />
+        {real && (
+          <>
+            {list("apps/StatefulSet", <Database />)}
+            {list("apps/DaemonSet", <Copy />)}
+            {list("batch/Job", <Play />)}
+            {list("batch/CronJob", <Clock />)}
+          </>
+        )}
+        {list("Service", <Network />, <NavCount>74</NavCount>)}
+        {list("networking.k8s.io/Ingress", <Globe />, <NavCount>19</NavCount>)}
+        {list("ConfigMap", <FileText />, <NavCount>203</NavCount>)}
+        {list("Event", <Activity />, <CountPill tone="warning" className="ml-auto">23</CountPill>)}
         <NavItem icon={<Server />} label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={real ? count(nodesAttention, nodeRows.length, "warning") : <><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
-        <NavItem icon={<LayoutGrid />} label="All resource kinds" muted trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />
+        <NavItem icon={<LayoutGrid />} label="All resource kinds" onClick={openKinds} trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />
       </NavSection>
 
       <NavSection title={<span className="section-label">Investigations</span>}>

@@ -20,6 +20,8 @@ export type WorkspaceTabKind =
   | "deployments"
   | "nodes"
   | "resource"
+  | "list"
+  | "create"
   | "investigation"
   | "logs"
   | "shell"

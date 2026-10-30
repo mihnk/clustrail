@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { Dialog } from "radix-ui";
 import { X } from "lucide-react";
 import { CommandPalette } from "@/components/shell/CommandPalette";
+import { KindPicker } from "@/features/resources/KindPicker";
 import { IconButton } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { isMac, modKey } from "@/lib/platform";
@@ -10,6 +11,8 @@ import { useWorkspace } from "./workspace";
 interface Overlays {
   openPalette: () => void;
   openHelp: () => void;
+  /** ⌘J: every resource kind the selected clusters serve. */
+  openKinds: () => void;
   /** ⌘⇧C: the active explorer's cluster picker. */
   clusterPickerOpen: boolean;
   setClusterPickerOpen: (open: boolean) => void;
@@ -31,6 +34,7 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
   const ws = useWorkspace();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [kindsOpen, setKindsOpen] = useState(false);
   const [clusterPickerOpen, setClusterPickerOpen] = useState(false);
   const pendingG = useRef<number | null>(null);
 
@@ -40,6 +44,8 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
       const key = e.key.toLowerCase();
       if (mod && !e.shiftKey && key === "k") {
         setPaletteOpen((o) => !o);
+      } else if (mod && !e.shiftKey && key === "j") {
+        setKindsOpen((o) => !o);
       } else if (mod && e.shiftKey && key === "t") {
         ws.reopenClosedTab();
       } else if (mod && e.shiftKey && key === "c") {
@@ -71,6 +77,7 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
     () => ({
       openPalette: () => setPaletteOpen(true),
       openHelp: () => setHelpOpen(true),
+      openKinds: () => setKindsOpen(true),
       clusterPickerOpen,
       setClusterPickerOpen,
     }),
@@ -80,8 +87,9 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
   return (
     <OverlayContext.Provider value={value}>
       {children}
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onOpenKinds={() => setKindsOpen(true)} />
       <KeyboardHelp open={helpOpen} onOpenChange={setHelpOpen} />
+      <KindPicker open={kindsOpen} onOpenChange={setKindsOpen} />
     </OverlayContext.Provider>
   );
 }
@@ -98,6 +106,7 @@ const KEYS: [string[], string][] = [
   [[`${modKey}\\`], "toggle inspector"],
   [["G", "P"], "go to Pods (D, N, C)"],
   [[`${modKey}K`], "command palette"],
+  [[`${modKey}J`], "all resource kinds"],
   [[`${modKey}⇧C`], "pick clusters"],
   [[`${modKey}⇧T`], "reopen closed tab"],
   [["?"], "this help"],

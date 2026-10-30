@@ -108,6 +108,45 @@ export interface ApplyResult {
   warnings: string[];
 }
 
+export interface KindInfo {
+  kind: string;
+  group: string;
+  version: string;
+  resource: string;
+  namespaced: boolean;
+  shortNames?: string[];
+  delete: boolean;
+}
+
+export interface TableColumn {
+  name: string;
+  type: string;
+  description?: string;
+  /** > 0: kubectl shows it only with -o wide. */
+  priority: number;
+}
+
+export interface GenericRow {
+  id: string;
+  cluster: string;
+  namespace?: string;
+  name: string;
+  /** RFC 3339 */
+  created?: string;
+  labels?: Record<string, string>;
+  cells: string[];
+}
+
+export interface GenericList {
+  cluster: string;
+  kind: string;
+  namespaced: boolean;
+  columns: TableColumn[];
+  rows: GenericRow[];
+  truncated?: boolean;
+  shown?: string;
+}
+
 export interface LogsRequest {
   cluster: string;
   namespace: string;
@@ -198,6 +237,10 @@ export const backendApi = {
   getObject: (cluster: string, kind: string, ns: string, name: string) => call<LiveObjectInfo>("GetObject", cluster, kind, ns, name),
   applyYaml: (cluster: string, text: string, openedVersion: string, dryRun: boolean, force: boolean) =>
     call<ApplyResult>("ApplyYAML", cluster, text, openedVersion, dryRun, force),
+
+  resourceKinds: (cluster: string) => call<KindInfo[]>("ResourceKinds", cluster),
+  listResources: (cluster: string, kind: string, namespace: string) => call<GenericList>("ListResources", cluster, kind, namespace),
+  deleteResource: (cluster: string, kind: string, ns: string, name: string) => call<void>("DeleteResource", cluster, kind, ns, name),
 
   deploymentRelations: (cluster: string, ns: string, name: string) => call<PodRelation[]>("DeploymentRelations", cluster, ns, name),
   helmRevision: (cluster: string, ns: string, name: string, rev: number) =>

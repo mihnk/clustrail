@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Activity, Box, GitBranch, LayoutGrid, Layers, LifeBuoy, Network, Route, Server } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
+import { useOverlays } from "@/app/shortcuts";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 
@@ -10,6 +11,8 @@ import { cn } from "@/lib/cn";
  */
 export function NavigationRail() {
   const { selectedClusterIds, activeTab, openTab, openView } = useWorkspace();
+  const { openKinds } = useOverlays();
+  const listKind = activeTab?.kind === "list" ? activeTab.params?.kind : undefined;
   const kind = activeTab?.kind;
   return (
     <nav
@@ -30,16 +33,16 @@ export function NavigationRail() {
       <RailButton label="Deployments" active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })}>
         <Layers />
       </RailButton>
-      <RailButton label="Services">
+      <RailButton label="Services" active={listKind === "Service"} onClick={() => openView({ kind: "list", title: "Services", params: { kind: "Service" } })}>
         <Network />
       </RailButton>
-      <RailButton label="Events">
+      <RailButton label="Events" active={listKind === "Event"} onClick={() => openView({ kind: "list", title: "Events", params: { kind: "Event" } })}>
         <Activity />
       </RailButton>
       <RailButton label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })}>
         <Server />
       </RailButton>
-      <RailButton label="All resource kinds">
+      <RailButton label="All resource kinds" onClick={openKinds}>
         <LayoutGrid />
       </RailButton>
       <Divider />

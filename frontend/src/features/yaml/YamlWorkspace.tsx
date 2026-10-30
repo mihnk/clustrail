@@ -51,6 +51,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const { confirm } = useConfirm();
   const toast = useToast();
   const params = tab.params ?? {};
+  const kindOnly = (params.kind ?? "").slice((params.kind ?? "").lastIndexOf("/") + 1);
   const cluster = tab.cluster ? ws.clusterById(tab.cluster) : undefined;
   // Mock: a fixed object (with the investigation's suggested edit). Desktop: loaded from the API server below.
   const initial = useMemo<LiveObject>(
@@ -231,8 +232,9 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
     }
     const doc = parse(edited) as { apiVersion?: string; kind?: string; metadata?: { name?: string } } | null;
     const checks: Check[] = [];
-    if (!doc || doc.kind !== params.kind || doc.metadata?.name !== params.name) {
-      checks.push({ health: "failed", text: <>The object must keep its kind and name (<span className="font-mono">{params.kind}/{params.name}</span>).</> });
+    // params.kind may be "group/Kind" (generic lists); the document carries only the Kind.
+    if (!doc || doc.kind !== kindOnly || doc.metadata?.name !== params.name) {
+      checks.push({ health: "failed", text: <>The object must keep its kind and name (<span className="font-mono">{kindOnly}/{params.name}</span>).</> });
     } else {
       checks.push({
         health: "completed",
@@ -369,12 +371,12 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-app">
       {loadError && (
         <Banner tone="critical" className="shrink-0 rounded-none border-b border-line">
-          Could not read {params.kind}/{params.name}: <span className="selectable font-mono">{loadError}</span>
+          Could not read {kindOnly}/{params.name}: <span className="selectable font-mono">{loadError}</span>
         </Banner>
       )}
       {backend && !loadError && live.resourceVersion === "" && (
         <Banner tone="info" className="shrink-0 rounded-none border-b border-line">
-          Reading {params.kind}/{params.name} from {tab.cluster}…
+          Reading {kindOnly}/{params.name} from {tab.cluster}…
         </Banner>
       )}
       {live.gitops && (

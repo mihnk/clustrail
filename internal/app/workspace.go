@@ -132,6 +132,20 @@ func (w *Workspace) GetObject(cluster, kind, ns, name string) (kube.LiveObject, 
 	return w.m.GetObject(cluster, kind, ns, name)
 }
 
+// Generic lists: any kind the cluster serves, with the server's columns.
+
+func (w *Workspace) ResourceKinds(cluster string) ([]kube.KindInfo, error) {
+	return w.m.ResourceKinds(cluster)
+}
+
+func (w *Workspace) ListResources(cluster, kind, namespace string) (kube.GenericList, error) {
+	return w.m.ListResources(cluster, kind, namespace)
+}
+
+func (w *Workspace) DeleteResource(cluster, kind, ns, name string) error {
+	return w.m.DeleteResource(cluster, kind, ns, name)
+}
+
 func (w *Workspace) ApplyYAML(cluster, text, openedVersion string, dryRun, force bool) (kube.ApplyResult, error) {
 	return w.m.ApplyYAML(cluster, text, openedVersion, dryRun, force)
 }

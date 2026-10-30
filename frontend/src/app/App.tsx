@@ -19,11 +19,13 @@ import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspac
 import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
 import { LogsWorkspace } from "@/features/logs/LogsWorkspace";
+import { ResourceListWorkspace } from "@/features/resources/ResourceListWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
 // xterm.js and Monaco only load when a Shell or YAML tab renders.
 const ShellWorkspace = lazy(() => import("@/features/terminal/ShellWorkspace").then((m) => ({ default: m.ShellWorkspace })));
 const YamlWorkspace = lazy(() => import("@/features/yaml/YamlWorkspace").then((m) => ({ default: m.YamlWorkspace })));
+const CreateResourceWorkspace = lazy(() => import("@/features/resources/CreateResourceWorkspace").then((m) => ({ default: m.CreateResourceWorkspace })));
 import { usePersistentState } from "@/app/preferences";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
@@ -113,6 +115,14 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
         <EmptyState className="flex-1" icon={<Layers />} title={`${tab.title} · ${tab.subtitle}`}>
           Resource detail views are not implemented in this build.
         </EmptyState>
+      );
+    case "list":
+      return <ResourceListWorkspace tab={tab} active={active} />;
+    case "create":
+      return (
+        <Suspense fallback={<EmptyState className="flex-1" title="Loading editor…" />}>
+          <CreateResourceWorkspace tab={tab} active={active} />
+        </Suspense>
       );
     case "investigation":
       return <InvestigationWorkspace />;

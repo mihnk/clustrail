@@ -4,11 +4,13 @@ import {
   Box,
   GitBranch,
   KeyRound,
+  LayoutGrid,
   LifeBuoy,
   Layers,
   Lock,
   Moon,
   Network,
+  Plus,
   RotateCcw,
   Route,
   Search,
@@ -25,6 +27,7 @@ import { Kbd } from "@/components/ui/kbd";
 import type { Environment } from "@/data/types";
 import { cn } from "@/lib/cn";
 import { modKey } from "@/lib/platform";
+import { LISTED_KINDS } from "@/features/resources/kinds";
 
 type Section = "Resources" | "Actions" | "Navigate";
 const SCOPES: (Section | "All")[] = ["All", "Resources", "Actions", "Navigate"];
@@ -45,7 +48,7 @@ interface Item {
 const MAX_PER_SECTION = 6;
 
 /** ⌘K: resources, actions and navigation in one list. */
-export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: boolean; onOpenChange: (open: boolean) => void; onOpenKinds: () => void }) {
   const ws = useWorkspace();
   const { confirm } = useConfirm();
   const [query, setQuery] = useState("");
@@ -132,9 +135,21 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       ["Connections", <KeyRound key="k" />, () => ws.openView({ kind: "connections", title: "Connections" })],
       ["Settings", <Settings key="s" />, () => ws.openView({ kind: "settings", title: "Settings" })],
     ];
+    for (const k of LISTED_KINDS) {
+      nav.push([k.label, <LayoutGrid key={k.key} />, () => ws.openView({ kind: "list", title: k.label, params: { kind: k.key } })]);
+    }
     for (const [label, icon, run] of nav) {
       items.push({ id: `nav:${label}`, section: "Navigate", icon, label: `Go to ${label}`, haystack: `go to ${label}`, run });
     }
+    items.push({ id: "kinds", section: "Navigate", icon: <LayoutGrid />, label: "All resource kinds…", detail: `${modKey}J`, haystack: "all resource kinds crd custom", run: onOpenKinds });
+    items.push({
+      id: "create",
+      section: "Navigate",
+      icon: <Plus />,
+      label: "Create resource from YAML…",
+      haystack: "create new resource yaml apply",
+      run: () => ws.openView({ kind: "create", title: "New resource", params: { kind: "apps/Deployment" } }),
+    });
     items.push({
       id: "theme",
       section: "Navigate",
