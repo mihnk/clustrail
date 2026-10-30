@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -165,38 +166,69 @@ func manifestResources(manifest string) []HelmResource {
 }
 
 // chartInLocalRepoCache reports whether a chart name appears in a Helm repo
-// index cached on this machine, i.e. an upgrade source is configured.
+// cached on this machine, i.e. an upgrade source is configured.
 var chartCache struct {
 	once  sync.Once
 	names map[string]bool
 }
 
+func helmRepositoryCache() string {
+	if dir := os.Getenv("HELM_REPOSITORY_CACHE"); dir != "" {
+		return dir
+	}
+	if c, err := os.UserCacheDir(); err == nil {
+		return filepath.Join(c, "helm", "repository")
+	}
+	return ""
+}
+
 func chartInLocalRepoCache(chart string) bool {
-	chartCache.once.Do(func() {
-		chartCache.names = map[string]bool{}
-		dir := os.Getenv("HELM_REPOSITORY_CACHE")
-		if dir == "" {
-			if c, err := os.UserCacheDir(); err == nil {
-				dir = filepath.Join(c, "helm", "repository")
-			}
-		}
-		files, _ := filepath.Glob(filepath.Join(dir, "*-index.yaml"))
-		for _, f := range files {
-			raw, err := os.ReadFile(f)
-			if err != nil {
-				continue
-			}
-			var idx struct {
-				Entries map[string]any `json:"entries"`
-			}
-			if yaml.Unmarshal(raw, &idx) == nil {
-				for name := range idx.Entries {
-					chartCache.names[name] = true
+	chartCache.once.Do(func() { chartCache.names = cachedChartNames(helmRepositoryCache()) })
+	return chartCache.names[chart]
+}
+
+// cachedChartNames collects chart names from Helm's repository cache. Helm
+// writes <repo>-charts.txt (one name per line) next to each index; without it
+// the index is scanned for its entry keys. Indexes reach tens of MB (every
+// version of every chart), so they are never fully parsed.
+func cachedChartNames(dir string) map[string]bool {
+	names := map[string]bool{}
+	if dir == "" {
+		return names
+	}
+	indexes, _ := filepath.Glob(filepath.Join(dir, "*-index.yaml"))
+	for _, index := range indexes {
+		if list, err := os.Open(strings.TrimSuffix(index, "-index.yaml") + "-charts.txt"); err == nil {
+			sc := bufio.NewScanner(list)
+			for sc.Scan() {
+				if n := strings.TrimSpace(sc.Text()); n != "" {
+					names[n] = true
 				}
 			}
+			list.Close()
+			continue
 		}
-	})
-	return chartCache.names[chart]
+		f, err := os.Open(index)
+		if err != nil {
+			continue
+		}
+		sc := bufio.NewScanner(f)
+		sc.Buffer(make([]byte, 64*1024), 4*1024*1024)
+		inEntries := false
+		for sc.Scan() {
+			line := sc.Text()
+			switch {
+			case line == "entries:":
+				inEntries = true
+			case inEntries && len(line) > 0 && line[0] != ' ' && line[0] != '-':
+				inEntries = false // next top-level key
+			case inEntries && strings.HasPrefix(line, "  ") && len(line) > 2 && line[2] != ' ' && line[2] != '-' && strings.HasSuffix(line, ":"):
+				names[strings.Trim(strings.TrimSuffix(line[2:], ":"), `"'`)] = true
+			}
+		}
+		f.Close()
+	}
+	return names
 }
 
 // helmWatcher reads Helm release Secrets (label owner=helm).

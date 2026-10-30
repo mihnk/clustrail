@@ -299,6 +299,8 @@ func encodeRelease(t *testing.T, r map[string]any) []byte {
 }
 
 func TestHelmReleasesFromSecrets(t *testing.T) {
+	// Independent of the Helm repositories on the machine running the tests.
+	t.Setenv("HELM_REPOSITORY_CACHE", t.TempDir())
 	rel := func(version int, status, chartVersion, app string) *corev1.Secret {
 		return &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "sh.helm.release.v1.payments-workers.v" + itoa(version), Namespace: "payments", Labels: map[string]string{"owner": "helm"}},
@@ -489,4 +491,23 @@ func TestGitOpsRowsFromArgoAndFlux(t *testing.T) {
 		t.Fatalf("flux row = %+v", f)
 	}
 	_ = schema.GroupVersionResource{}
+}
+
+func TestCachedChartNames(t *testing.T) {
+	dir := t.TempDir()
+	index := "apiVersion: v1\nentries:\n  ingress-nginx:\n  - apiVersion: v2\n    name: ingress-nginx\n    version: 4.11.3\n  \"cert-manager\":\n  - name: cert-manager\ngenerated: \"2026-01-01T00:00:00Z\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "a-index.yaml"), []byte(index), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "b-index.yaml"), []byte("ignored when charts.txt exists"), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, "b-charts.txt"), []byte("argo-cd\nargo-workflows\n"), 0o600)
+	got := cachedChartNames(dir)
+	for _, want := range []string{"ingress-nginx", "cert-manager", "argo-cd", "argo-workflows"} {
+		if !got[want] {
+			t.Errorf("missing %q in %v", want, got)
+		}
+	}
+	if got["generated"] || got["apiVersion"] || got["name"] || len(got) != 4 {
+		t.Errorf("unexpected names: %v", got)
+	}
 }
