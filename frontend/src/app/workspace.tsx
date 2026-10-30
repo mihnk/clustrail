@@ -8,6 +8,7 @@ import {
 import type { Cluster, DeploymentRow, PodRow } from "@/data/types";
 import { nodes as initialNodes, type NodeRow } from "@/data/nodes";
 import { helmReleases as initialReleases, helmHealth, type HelmRelease } from "@/data/helm";
+import { gitopsObjects as initialGitOps, gitopsHealth, type GitOpsObject } from "@/data/gitops";
 import { useToast } from "@/components/ui/toast";
 import { usePersistentState, type Density, type Theme } from "./preferences";
 
@@ -111,6 +112,12 @@ interface WorkspaceState {
   helmReleases: HelmRelease[];
   /** helm rollback <release> <rev> --wait: a new revision with the target's manifest. */
   rollbackRelease: (id: string, rev: number) => void;
+  gitops: GitOpsObject[];
+  /** Asks the controller to re-read the source (Argo refresh annotation / Flux requestedAt). */
+  refreshGitOps: (id: string) => void;
+  /** Argo CD sync operation / Flux reconcile with source: the desired state wins over drift. */
+  syncGitOps: (id: string) => void;
+  setGitOpsSuspended: (id: string, suspended: boolean) => void;
   jobs: BackgroundJob[];
   pins: Pin[];
   pinToInvestigation: (pin: Omit<Pin, "id" | "at">) => void;
@@ -174,6 +181,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [deployments, setDeployments] = useState(initialDeployments);
   const [nodes, setNodes] = useState(initialNodes);
   const [helmReleases, setHelmReleases] = useState(initialReleases);
+  const [gitops, setGitops] = useState(initialGitOps);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [pins, setPins] = usePersistentState<Pin[]>("investigation.checkout-api-restarts.pins", []);
   const [tabs, setTabs] = useState(initialTabs);
@@ -416,6 +424,59 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [helmReleases, later, toast],
   );
 
+  const patchGitOps = useCallback(
+    (id: string, p: Partial<GitOpsObject> | ((o: GitOpsObject) => Partial<GitOpsObject>)) =>
+      setGitops((os) =>
+        os.map((o) => {
+          if (o.id !== id) return o;
+          const next = { ...o, ...(typeof p === "function" ? p(o) : p) };
+          return { ...next, health: gitopsHealth(next.sync, next.appHealth) };
+        }),
+      ),
+    [],
+  );
+
+  const refreshGitOps = useCallback(
+    (id: string) => {
+      const o = gitops.find((x) => x.id === id);
+      if (!o) return;
+      patchGitOps(id, { reconciledSeconds: 0 });
+      toast.show({ kind: "success", title: o.tool === "Argo CD" ? "Refresh requested" : "Reconcile requested", target: `${o.name} · ${o.cluster}`, env: o.env });
+    },
+    [gitops, patchGitOps, toast],
+  );
+
+  const syncGitOps = useCallback(
+    (id: string) => {
+      const o = gitops.find((x) => x.id === id);
+      if (!o) return;
+      patchGitOps(id, { appHealth: "Progressing", reconciledSeconds: 0 });
+      later(2500, () => {
+        if (o.error) {
+          patchGitOps(id, (cur) => ({ appHealth: o.appHealth, sync: "Failed", conditions: [{ type: "Ready=False", message: "ReconciliationFailed", at: new Date().toLocaleTimeString([], { hour12: false }) }, ...cur.conditions.slice(1)] }));
+          toast.show({ kind: "error", title: "Reconciliation failed", target: `${o.name} · ${o.cluster}`, env: o.env, detail: o.error, copyText: o.error });
+          return;
+        }
+        patchGitOps(id, (cur) => ({
+          sync: cur.tool === "Argo CD" ? "Synced" : "Applied",
+          appHealth: cur.appHealth === "Progressing" ? (o.appHealth === "Progressing" ? "Healthy" : o.appHealth) : cur.appHealth,
+          drift: [],
+          resources: cur.resources.map((r) => ({ ...r, status: "Synced" })),
+          history: [{ revision: cur.revision, at: "now", message: `Sync to ${cur.revision} (from Clustrail)` }, ...cur.history],
+        }));
+        toast.show({ kind: "success", title: o.tool === "Argo CD" ? "Synced" : "Reconciled", target: `${o.name} · ${o.cluster}`, env: o.env, detail: `revision ${o.revision}` });
+      });
+    },
+    [gitops, later, patchGitOps, toast],
+  );
+
+  const setGitOpsSuspended = useCallback(
+    (id: string, suspended: boolean) => {
+      patchGitOps(id, (o) => ({ suspended, appHealth: suspended ? "Suspended" : "Ready", sync: suspended ? o.sync : "Applied" }));
+    },
+    [patchGitOps],
+  );
+
   const setNodeCordoned = useCallback(
     (id: string, cordoned: boolean) => {
       setNodes((ns) =>
@@ -584,6 +645,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       drainNode,
       helmReleases,
       rollbackRelease,
+      gitops,
+      refreshGitOps,
+      syncGitOps,
+      setGitOpsSuspended,
       jobs,
       pins,
       pinToInvestigation: (pin) => {
@@ -652,6 +717,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     drainNode,
     helmReleases,
     rollbackRelease,
+    gitops,
+    refreshGitOps,
+    syncGitOps,
+    setGitOpsSuspended,
     jobs,
     pins,
     setPins,
