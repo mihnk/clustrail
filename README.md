@@ -40,23 +40,37 @@ through one Wails service (`internal/app.Workspace`) and its events.
 - **Connections** (`manager.go`, `cluster.go`): one connection per context.
   Connect probes `/version`, identity (SelfSubjectReview) and metrics.k8s.io,
   checks list permission per resource (SelfSubjectAccessReview) and starts
-  shared informers for pods, deployments, replicasets, nodes and HPAs. Exec
+  shared informers for pods, deployments, replicasets, nodes and HPAs. When an
+  identity may not list a resource cluster-wide, the context's namespace (or
+  `default`) is watched instead and the UI says so. Exec
   plugins never prompt: expired credentials surface with the command to run in
   your own terminal. A lost watch marks the cluster *reconnecting* with stale
   rows until a probe succeeds.
 - **Rows** (`convert.go`): pod, deployment and node rows follow kubectl's status
   logic. Changes are sent to the UI as deltas at most every 250 ms
-  (`clustrail:delta`), never as full lists.
-- **Metrics** (`cluster.go`, `samples.go`): metrics-server is polled every 15 s.
-  It has no history, so charts show only samples taken since Clustrail
-  connected and say so.
+  (`clustrail:delta`), never as full lists. Informer indexes (pods by node,
+  ReplicaSets by owner) keep a change to one object from rebuilding unrelated
+  rows.
+- **Other kinds** (`generic.go`): any kind the cluster serves, CRDs included,
+  is listed with the API server's own table columns (what `kubectl get`
+  prints), deleted with background propagation, or created from YAML.
+- **Metrics** (`cluster.go`, `samples.go`): metrics-server is polled every 15 s
+  (Settings). It has no history, so Clustrail keeps its own samples for 2 hours
+  in the user cache directory, across restarts, and charts say where they come
+  from.
 - **Actions** (`actions.go`, `yaml.go`, `helm_actions.go`): delete, rollout
   restart, scale, rollback (like `kubectl rollout undo`), pause, cordon, drain
   through the Eviction API (PDBs respected, refused evictions retried),
   server-side apply with dry run and resourceVersion conflicts, Helm rollback
   with the Helm SDK, Argo CD refresh/sync and Flux reconcile/suspend.
-- **Streams** (`streams.go`): follow logs per container (reconnecting across
-  container restarts) and interactive exec over WebSocket with SPDY fallback.
+- **Streams** (`streams.go`, `portforward.go`): follow logs per container
+  (reconnecting across container restarts), interactive exec over WebSocket
+  with SPDY fallback (a dropped shell reconnects with backoff), and port
+  forwards to a pod, or a ready pod behind a Service or Deployment, that
+  re-resolve the pod and keep their local port when it goes away.
+- **PATH** (`internal/app/env.go`): apps started from Finder or a desktop
+  launcher get a minimal PATH, so the login shell's PATH is read at startup and
+  exec auth plugins (`aws`, `gke-gcloud-auth-plugin`, `kubelogin`) are found.
 - **Helm and GitOps** (`helm.go`, `gitops.go`): releases are read from Helm's
   storage Secrets (values with credential-like keys redacted); Argo CD
   Applications and Flux Kustomizations/HelmReleases from their CRDs when served.
@@ -67,7 +81,8 @@ through one Wails service (`internal/app.Workspace`) and its events.
 main.go                       Wails application, window and Workspace service
 internal/app/                 Wails service: the API the frontend calls
 internal/kube/                Kubeconfig, connections, informers, rows, actions, streams
-build/                        App icon (source SVG and 1024px PNG)
+build/                        App icon, macOS Info.plist, Windows installer (NSIS), Linux .desktop
+hack/kind-smoke.sh            Local kind cluster with workloads that exercise the app
 frontend/
   src/styles/index.css        Design tokens (dark + light) and Tailwind theme
   src/app/                    App shell, workspace state, preferences
@@ -85,6 +100,7 @@ frontend/
   src/backend/                Wails client, desktop-mode detection, on-demand data hooks
   src/app/desktop.ts          Snapshot + delta sync and backend actions (desktop mode)
   src/data/                   View-model types and mock data (browser mode)
+  e2e/                        Playwright tests (browser preview and desktop mode with a faked backend)
 ```
 
 ## Development
@@ -129,6 +145,18 @@ go vet ./... && go test -race ./internal/...
 The Go tests run the informers, actions and Helm/GitOps readers against
 client-go's fake clientsets; no cluster is needed.
 
+End-to-end tests run the production build in Chromium. Desktop mode is tested
+against a faked Wails transport answering from `frontend/e2e/fixtures/desktop.json`,
+which the Go converters produce:
+
+```bash
+cd frontend && npm run build && npx playwright install chromium && npm run e2e
+```
+
+```bash
+CLUSTRAIL_FIXTURE=$PWD/frontend/e2e/fixtures/desktop.json go test -run TestWriteUIFixture ./internal/kube
+```
+
 ### Against a real cluster
 
 `hack/kind-smoke.sh` creates a three-node [kind](https://kind.sigs.k8s.io)
@@ -145,3 +173,16 @@ hack/kind-smoke.sh
 ```bash
 hack/kind-smoke.sh down
 ```
+
+## Releases
+
+Pushing a tag `vX.Y.Z` runs `.github/workflows/release.yml`: a universal macOS
+app (`.dmg` and `.zip`), a Windows installer and portable `.exe`, and a Linux
+tarball, attached to a draft GitHub release with `SHA256SUMS`. macOS builds are
+signed and notarized when the signing secrets listed in the workflow are set;
+otherwise they are ad-hoc signed.
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE). Contributions are welcome, see
+[CONTRIBUTING.md](CONTRIBUTING.md).

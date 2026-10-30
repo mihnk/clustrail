@@ -89,10 +89,16 @@ type clusterConn struct {
 	syncFns []cache.InformerSynced
 	kinds   kindIndex
 
-	mu         sync.Mutex
-	dirtyPods  map[string]bool // ns/name
-	dirtyDeps  map[string]bool
+	mu        sync.Mutex
+	dirtyPods map[string]bool // ns/name
+	dirtyDeps map[string]bool
+	// nodesDirty rebuilds every node row (metrics ticks); dirtyNodes only the named ones.
 	nodesDirty bool
+	dirtyNodes map[string]bool
+	// podsByNode and rsByOwner are informer indexes, so a node or Deployment
+	// row is built from its own pods and ReplicaSets instead of a full scan.
+	podsByNode cache.Indexer
+	rsByOwner  cache.Indexer
 	resetSent  map[string]bool
 	podUsage   map[string]Usage // ns/name
 	nodeUsage  map[string]Usage
@@ -170,7 +176,7 @@ func newClusterConn(id string, cfg *rest.Config, env func() Environment, emit Em
 func connFromClients(id string, env func() Environment, emit Emitter, onState func(ConnectionState, error), client kubernetes.Interface, dyn dynamic.Interface, mc metricsclient.Interface) *clusterConn {
 	return &clusterConn{
 		id: id, env: env, emit: emit, client: client, dynamic: dyn, metrics: mc,
-		dirtyPods: map[string]bool{}, dirtyDeps: map[string]bool{}, resetSent: map[string]bool{},
+		dirtyPods: map[string]bool{}, dirtyDeps: map[string]bool{}, dirtyNodes: map[string]bool{}, resetSent: map[string]bool{},
 		podUsage: map[string]Usage{}, nodeUsage: map[string]Usage{}, samples: newSampleStore(120),
 		onState: onState,
 	}
@@ -309,11 +315,20 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 		c.podsNS = ns
 		inf := factoryFor(ns).Core().V1().Pods()
 		c.pods = inf.Lister()
+		_ = inf.Informer().AddIndexers(cache.Indexers{indexNode: func(obj any) ([]string, error) {
+			if p, ok := obj.(*corev1.Pod); ok && p.Spec.NodeName != "" {
+				return []string{p.Spec.NodeName}, nil
+			}
+			return nil, nil
+		}})
+		c.podsByNode = inf.Informer().GetIndexer()
 		add(inf.Informer(), func(obj any) {
 			if p, ok := obj.(*corev1.Pod); ok {
 				c.mu.Lock()
 				c.dirtyPods[p.Namespace+"/"+p.Name] = true
-				c.nodesDirty = true
+				if p.Spec.NodeName != "" {
+					c.dirtyNodes[p.Spec.NodeName] = true
+				}
 				if o := metav1.GetControllerOf(p); o != nil && o.Kind == "ReplicaSet" {
 					if dep := c.deploymentOfRS(p.Namespace, o.Name); dep != "" {
 						c.dirtyDeps[p.Namespace+"/"+dep] = true
@@ -326,10 +341,12 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 	if c.canList(ctx, "", "nodes") { // cluster-scoped: no namespace to fall back to
 		inf := c.factory.Core().V1().Nodes()
 		c.nodes = inf.Lister()
-		add(inf.Informer(), func(any) {
-			c.mu.Lock()
-			c.nodesDirty = true
-			c.mu.Unlock()
+		add(inf.Informer(), func(obj any) {
+			if n, ok := obj.(*corev1.Node); ok {
+				c.mu.Lock()
+				c.dirtyNodes[n.Name] = true
+				c.mu.Unlock()
+			}
 		})
 	} else {
 		c.forbidden = append(c.forbidden, Forbidden{Cluster: c.id, Namespace: "cluster", User: identity, Resource: "nodes"})
@@ -348,6 +365,15 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 	if ns, ok := c.scope(ctx, identity, "apps", "replicasets", "replicasets"); ok {
 		inf := factoryFor(ns).Apps().V1().ReplicaSets()
 		c.rsets = inf.Lister()
+		_ = inf.Informer().AddIndexers(cache.Indexers{indexOwner: func(obj any) ([]string, error) {
+			if rs, ok := obj.(*appsv1.ReplicaSet); ok {
+				if o := metav1.GetControllerOf(rs); o != nil {
+					return []string{string(o.UID)}, nil
+				}
+			}
+			return nil, nil
+		}})
+		c.rsByOwner = inf.Informer().GetIndexer()
 		add(inf.Informer(), func(obj any) {
 			if rs, ok := obj.(*appsv1.ReplicaSet); ok {
 				if o := metav1.GetControllerOf(rs); o != nil && o.Kind == "Deployment" {
@@ -458,8 +484,8 @@ func (c *clusterConn) flush() {
 	env := c.env()
 
 	c.mu.Lock()
-	pods, deps, nodes := c.dirtyPods, c.dirtyDeps, c.nodesDirty
-	c.dirtyPods, c.dirtyDeps, c.nodesDirty = map[string]bool{}, map[string]bool{}, false
+	pods, deps, nodes, someNodes := c.dirtyPods, c.dirtyDeps, c.nodesDirty, c.dirtyNodes
+	c.dirtyPods, c.dirtyDeps, c.nodesDirty, c.dirtyNodes = map[string]bool{}, map[string]bool{}, false, map[string]bool{}
 	first := !c.resetSent["pods"]
 	c.resetSent["pods"], c.resetSent["deployments"], c.resetSent["nodes"] = true, true, true
 	c.mu.Unlock()
@@ -498,7 +524,49 @@ func (c *clusterConn) flush() {
 	}
 	if nodes && c.nodes != nil {
 		c.emit.Emit(EventDelta, Delta{Cluster: c.id, Kind: "nodes", Reset: true, Upserts: toAny(c.allNodeRows(env, now)), Deletes: []string{}})
+	} else if len(someNodes) > 0 && c.nodes != nil {
+		c.mu.Lock()
+		usage := c.nodeUsage
+		c.mu.Unlock()
+		d := Delta{Cluster: c.id, Kind: "nodes", Upserts: []any{}, Deletes: []string{}}
+		for name := range someNodes {
+			n, err := c.nodes.Get(name)
+			if err != nil {
+				d.Deletes = append(d.Deletes, c.id+"/"+name)
+				continue
+			}
+			d.Upserts = append(d.Upserts, c.nodeRow(n, usage, env, now))
+		}
+		c.emit.Emit(EventDelta, d)
 	}
+}
+
+const (
+	indexNode  = "node"
+	indexOwner = "owner"
+)
+
+// podsOn returns the pods scheduled to a node, from the pod index.
+func (c *clusterConn) podsOn(node string) []*corev1.Pod {
+	if c.podsByNode == nil {
+		return nil
+	}
+	objs, _ := c.podsByNode.ByIndex(indexNode, node)
+	out := make([]*corev1.Pod, 0, len(objs))
+	for _, o := range objs {
+		if p, ok := o.(*corev1.Pod); ok {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (c *clusterConn) nodeRow(n *corev1.Node, usage map[string]Usage, env Environment, now time.Time) NodeRow {
+	var u *Usage
+	if v, ok := usage[n.Name]; ok {
+		u = &v
+	}
+	return ToNodeRow(n, c.id, env, c.podsOn(n.Name), u, now)
 }
 
 func toAny[T any](rows []T) []any {
@@ -534,10 +602,10 @@ func (c *clusterConn) allPodRows(env Environment, now time.Time) []PodRow {
 
 func (c *clusterConn) deploymentRow(d *appsv1.Deployment, env Environment, now time.Time) DeploymentRow {
 	var owned []*appsv1.ReplicaSet
-	if c.rsets != nil {
-		all, _ := c.rsets.ReplicaSets(d.Namespace).List(labels.Everything())
-		for _, rs := range all {
-			if o := metav1.GetControllerOf(rs); o != nil && o.UID == d.UID {
+	if c.rsByOwner != nil {
+		objs, _ := c.rsByOwner.ByIndex(indexOwner, string(d.UID))
+		for _, o := range objs {
+			if rs, ok := o.(*appsv1.ReplicaSet); ok {
 				owned = append(owned, rs)
 			}
 		}
@@ -601,25 +669,12 @@ func (c *clusterConn) allNodeRows(env Environment, now time.Time) []NodeRow {
 		return nil
 	}
 	list, _ := c.nodes.List(labels.Everything())
-	byNode := map[string][]*corev1.Pod{}
-	if c.pods != nil {
-		pods, _ := c.pods.List(labels.Everything())
-		for _, p := range pods {
-			if p.Spec.NodeName != "" {
-				byNode[p.Spec.NodeName] = append(byNode[p.Spec.NodeName], p)
-			}
-		}
-	}
 	rows := make([]NodeRow, 0, len(list))
 	c.mu.Lock()
 	usage := c.nodeUsage
 	c.mu.Unlock()
 	for _, n := range list {
-		var u *Usage
-		if v, ok := usage[n.Name]; ok {
-			u = &v
-		}
-		rows = append(rows, ToNodeRow(n, c.id, env, byNode[n.Name], u, now))
+		rows = append(rows, c.nodeRow(n, usage, env, now))
 	}
 	return rows
 }
@@ -650,16 +705,45 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 				_, ok := podUsage[ns+"/"+pod]
 				return ok
 			})
+			// Only rows whose usage changed are sent again: their pod and its Deployment.
 			c.mu.Lock()
+			old := c.podUsage
 			c.podUsage = podUsage
-			for k := range podUsage {
+			changed := make([]string, 0, len(podUsage))
+			for k, u := range podUsage {
+				if prev, ok := old[k]; !ok || prev != u {
+					changed = append(changed, k)
+				}
+			}
+			for k := range old {
+				if _, ok := podUsage[k]; !ok {
+					changed = append(changed, k)
+				}
+			}
+			for _, k := range changed {
 				c.dirtyPods[k] = true
 			}
-			if c.deploys != nil {
-				all, _ := c.deploys.List(labels.Everything())
-				for _, d := range all {
-					c.dirtyDeps[d.Namespace+"/"+d.Name] = true
+			c.mu.Unlock()
+			// Owner lookups use the listers only; c.mu is not held.
+			deps := map[string]bool{}
+			for _, k := range changed {
+				ns, name, _ := strings.Cut(k, "/")
+				if c.pods == nil {
+					break
 				}
+				p, err := c.pods.Pods(ns).Get(name)
+				if err != nil {
+					continue
+				}
+				if o := metav1.GetControllerOf(p); o != nil && o.Kind == "ReplicaSet" {
+					if dep := c.deploymentOfRS(ns, o.Name); dep != "" {
+						deps[ns+"/"+dep] = true
+					}
+				}
+			}
+			c.mu.Lock()
+			for k := range deps {
+				c.dirtyDeps[k] = true
 			}
 			c.mu.Unlock()
 		}

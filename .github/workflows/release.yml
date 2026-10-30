@@ -1,0 +1,222 @@
+name: Release
+
+# Push a tag like v1.2.3 to build macOS, Windows and Linux packages and
+# attach them to a draft GitHub release.
+#
+# macOS signing and notarization run only when these repository secrets exist;
+# without them the app is ad-hoc signed and Gatekeeper asks on first launch.
+#   MACOS_CERTIFICATE           base64 of a "Developer ID Application" .p12
+#   MACOS_CERTIFICATE_PASSWORD  its password
+#   MACOS_SIGNING_IDENTITY      e.g. "Developer ID Application: Name (TEAMID)"
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD   notarytool credentials
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v (dry run: artifacts only, no release)"
+        required: true
+        default: "0.0.0-test"
+
+permissions:
+  contents: read
+
+env:
+  VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+
+  macos:
+    needs: frontend
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Build universal binary
+        run: |
+          V="${VERSION#v}"
+          LDFLAGS="-s -w -X github.com/mihnk/clustrail/internal/app.Version=$V"
+          export CGO_ENABLED=1 MACOSX_DEPLOYMENT_TARGET=11.0
+          GOARCH=arm64 CC="clang -arch arm64" go build -tags production -ldflags "$LDFLAGS" -o bin/clustrail-arm64 .
+          GOARCH=amd64 CC="clang -arch x86_64" go build -tags production -ldflags "$LDFLAGS" -o bin/clustrail-amd64 .
+          lipo -create -output bin/clustrail bin/clustrail-arm64 bin/clustrail-amd64
+      - name: App bundle
+        run: |
+          V="${VERSION#v}"
+          APP=dist/Clustrail.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp bin/clustrail "$APP/Contents/MacOS/clustrail"
+          sed "s/@VERSION@/$V/g" build/darwin/Info.plist > "$APP/Contents/Info.plist"
+          ICONSET=$(mktemp -d)/icon.iconset && mkdir -p "$ICONSET"
+          for s in 16 32 128 256 512; do
+            sips -z $s $s build/appicon.png --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+            sips -z $((s*2)) $((s*2)) build/appicon.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+          done
+          iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/icon.icns"
+      - name: Sign
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "No signing certificate: ad-hoc signature only."
+            codesign --force --deep --sign - dist/Clustrail.app
+            exit 0
+          fi
+          KEYCHAIN=$RUNNER_TEMP/build.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          echo "$MACOS_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import $RUNNER_TEMP/cert.p12 -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          codesign --force --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" dist/Clustrail.app/Contents/MacOS/clustrail
+          codesign --force --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" dist/Clustrail.app
+          codesign --verify --strict --verbose=2 dist/Clustrail.app
+      - name: Notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ] || [ -z "$APPLE_ID" ]; then
+            echo "Notarization skipped (no credentials)."
+            exit 0
+          fi
+          ditto -c -k --keepParent dist/Clustrail.app $RUNNER_TEMP/notarize.zip
+          xcrun notarytool submit $RUNNER_TEMP/notarize.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/Clustrail.app
+      - name: Package
+        run: |
+          V="${VERSION#v}"
+          ditto -c -k --keepParent dist/Clustrail.app "dist/Clustrail-$V-macos-universal.zip"
+          STAGE=$(mktemp -d) && cp -R dist/Clustrail.app "$STAGE/" && ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname Clustrail -srcfolder "$STAGE" -ov -format UDZO "dist/Clustrail-$V-macos-universal.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            dist/*.zip
+            dist/*.dmg
+
+  windows:
+    needs: frontend
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Build
+        run: |
+          V="${VERSION#v}"
+          NUM=$(echo "$V" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          # Version info and the icon go into the .exe as a resource.
+          go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --icon build/appicon.png --manifest gui \
+            --product-name Clustrail --file-description "Kubernetes desktop workspace" \
+            --product-version "$NUM.0" --file-version "$NUM.0"
+          go build -tags production -ldflags "-H windowsgui -s -w -X github.com/mihnk/clustrail/internal/app.Version=$V" -o bin/clustrail.exe .
+      - name: Installer
+        run: |
+          V="${VERSION#v}"
+          NUM=$(echo "$V" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          mkdir -p dist
+          "/c/Program Files (x86)/NSIS/makensis.exe" -DVERSION="$NUM" -DEXE="..\\..\\bin\\clustrail.exe" -DOUT="..\\..\\dist\\Clustrail-$V-windows-amd64-setup.exe" build/windows/installer.nsi
+          cp bin/clustrail.exe "dist/Clustrail-$V-windows-amd64-portable.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.exe
+
+  linux:
+    needs: frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: System packages
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+      - name: Build and package
+        run: |
+          V="${VERSION#v}"
+          go build -tags production -ldflags "-s -w -X github.com/mihnk/clustrail/internal/app.Version=$V" -o bin/clustrail .
+          PKG="clustrail-$V-linux-amd64"
+          mkdir -p "dist/$PKG"
+          cp bin/clustrail LICENSE "dist/$PKG/"
+          cp build/linux/clustrail.desktop build/appicon.png "dist/$PKG/"
+          cat > "dist/$PKG/install.sh" <<'SH'
+          #!/bin/sh
+          # Installs for the current user: ~/.local/bin, the menu entry and the icon.
+          set -e
+          cd "$(dirname "$0")"
+          install -Dm755 clustrail "$HOME/.local/bin/clustrail"
+          install -Dm644 clustrail.desktop "$HOME/.local/share/applications/clustrail.desktop"
+          install -Dm644 appicon.png "$HOME/.local/share/icons/hicolor/1024x1024/apps/clustrail.png"
+          echo "Installed. Needs GTK 4 and WebKitGTK 6 (libgtk-4-1, libwebkitgtk-6.0-4)."
+          SH
+          chmod +x "dist/$PKG/install.sh"
+          tar -C dist -czf "dist/$PKG.tar.gz" "$PKG"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --draft --generate-notes --title "Clustrail ${GITHUB_REF_NAME#v}"

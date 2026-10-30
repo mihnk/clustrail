@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Clustrail
+Comment=Kubernetes desktop workspace
+Exec=clustrail
+Icon=clustrail
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=clustrail

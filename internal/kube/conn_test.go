@@ -615,3 +615,46 @@ func TestDeploymentRelations(t *testing.T) {
 		}
 	}
 }
+
+func TestNodeRowsUpdateIncrementally(t *testing.T) {
+	node := func(name string) *corev1.Node {
+		return &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}, Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}}}
+	}
+	c, client, rec := newFakeConn(t, node("n1"), node("n2"))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := c.start(ctx, "tester", false); err != nil {
+		t.Fatal(err)
+	}
+	defer c.stop()
+	waitFor(t, "node reset", func() bool { return len(rec.deltas("nodes")) > 0 })
+	if d := rec.deltas("nodes")[0]; !d.Reset || len(d.Upserts) != 2 {
+		t.Fatalf("first = %+v", d)
+	}
+
+	p := pod("on-n2", nil)
+	p.Spec.NodeName = "n2"
+	if _, err := client.CoreV1().Pods("payments").Create(ctx, p, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "n2 update", func() bool { return len(rec.deltas("nodes")) > 1 })
+	d := rec.deltas("nodes")[1]
+	if d.Reset || len(d.Upserts) != 1 {
+		t.Fatalf("a pod on n2 must resend n2 only: %+v", d)
+	}
+	if row := d.Upserts[0].(NodeRow); row.ID != "test/n2" || row.Pods != 1 {
+		t.Fatalf("row = %+v", row)
+	}
+
+	if err := client.CoreV1().Nodes().Delete(ctx, "n1", metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "n1 delete", func() bool {
+		for _, d := range rec.deltas("nodes") {
+			if len(d.Deletes) == 1 && d.Deletes[0] == "test/n1" {
+				return true
+			}
+		}
+		return false
+	})
+}

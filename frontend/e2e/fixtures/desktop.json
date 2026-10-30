@@ -1,0 +1,328 @@
+{
+ "liveObject": {
+  "yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  creationTimestamp: \"2026-10-27T04:56:25Z\"\n  generation: 14\n  name: checkout-api\n  namespace: payments\n  uid: dep-uid\nspec:\n  replicas: 3\n  selector:\n    matchLabels:\n      app: checkout-api\n  strategy:\n    rollingUpdate:\n      maxSurge: 1\n      maxUnavailable: 1\n    type: RollingUpdate\n  template:\n    metadata: {}\n    spec:\n      containers:\n      - image: ghcr.io/acme/checkout-api:v2.31.0\n        name: api\n        resources:\n          limits:\n            memory: 256Mi\n          requests:\n            cpu: 250m\n            memory: 192Mi\nstatus:\n  availableReplicas: 2\n  conditions:\n  - lastTransitionTime: \"2026-10-30T04:09:25Z\"\n    lastUpdateTime: null\n    reason: MinimumReplicasUnavailable\n    status: \"False\"\n    type: Available\n  observedGeneration: 14\n  readyReplicas: 2\n  replicas: 3\n  updatedReplicas: 3\n",
+  "resourceVersion": "",
+  "owners": {
+   "spec.replicas": "argocd-controller"
+  },
+  "apiVersion": "apps/v1"
+ },
+ "podDetail": {
+  "pod": {
+   "id": "prod-eu-west-1/payments/checkout-api-7d9f8b6c4-x2kqp",
+   "name": "checkout-api-7d9f8b6c4-x2kqp",
+   "namespace": "payments",
+   "cluster": "prod-eu-west-1",
+   "env": "prod",
+   "node": "ip-10-42-3-17.eu-west-1.compute.internal",
+   "health": "failed",
+   "status": "CrashLoop",
+   "reason": "CrashLoopBackOff · last: OOMKilled (exit 137)",
+   "readyContainers": 1,
+   "totalContainers": 2,
+   "restarts": 14,
+   "cpuMilli": null,
+   "memoryMiB": null,
+   "ageSeconds": 259200,
+   "owner": {
+    "kind": "Deployment",
+    "name": "checkout-api"
+   },
+   "labels": {
+    "app": "checkout-api"
+   }
+  },
+  "problem": {
+   "title": "CrashLoopBackOff",
+   "container": "api",
+   "detail": "Last terminated OOMKilled (exit 137) 2m ago · 14 restarts"
+  },
+  "containers": [
+   {
+    "name": "api",
+    "health": "failed",
+    "state": "Waiting · CrashLoopBackOff",
+    "ready": false,
+    "restarts": 14,
+    "image": "ghcr.io/acme/checkout-api:v2.31.0",
+    "lastState": "Terminated · OOMKilled · exit 137",
+    "memory": "req 192Mi · limit 256Mi"
+   },
+   {
+    "name": "envoy",
+    "health": "healthy",
+    "state": "Running · ready",
+    "ready": true,
+    "restarts": 0
+   }
+  ],
+  "events": [
+   {
+    "type": "Warning",
+    "reason": "BackOff",
+    "message": "Back-off restarting failed container api",
+    "count": 42,
+    "lastSeen": "1m",
+    "object": "pod"
+   }
+  ],
+  "memory": {
+   "container": "api",
+   "series": {
+    "source": "sampled from metrics-server every 15s by Clustrail · kept 2h across restarts",
+    "timestamps": [
+     1793336095,
+     1793336110,
+     1793336125,
+     1793336140,
+     1793336155,
+     1793336170
+    ],
+    "values": [
+     180,
+     192,
+     204,
+     216,
+     228,
+     240
+    ],
+    "limit": 256,
+    "request": 192,
+    "markers": [
+     1793336065
+    ]
+   }
+  },
+  "ownerChain": [
+   {
+    "kind": "Deployment",
+    "name": "checkout-api",
+    "note": "2/3 ready",
+    "tone": "warning"
+   },
+   {
+    "kind": "ReplicaSet",
+    "name": "checkout-api-7d9f8b6c4",
+    "note": "rev 14"
+   }
+  ],
+  "relations": [
+   {
+    "label": "Owned by",
+    "objects": [
+     {
+      "kind": "deploy",
+      "name": "checkout-api"
+     },
+     {
+      "kind": "rs",
+      "name": "checkout-api-7d9f8b6c4"
+     }
+    ],
+    "via": "ownerReferences"
+   },
+   {
+    "label": "Selected by",
+    "objects": [
+     {
+      "kind": "svc",
+      "name": "checkout-api"
+     }
+    ],
+    "pill": {
+     "text": "not ready",
+     "tone": "warning"
+    },
+    "via": "Service selector app=checkout-api"
+   },
+   {
+    "label": "Runs on",
+    "objects": [
+     {
+      "kind": "node",
+      "name": "ip-10-42-3-17"
+     }
+    ],
+    "via": "spec.nodeName"
+   },
+   {
+    "label": "Disruption",
+    "objects": [
+     {
+      "kind": "pdb",
+      "name": "checkout-api"
+     }
+    ],
+    "pill": {
+     "text": "0 allowed",
+     "tone": "warning"
+    },
+    "via": "PDB selector"
+   }
+  ]
+ },
+ "snapshot": {
+  "clusters": null,
+  "pods": [
+   {
+    "id": "prod-eu-west-1/payments/checkout-api-7d9f8b6c4-9rkzd",
+    "name": "checkout-api-7d9f8b6c4-9rkzd",
+    "namespace": "payments",
+    "cluster": "prod-eu-west-1",
+    "env": "prod",
+    "node": "ip-10-42-3-17.eu-west-1.compute.internal",
+    "health": "healthy",
+    "status": "Running",
+    "reason": "Running",
+    "readyContainers": 2,
+    "totalContainers": 2,
+    "restarts": 0,
+    "cpuMilli": 184,
+    "memoryMiB": 231,
+    "ageSeconds": 259200,
+    "owner": {
+     "kind": "Deployment",
+     "name": "checkout-api"
+    },
+    "labels": {
+     "app": "checkout-api"
+    }
+   },
+   {
+    "id": "prod-eu-west-1/payments/checkout-api-7d9f8b6c4-h2pqs",
+    "name": "checkout-api-7d9f8b6c4-h2pqs",
+    "namespace": "payments",
+    "cluster": "prod-eu-west-1",
+    "env": "prod",
+    "node": "ip-10-42-3-17.eu-west-1.compute.internal",
+    "health": "healthy",
+    "status": "Running",
+    "reason": "Running",
+    "readyContainers": 2,
+    "totalContainers": 2,
+    "restarts": 0,
+    "cpuMilli": 176,
+    "memoryMiB": 226,
+    "ageSeconds": 259200,
+    "owner": {
+     "kind": "Deployment",
+     "name": "checkout-api"
+    },
+    "labels": {
+     "app": "checkout-api"
+    }
+   },
+   {
+    "id": "prod-eu-west-1/payments/checkout-api-7d9f8b6c4-x2kqp",
+    "name": "checkout-api-7d9f8b6c4-x2kqp",
+    "namespace": "payments",
+    "cluster": "prod-eu-west-1",
+    "env": "prod",
+    "node": "ip-10-42-3-17.eu-west-1.compute.internal",
+    "health": "failed",
+    "status": "CrashLoop",
+    "reason": "CrashLoopBackOff · last: OOMKilled (exit 137)",
+    "readyContainers": 1,
+    "totalContainers": 2,
+    "restarts": 14,
+    "cpuMilli": null,
+    "memoryMiB": null,
+    "ageSeconds": 259200,
+    "owner": {
+     "kind": "Deployment",
+     "name": "checkout-api"
+    },
+    "labels": {
+     "app": "checkout-api"
+    }
+   }
+  ],
+  "deployments": [
+   {
+    "id": "prod-eu-west-1/payments/checkout-api",
+    "name": "checkout-api",
+    "namespace": "payments",
+    "cluster": "prod-eu-west-1",
+    "env": "prod",
+    "health": "failed",
+    "status": "Degraded",
+    "rollout": "Degraded",
+    "reason": "Available=False: MinimumReplicasUnavailable",
+    "since": "47m",
+    "image": "v2.31.0",
+    "revisions": [
+     {
+      "rev": 14,
+      "image": "v2.31.0",
+      "age": "3d"
+     }
+    ],
+    "usage": {
+     "cpuMilli": 360,
+     "cpuRequestMilli": 750,
+     "memoryMiB": 457,
+     "memoryLimitMiB": 768
+    },
+    "readyReplicas": 2,
+    "replicas": 3,
+    "updatedReplicas": 3,
+    "availableReplicas": 2,
+    "strategy": {
+     "type": "RollingUpdate",
+     "maxSurge": "1",
+     "maxUnavailable": "1"
+    },
+    "ageSeconds": 259200
+   }
+  ],
+  "nodes": [
+   {
+    "id": "prod-eu-west-1/ip-10-42-3-17.eu-west-1.compute.internal",
+    "name": "ip-10-42-3-17.eu-west-1.compute.internal",
+    "cluster": "prod-eu-west-1",
+    "env": "prod",
+    "health": "healthy",
+    "status": "Ready",
+    "reason": "Ready=True",
+    "roles": "worker",
+    "version": "1.30",
+    "gitVersion": "v1.30.4-eks-a737599",
+    "instanceType": "m6i.2xlarge",
+    "zone": "eu-west-1a",
+    "cpuPct": 50,
+    "memPct": 50,
+    "cpu": {
+     "used": 4,
+     "requests": 0.8,
+     "limits": 0,
+     "allocatable": 7.9
+    },
+    "memoryGiB": {
+     "used": 13.9,
+     "requests": 0.6,
+     "allocatable": 27.8
+    },
+    "pods": 3,
+    "podCapacity": 58,
+    "taints": [],
+    "ageSeconds": 259200,
+    "conditions": [
+     {
+      "type": "Ready",
+      "status": "True",
+      "since": "3d",
+      "ok": true
+     }
+    ],
+    "heartbeat": "0s ago",
+    "labels": {
+     "node.kubernetes.io/instance-type": "m6i.2xlarge",
+     "topology.kubernetes.io/region": "eu-west-1",
+     "topology.kubernetes.io/zone": "eu-west-1a"
+    }
+   }
+  ],
+  "helm": [],
+  "gitops": []
+ }
+}
