@@ -95,6 +95,8 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
         { kind: "Service", group: "", version: "v1", resource: "services", namespaced: true, shortNames: ["svc"], delete: true },
         { kind: "Certificate", group: "cert-manager.io", version: "v1", resource: "certificates", namespaced: true, shortNames: ["cert"], delete: true },
       ];
+    case "CreateObjects":
+      return [{ kind: "CronJob", name: "my-cronjob", namespace: "default", status: args[2] ? "valid" : "created" }];
     case "ListResources": {
       const [cluster, kind] = args as [string, string];
       if (kind === "batch/CronJob")
@@ -135,13 +137,21 @@ export interface FakeBackend {
   emit: (name: string, data: unknown) => Promise<void>;
   /** Console errors and page errors seen so far. */
   errors: string[];
+  /** The id of the latest list watch started for a kind. */
+  watchOf: (kind: string) => string | undefined;
 }
+
+const EVENT_LIST = "clustrail:list";
 
 /** Opens the app in desktop mode against the fake backend, with fresh local storage. */
 export async function openDesktop(page: Page): Promise<FakeBackend> {
   const d = data();
   const calls: string[] = [];
   const errors: string[] = [];
+  let lists = 0;
+  const watches = new Map<string, string>();
+  const emit = (name: string, data: unknown) =>
+    page.evaluate(([n, x]) => (window as unknown as { _wails: { dispatchWailsEvent: (e: unknown) => void } })._wails.dispatchWailsEvent({ name: n, data: x }), [name, data] as const).catch(() => {});
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.route("**/wails/runtime", async (route) => {
@@ -151,6 +161,15 @@ export async function openDesktop(page: Page): Promise<FakeBackend> {
     const args = body.args.args ?? [];
     calls.push(method);
     if (method === "GetObject" && args[3] === "my-cronjob") return route.fulfill({ status: 500, contentType: "text/plain", body: 'cronjobs "my-cronjob" not found' });
+    if (method === "StartListWatch") {
+      // A watch: the id comes back first, then the backend's first update (a reset with every row).
+      const id = `list-${++lists}`;
+      const l = answer(d, "ListResources", args) as { columns: unknown[]; namespaced: boolean; shown?: string; rows: unknown[] };
+      watches.set(String(args[1]), id);
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(id) });
+      setTimeout(() => void emit(EVENT_LIST, { id, cluster: args[0], reset: true, columns: l.columns, namespaced: l.namespaced, shown: l.shown, upserts: l.rows, deletes: [], mode: "watch" }), 50);
+      return;
+    }
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(answer(d, method, args)) });
   });
   await page.goto("/?backend=1");
@@ -160,6 +179,7 @@ export async function openDesktop(page: Page): Promise<FakeBackend> {
     calls,
     errors,
     fixture: d.fx,
-    emit: (name, data) => page.evaluate(([n, x]) => (window as unknown as { _wails: { dispatchWailsEvent: (e: unknown) => void } })._wails.dispatchWailsEvent({ name: n, data: x }), [name, data] as const),
+    emit,
+    watchOf: (kind) => watches.get(kind),
   };
 }

@@ -3,14 +3,18 @@ package kube
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
 // KindInfo is a resource kind the cluster serves and this identity's verbs
@@ -175,16 +179,27 @@ func (c *clusterConn) listTable(ctx context.Context, gvr schema.GroupVersionReso
 // fromTable keeps every column but Name (shown on its own) and Age (computed
 // from the creation time so it stays current between refreshes).
 func fromTable(t *metav1.Table) GenericList {
-	var keep []int
-	out := GenericList{Columns: []TableColumn{}, Rows: make([]GenericRow, 0, len(t.Rows)), Truncated: t.Continue != ""}
-	for i, col := range t.ColumnDefinitions {
+	cols, keep := tableColumns(t.ColumnDefinitions)
+	return GenericList{Columns: cols, Rows: tableRows(t.Rows, keep), Truncated: t.Continue != ""}
+}
+
+// tableColumns picks the columns shown and their indexes in each row's cells.
+func tableColumns(defs []metav1.TableColumnDefinition) ([]TableColumn, []int) {
+	cols, keep := []TableColumn{}, []int{}
+	for i, col := range defs {
 		if col.Name == "Name" || col.Name == "Age" {
 			continue
 		}
 		keep = append(keep, i)
-		out.Columns = append(out.Columns, TableColumn{Name: col.Name, Type: col.Type, Description: firstSentence(col.Description), Priority: int(col.Priority)})
+		cols = append(cols, TableColumn{Name: col.Name, Type: col.Type, Description: firstSentence(col.Description), Priority: int(col.Priority)})
 	}
-	for _, r := range t.Rows {
+	return cols, keep
+}
+
+// tableRows converts table rows (with includeObject=Metadata) to rows; IDs are set by the caller.
+func tableRows(rows []metav1.TableRow, keep []int) []GenericRow {
+	out := make([]GenericRow, 0, len(rows))
+	for _, r := range rows {
 		var meta metav1.PartialObjectMetadata
 		if len(r.Object.Raw) > 0 {
 			_ = json.Unmarshal(r.Object.Raw, &meta)
@@ -203,7 +218,7 @@ func fromTable(t *metav1.Table) GenericList {
 				row.Cells = append(row.Cells, "")
 			}
 		}
-		out.Rows = append(out.Rows, row)
+		out = append(out, row)
 	}
 	return out
 }
@@ -292,4 +307,112 @@ func (m *Manager) DeleteResource(cluster, kind, ns, name string) error {
 		return c.dynamic.Resource(gvr).Namespace(ns).Delete(ctx, name, opts)
 	}
 	return c.dynamic.Resource(gvr).Delete(ctx, name, opts)
+}
+
+// CreateResult is the outcome for one document of a manifest.
+type CreateResult struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"`
+	// Status: created, valid (dry run passed), exists, failed or skipped.
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+// CreateObjects creates every document of a manifest, in order, like
+// kubectl create -f. Objects that exist are reported, never changed. With
+// dryRun every document is checked by the API server; otherwise creation
+// stops at the first failure and the rest are reported as skipped (nothing
+// already created is rolled back).
+func (m *Manager) CreateObjects(cluster, text string, dryRun bool) ([]CreateResult, error) {
+	var c *clusterConn
+	var err error
+	if dryRun {
+		c, err = m.conn(cluster)
+	} else {
+		c, err = m.writable(cluster)
+	}
+	if err != nil {
+		return nil, err
+	}
+	var docs []*unstructured.Unstructured
+	dec := utilyaml.NewYAMLOrJSONDecoder(strings.NewReader(text), 4096)
+	for {
+		var obj map[string]any
+		if err := dec.Decode(&obj); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("document %d: %w", len(docs)+1, err)
+		}
+		if len(obj) == 0 {
+			continue // empty document between separators
+		}
+		u := &unstructured.Unstructured{Object: obj}
+		if u.GetKind() == "" || u.GetAPIVersion() == "" {
+			return nil, fmt.Errorf("document %d: apiVersion and kind are required", len(docs)+1)
+		}
+		if u.GetName() == "" && u.GetGenerateName() == "" {
+			return nil, fmt.Errorf("document %d (%s): metadata.name is required", len(docs)+1, u.GetKind())
+		}
+		docs = append(docs, u)
+	}
+	if len(docs) == 0 {
+		return nil, errors.New("the manifest has no objects")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	out := make([]CreateResult, 0, len(docs))
+	failed := false
+	for _, u := range docs {
+		res := CreateResult{Kind: u.GetKind(), Name: u.GetName(), Namespace: u.GetNamespace()}
+		if failed {
+			res.Status = "skipped"
+			out = append(out, res)
+			continue
+		}
+		gvr, namespaced, err := c.resolve(u.GroupVersionKind().Group + "/" + u.GetKind())
+		if err != nil {
+			gvr, namespaced, err = c.resolve(u.GetKind())
+		}
+		if err == nil {
+			for _, f := range []string{"resourceVersion", "uid", "creationTimestamp", "managedFields"} {
+				unstructured.RemoveNestedField(u.Object, "metadata", f)
+			}
+			unstructured.RemoveNestedField(u.Object, "status")
+			opts := metav1.CreateOptions{FieldManager: "clustrail"}
+			if dryRun {
+				opts.DryRun = []string{metav1.DryRunAll}
+			}
+			ri := c.dynamic.Resource(gvr)
+			if namespaced {
+				if u.GetNamespace() == "" {
+					ns := c.fallbackNS
+					if ns == "" {
+						ns = "default"
+					}
+					u.SetNamespace(ns)
+				}
+				res.Namespace = u.GetNamespace()
+				_, err = ri.Namespace(u.GetNamespace()).Create(ctx, u, opts)
+			} else {
+				res.Namespace = ""
+				_, err = ri.Create(ctx, u, opts)
+			}
+		}
+		switch {
+		case err == nil && dryRun:
+			res.Status = "valid"
+		case err == nil:
+			res.Status = "created"
+		case apierrors.IsAlreadyExists(err):
+			res.Status, res.Error = "exists", "already exists; change it with Edit YAML"
+			failed = !dryRun
+		default:
+			res.Status, res.Error = "failed", err.Error()
+			failed = !dryRun
+		}
+		out = append(out, res)
+	}
+	return out, nil
 }

@@ -27,6 +27,9 @@ type TestStep struct {
 // permissions and stops at the first failure. Nothing is changed on the cluster.
 func (m *Manager) TestConnection(id string) ([]TestStep, error) {
 	cfg, _, err := m.restConfig(id)
+	if cfg != nil {
+		cfg.Timeout = 20 * time.Second // every step here is a short request
+	}
 	if err != nil {
 		return nil, err
 	}

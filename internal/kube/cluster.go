@@ -20,6 +20,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -63,8 +64,10 @@ type clusterConn struct {
 	env  func() Environment
 	emit Emitter
 
-	rest    *rest.Config
-	client  kubernetes.Interface
+	rest   *rest.Config
+	client kubernetes.Interface
+	// disc has a request timeout; c.client has none so watches and streams stay open.
+	disc    discovery.DiscoveryInterface
 	dynamic dynamic.Interface
 	metrics metricsclient.Interface
 
@@ -167,8 +170,15 @@ func newClusterConn(id string, cfg *rest.Config, env func() Environment, emit Em
 	if err != nil {
 		return nil, err
 	}
+	// Discovery calls take no context, so they get a client with a deadline.
+	dcfg := rest.CopyConfig(cfg)
+	dcfg.Timeout = 20 * time.Second
+	disc, err := discovery.NewDiscoveryClientForConfig(dcfg)
+	if err != nil {
+		return nil, err
+	}
 	c := connFromClients(id, env, emit, onState, client, dyn, mc)
-	c.rest = cfg
+	c.rest, c.disc = cfg, disc
 	return c, nil
 }
 
@@ -178,7 +188,7 @@ func connFromClients(id string, env func() Environment, emit Emitter, onState fu
 		id: id, env: env, emit: emit, client: client, dynamic: dyn, metrics: mc,
 		dirtyPods: map[string]bool{}, dirtyDeps: map[string]bool{}, dirtyNodes: map[string]bool{}, resetSent: map[string]bool{},
 		podUsage: map[string]Usage{}, nodeUsage: map[string]Usage{}, samples: newSampleStore(120),
-		onState: onState,
+		onState: onState, disc: client.Discovery(),
 	}
 }
 
@@ -186,7 +196,7 @@ func connFromClients(id string, env func() Environment, emit Emitter, onState fu
 func (c *clusterConn) probe(ctx context.Context) (ConnectInfo, error) {
 	var info ConnectInfo
 	start := time.Now()
-	v, err := c.client.Discovery().ServerVersion()
+	v, err := c.disc.ServerVersion()
 	if err != nil {
 		return info, err
 	}
@@ -198,7 +208,7 @@ func (c *clusterConn) probe(ctx context.Context) (ConnectInfo, error) {
 	if r, err := c.client.AuthenticationV1().SelfSubjectReviews().Create(ctx, &authnv1.SelfSubjectReview{}, metav1.CreateOptions{}); err == nil {
 		info.Identity = shortIdentity(r.Status.UserInfo.Username)
 	}
-	if groups, err := c.client.Discovery().ServerGroups(); err == nil {
+	if groups, err := c.disc.ServerGroups(); err == nil {
 		for _, g := range groups.Groups {
 			if g.Name == "metrics.k8s.io" {
 				info.Metrics = true

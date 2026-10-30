@@ -55,7 +55,7 @@ func (c *clusterConn) resolve(kind string) (schema.GroupVersionResource, bool, e
 	c.kinds.once.Do(func() {
 		c.kinds.byKind, c.kinds.namespaced = map[string]schema.GroupVersionResource{}, map[string]bool{}
 		// Partial discovery failures (an unavailable aggregated API) still return the rest.
-		groups, lists, err := c.client.Discovery().ServerGroupsAndResources()
+		groups, lists, err := c.disc.ServerGroupsAndResources()
 		if err != nil && len(lists) == 0 {
 			c.kinds.err = err
 			return

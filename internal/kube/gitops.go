@@ -121,7 +121,7 @@ func newGitOpsWatcher(c *clusterConn) *gitopsWatcher {
 
 // served reports whether the API server serves a resource (the CRD exists).
 func (g *gitopsWatcher) served(gvr schema.GroupVersionResource) bool {
-	list, err := g.c.client.Discovery().ServerResourcesForGroupVersion(gvr.GroupVersion().String())
+	list, err := g.c.disc.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 	if err != nil {
 		return false
 	}

@@ -28,6 +28,7 @@ type Manager struct {
 	attempts map[string]int
 	streams  streams
 	forwards forwards
+	lists    listWatches
 }
 
 func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
@@ -206,7 +207,9 @@ func (m *Manager) restConfig(id string) (*rest.Config, *clientcmdapi.AuthInfo, e
 		// Never prompt: expired credentials surface as an error with the command to run.
 		cfg.ExecProvider.InteractiveMode = clientcmdapi.NeverExecInteractiveMode
 	}
-	cfg.Timeout = 20 * time.Second
+	// No cfg.Timeout: client-go applies it to the whole HTTP request, which would
+	// cut watches and followed logs. Calls carry context deadlines instead, and
+	// discovery uses its own client with a timeout (newClusterConn).
 	return cfg, auth, nil
 }
 

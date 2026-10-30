@@ -205,7 +205,7 @@ export interface WorkspaceState {
   backendMeta: ClusterList | null;
 }
 
-const SYSTEM_NAMESPACES = ["kube-system", "kube-public", "kube-node-lease"];
+export const SYSTEM_NAMESPACES = ["kube-system", "kube-public", "kube-node-lease"];
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
 

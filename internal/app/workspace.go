@@ -156,6 +156,16 @@ func (w *Workspace) ListResources(cluster, kind, namespace string) (kube.Generic
 	return w.m.ListResources(cluster, kind, namespace)
 }
 
+func (w *Workspace) CreateObjects(cluster, text string, dryRun bool) ([]kube.CreateResult, error) {
+	return w.m.CreateObjects(cluster, text, dryRun)
+}
+
+func (w *Workspace) StartListWatch(cluster, kind, namespace string) (string, error) {
+	return w.m.StartListWatch(cluster, kind, namespace)
+}
+
+func (w *Workspace) StopListWatch(id string) { w.m.StopListWatch(id) }
+
 func (w *Workspace) DeleteResource(cluster, kind, ns, name string) error {
 	return w.m.DeleteResource(cluster, kind, ns, name)
 }

@@ -2,9 +2,10 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { Cable, PanelTop, Check, Code, Copy, LayoutGrid, Pencil, Plus, RefreshCw, Search, SearchX, Trash2, X } from "lucide-react";
 import { openPortForward } from "@/features/portforward/PortForward";
-import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
+import { SYSTEM_NAMESPACES, useWorkspace, type WorkspaceTab } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
-import { backend, errorText, type GenericList, type GenericRow } from "@/backend/client";
+import { backend, errorText, EVENTS, onEvent, type GenericList, type GenericRow, type ListUpdate } from "@/backend/client";
+import { usePersistentState } from "@/app/preferences";
 import { useEvents } from "@/backend/hooks";
 import type { Environment } from "@/data/types";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
@@ -15,6 +16,16 @@ import { Banner } from "@/components/ui/banner";
 import { Button, IconButton } from "@/components/ui/button";
 import { InspectorPanel } from "@/components/ui/inspector-panel";
 import { Kbd } from "@/components/ui/kbd";
+import { FilterToken } from "@/components/ui/filter-token";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabCount } from "@/components/ui/tabs";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
@@ -26,7 +37,6 @@ import { cn } from "@/lib/cn";
 import { kindName, kubectlResource, listLabel, resourceTab } from "./kinds";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
-const REFRESH_MS = 10_000;
 
 /** A row with the cluster's environment, for the table and its actions. */
 interface Row extends GenericRow {
@@ -37,45 +47,77 @@ interface Row extends GenericRow {
 /** Cells whose text signals trouble, from the server's own columns. */
 const BAD = /^(Warning|Failed|BackOff|CrashLoopBackOff|Error|False|Pending|0\/[1-9])/;
 
-/** Polls one kind in each cluster; errors are per cluster so one 403 hides nothing else. */
+/**
+ * Keeps one kind current in each cluster: a watch (or a 30 s list in poll
+ * mode) per cluster while the tab is active. Errors are per cluster so one 403
+ * hides nothing else.
+ */
 function useGenericLists(clusters: string[], kind: string, active: boolean) {
   const [lists, setLists] = useState<Record<string, GenericList>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [modes, setModes] = useState<Record<string, "watch" | "poll">>({});
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const key = clusters.join(",");
   useEffect(() => {
     if (!backend || !active) return;
     const api = backend;
+    const ids = new Map<string, string>(); // watch id → cluster
+    const early: ListUpdate[] = [];
     let cancelled = false;
-    const load = () =>
-      Promise.all(
-        clusters.map((c) =>
-          api.listResources(c, kind, "").then(
-            (l) => ({ c, l, e: null as string | null }),
-            (e) => ({ c, l: null, e: errorText(e) }),
-          ),
-        ),
-      ).then((res) => {
-        if (cancelled) return;
-        const nextLists: Record<string, GenericList> = {};
-        const nextErrors: Record<string, string> = {};
-        for (const r of res) {
-          if (r.l) nextLists[r.c] = r.l;
-          if (r.e) nextErrors[r.c] = r.e;
-        }
-        setLists(nextLists);
-        setErrors(nextErrors);
-        setLoading(false);
+    setLoading(true);
+    const apply = (u: ListUpdate) => {
+      setModes((m) => (m[u.cluster] === u.mode ? m : { ...m, [u.cluster]: u.mode }));
+      if (u.error) {
+        setErrors((e) => ({ ...e, [u.cluster]: u.error! }));
+        return;
+      }
+      setErrors((e) => {
+        if (!(u.cluster in e)) return e;
+        const next = { ...e };
+        delete next[u.cluster];
+        return next;
       });
-    void load();
-    const t = setInterval(load, REFRESH_MS);
+      setLists((all) => {
+        const cur = all[u.cluster];
+        if (u.reset || !cur) {
+          return { ...all, [u.cluster]: { cluster: u.cluster, kind, namespaced: u.namespaced, columns: u.columns ?? cur?.columns ?? [], rows: u.upserts, truncated: u.truncated, shown: u.shown } };
+        }
+        const del = new Set(u.deletes);
+        const up = new Map(u.upserts.map((r) => [r.id, r]));
+        const rows = cur.rows.filter((r) => !del.has(r.id) && !up.has(r.id)).concat(u.upserts);
+        return { ...all, [u.cluster]: { ...cur, rows, truncated: u.truncated ?? cur.truncated, shown: u.shown ?? cur.shown } };
+      });
+      if (u.reset) setLoading(false);
+    };
+    const off = onEvent<ListUpdate>(EVENTS.list, (u) => {
+      if (ids.has(u.id)) apply(u);
+      else early.push(u);
+    });
+    setLists({});
+    setErrors({});
+    if (!clusters.length) setLoading(false);
+    for (const c of clusters) {
+      api
+        .startListWatch(c, kind, "")
+        .then((id) => {
+          if (cancelled) return void api.stopListWatch(id);
+          ids.set(id, c);
+          early.filter((u) => u.id === id).forEach(apply);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setErrors((all) => ({ ...all, [c]: errorText(e) }));
+          setLoading(false);
+        });
+    }
     return () => {
       cancelled = true;
-      clearInterval(t);
+      off();
+      for (const id of ids.keys()) void api.stopListWatch(id);
     };
   }, [key, kind, active, tick]);
-  return { lists, errors, loading, refresh: () => setTick((n) => n + 1) };
+  return { lists, errors, modes, loading, refresh: () => setTick((n) => n + 1) };
 }
 
 /** Any kind the cluster serves, with the API server's own columns (kubectl get). */
@@ -87,7 +129,9 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
   const kind = tab.params?.kind ?? "Service";
   const label = listLabel(kind);
   const connected = selectedClusters.filter((c) => c.connection === "connected").map((c) => c.id);
-  const { lists, errors, loading, refresh } = useGenericLists(connected, kind, active);
+  const { lists, errors, modes, loading, refresh } = useGenericLists(connected, kind, active);
+  const [hideSystem] = usePersistentState("settings.hideSystemNamespaces", true);
+  const [namespaces, setNamespaces] = useState<Set<string> | null>(null);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [wide, setWide] = useState(false);
@@ -119,14 +163,20 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         }));
     });
   }, [lists, columns, deleted, clusterById]);
+  const allNamespaces = useMemo(
+    () => [...new Set(allRows.map((r) => r.namespace ?? "").filter((ns) => ns && !(hideSystem && SYSTEM_NAMESPACES.includes(ns))))].sort(),
+    [allRows, hideSystem],
+  );
   const rows = useMemo(() => {
     const words = deferredQuery.toLowerCase().split(/\s+/).filter(Boolean);
-    if (!words.length) return allRows;
-    return allRows.filter((r) => {
+    const inNs = (r: Row) =>
+      !r.namespace || (!(hideSystem && SYSTEM_NAMESPACES.includes(r.namespace)) && (namespaces === null || namespaces.has(r.namespace)));
+    if (!words.length) return allRows.filter(inNs);
+    return allRows.filter(inNs).filter((r) => {
       const hay = `${r.name} ${r.namespace ?? ""} ${r.cluster} ${r.cells.join(" ")} ${Object.entries(r.labels ?? {}).map(([k, v]) => `${k}=${v}`).join(" ")}`.toLowerCase();
       return words.every((w) => hay.includes(w));
     });
-  }, [allRows, deferredQuery]);
+  }, [allRows, deferredQuery, namespaces, hideSystem]);
 
   const tableColumns = useMemo(() => {
     const col = createColumnHelper<Row>();
@@ -299,7 +349,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
             <Plus aria-hidden />
             Create…
           </Button>
-          <IconButton aria-label="Refresh" title={`Refreshes every ${REFRESH_MS / 1000}s`} onClick={refresh}>
+          <IconButton aria-label="Reload" title="Lists again and restarts the watch" onClick={refresh}>
             <RefreshCw />
           </IconButton>
         </div>
@@ -319,6 +369,33 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
             />
             <Kbd>/</Kbd>
           </label>
+          {namespaced && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <FilterToken k="namespace" value={namespaces === null ? "any" : `${namespaces.size} selected`} active={namespaces !== null} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-[360px] overflow-y-auto">
+                <DropdownMenuLabel>Namespaces{hideSystem ? " · system hidden" : ""}</DropdownMenuLabel>
+                {allNamespaces.map((ns) => (
+                  <DropdownMenuCheckboxItem
+                    key={ns}
+                    checked={namespaces === null || namespaces.has(ns)}
+                    onSelect={(e) => e.preventDefault()}
+                    onCheckedChange={(on) => {
+                      const next = new Set(namespaces ?? allNamespaces);
+                      if (on) next.add(ns);
+                      else next.delete(ns);
+                      setNamespaces(next.size === allNamespaces.length ? null : next);
+                    }}
+                  >
+                    {ns}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setNamespaces(null)}>Select all</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <div className="flex-1" />
           {hiddenWide > 0 && (
             <label className="flex items-center gap-2 text-meta text-fg-secondary">
@@ -373,10 +450,15 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
           <span>
             <span className="text-fg">{rows.length}</span> {label.toLowerCase()}
           </span>
-          {truncated.length > 0 && <span className="text-status-warning">First 2000 per cluster on {truncated.map((l) => l.cluster).join(", ")}</span>}
+          {truncated.length > 0 && (
+            <span className="text-status-warning">First 20,000 per cluster on {truncated.map((l) => l.cluster).join(", ")}; listed every 30s</span>
+          )}
           <div className="flex-1" />
           {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
-          <span>Columns: API server table view · refreshed every {REFRESH_MS / 1000}s</span>
+          <span>
+            Columns: API server table view ·{" "}
+            {Object.values(modes).includes("poll") ? "listed every 30s (poll mode)" : "live (watch)"}
+          </span>
         </div>
       </main>
 

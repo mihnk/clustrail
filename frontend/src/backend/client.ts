@@ -147,6 +147,28 @@ export interface GenericList {
   shown?: string;
 }
 
+export interface ListUpdate {
+  id: string;
+  cluster: string;
+  reset?: boolean;
+  columns?: TableColumn[];
+  namespaced: boolean;
+  shown?: string;
+  truncated?: boolean;
+  upserts: GenericRow[];
+  deletes: string[];
+  error?: string;
+  mode: "watch" | "poll";
+}
+
+export interface CreateResult {
+  kind: string;
+  name: string;
+  namespace?: string;
+  status: "created" | "valid" | "exists" | "failed" | "skipped";
+  error?: string;
+}
+
 export interface PortForwardRequest {
   cluster: string;
   namespace: string;
@@ -267,6 +289,9 @@ export const backendApi = {
   resourceKinds: (cluster: string) => call<KindInfo[]>("ResourceKinds", cluster),
   listResources: (cluster: string, kind: string, namespace: string) => call<GenericList>("ListResources", cluster, kind, namespace),
   deleteResource: (cluster: string, kind: string, ns: string, name: string) => call<void>("DeleteResource", cluster, kind, ns, name),
+  startListWatch: (cluster: string, kind: string, namespace: string) => call<string>("StartListWatch", cluster, kind, namespace),
+  stopListWatch: (id: string) => call<void>("StopListWatch", id),
+  createObjects: (cluster: string, text: string, dryRun: boolean) => call<CreateResult[]>("CreateObjects", cluster, text, dryRun),
 
   deploymentRelations: (cluster: string, ns: string, name: string) => call<PodRelation[]>("DeploymentRelations", cluster, ns, name),
   helmRevision: (cluster: string, ns: string, name: string, rev: number) =>
@@ -305,6 +330,7 @@ export const EVENTS = {
   logs: "clustrail:logs",
   exec: "clustrail:exec",
   portForwards: "clustrail:portforwards",
+  list: "clustrail:list",
 } as const;
 
 /** Opens a URL in the system browser (desktop) or a new tab (browser preview). */

@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
@@ -89,5 +91,95 @@ func TestListResourcesKindsAndDelete(t *testing.T) {
 	}
 	if l, _ := m.ListResources("test", "Service", "payments"); len(l.Rows) != 0 {
 		t.Fatalf("after delete: %+v", l.Rows)
+	}
+}
+
+func (r *recorder) listUpdates(id string) []ListUpdate {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []ListUpdate
+	for _, e := range r.events {
+		if u, ok := e.data.(ListUpdate); ok && e.name == EventList && u.ID == id {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+func TestListWatchStreamsChanges(t *testing.T) {
+	c, client, rec := newFakeConn(t)
+	client.Fake.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{
+		{Name: "configmaps", Kind: "ConfigMap", Namespaced: true, Verbs: []string{"list", "watch", "delete"}},
+	}}}
+	cm := func(name string) *corev1.ConfigMap {
+		return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "payments"}}
+	}
+	dyn := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, cm("a"))
+	c.dynamic = dyn
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	defer c.cancel()
+	m := managerWith(c, false)
+
+	id, err := m.StartListWatch("test", "ConfigMap", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.StopListWatch(id)
+	waitFor(t, "reset", func() bool { return len(rec.listUpdates(id)) > 0 })
+	if u := rec.listUpdates(id)[0]; !u.Reset || len(u.Upserts) != 1 || u.Upserts[0].ID != "test/payments/a" || u.Mode != "watch" {
+		t.Fatalf("reset = %+v", u)
+	}
+
+	gvr := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+	obj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(cm("b"))
+	if _, err := dyn.Resource(gvr).Namespace("payments").Create(context.Background(), &unstructured.Unstructured{Object: obj}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := dyn.Resource(gvr).Namespace("payments").Delete(context.Background(), "a", metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "upsert and delete", func() bool {
+		var up, del bool
+		for _, u := range rec.listUpdates(id) {
+			for _, r := range u.Upserts {
+				up = up || (!u.Reset && r.ID == "test/payments/b")
+			}
+			for _, d := range u.Deletes {
+				del = del || d == "test/payments/a"
+			}
+		}
+		return up && del
+	})
+}
+
+func TestCreateObjectsFromManifest(t *testing.T) {
+	c, client, _ := newFakeConn(t)
+	client.Fake.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{
+		{Name: "configmaps", Kind: "ConfigMap", Namespaced: true, Verbs: []string{"create", "list"}},
+		{Name: "namespaces", Kind: "Namespace", Namespaced: false, Verbs: []string{"create", "list"}},
+	}}}
+	c.dynamic = dynamicfake.NewSimpleDynamicClient(scheme.Scheme, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "taken", Namespace: "team-a"}})
+	c.fallbackNS = "team-a"
+	m := managerWith(c, false)
+
+	manifest := "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: team-b\n---\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\ndata:\n  A: \"1\"\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: taken\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: never\n"
+	res, err := m.CreateObjects("test", manifest, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct{ name, ns, status string }{{"team-b", "", "created"}, {"settings", "team-a", "created"}, {"taken", "team-a", "exists"}, {"never", "", "skipped"}}
+	if len(res) != len(want) {
+		t.Fatalf("results = %+v", res)
+	}
+	for i, w := range want {
+		if res[i].Name != w.name || res[i].Namespace != w.ns || res[i].Status != w.status {
+			t.Fatalf("result %d = %+v, want %+v", i, res[i], w)
+		}
+	}
+	if _, err := m.CreateObjects("test", "kind: ConfigMap\n", false); err == nil {
+		t.Fatal("a document without apiVersion must be refused")
+	}
+	if _, err := managerWith(c, true).CreateObjects("test", manifest, false); err != ErrReadOnly {
+		t.Fatalf("read-only err = %v", err)
 	}
 }

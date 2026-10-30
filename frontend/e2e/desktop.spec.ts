@@ -85,6 +85,16 @@ test("lists any kind, finds CRDs with ⌘J and dry-runs a new object", async ({ 
   await expect(page.getByText("Selector", { exact: true }).filter({ visible: true })).toHaveCount(0);
   await visible(page, "10.96.12.4").click();
   await expect(visible(page, "app=checkout-api")).toBeVisible();
+  await expect(visible(page, "live (watch)")).toBeVisible();
+
+  // Watch updates add and remove rows without a reload.
+  await backend.emit("clustrail:list", {
+    id: backend.watchOf("Service"), cluster: "prod-eu-west-1", namespaced: true, mode: "watch", deletes: [],
+    upserts: [{ id: "prod-eu-west-1/payments/ledger", cluster: "prod-eu-west-1", namespace: "payments", name: "ledger", created: "2026-10-29T00:00:00Z", cells: ["ClusterIP", "10.96.40.2", "8080/TCP", "app=ledger"] }],
+  });
+  await expect(visible(page, "10.96.40.2")).toBeVisible();
+  await backend.emit("clustrail:list", { id: backend.watchOf("Service"), cluster: "prod-eu-west-1", namespaced: true, mode: "watch", upserts: [], deletes: ["prod-eu-west-1/payments/ledger"] });
+  await expect(page.getByText("10.96.40.2")).toHaveCount(0);
 
   await page.keyboard.press("Control+j");
   await expect(visible(page, "certificates.cert-manager.io")).toBeVisible();
@@ -95,7 +105,8 @@ test("lists any kind, finds CRDs with ⌘J and dry-runs a new object", async ({ 
   await page.getByRole("button", { name: "Create…" }).click();
   await expect(visible(page, /New CronJob/)).toBeVisible();
   await page.getByRole("button", { name: "Dry run" }).click();
-  await expect(visible(page, /Server accepted CronJob\/my-cronjob/)).toBeVisible();
+  await expect(visible(page, "CronJob/my-cronjob")).toBeVisible();
+  await expect(visible(page, "valid")).toBeVisible();
 });
 
 test("port-forwards a Service and restores tabs on the next launch", async ({ page }) => {
