@@ -64,7 +64,7 @@ type netpolData struct {
 	policies   []networkingv1.NetworkPolicy
 }
 
-func (m *Manager) netpolData(ctx context.Context, c *clusterConn, ns string) (netpolData, error) {
+func loadNetpolData(ctx context.Context, c *clusterConn, ns string) (netpolData, error) {
 	d := netpolData{namespaces: map[string]map[string]string{}}
 	pols, err := c.client.NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -342,7 +342,7 @@ func (m *Manager) PodNetworkPolicies(cluster, ns, pod string) (NetPolView, error
 	if err != nil {
 		return NetPolView{}, err
 	}
-	d, err := m.netpolData(ctx, c, ns)
+	d, err := loadNetpolData(ctx, c, ns)
 	if err != nil {
 		return NetPolView{}, err
 	}
@@ -420,7 +420,7 @@ func (m *Manager) CheckConnection(cluster, srcNS, srcPod, dstNS, dstPod, dstIP s
 		}
 		dstIP = dst.Status.PodIP
 	}
-	d, err := m.netpolData(ctx, c, srcNS)
+	d, err := loadNetpolData(ctx, c, srcNS)
 	if err != nil {
 		return ConnectionCheck{}, err
 	}

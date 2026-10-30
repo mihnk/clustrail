@@ -125,6 +125,15 @@ through one Wails service (`internal/app.Workspace`) and its events.
   and what each rule lets in and out, with the network plugin found in
   kube-system and whether it enforces policies; a check says whether one
   connection (pod or IP, port, protocol) is allowed and by which rule.
+- **Service chain** (`servicechain.go`): Ingress → IngressClass and its
+  controller's pods → Service → EndpointSlices → pods, read from the objects
+  (no request is sent, so read-only contexts have it too). Each link is
+  checked in the order a request meets it: a missing class or Service, a port
+  the Service lacks, a selector that matches nothing (with the label values
+  pods do have), a named targetPort the pods do not declare, no ready
+  endpoints (with the readiness probe's failure), a missing or expiring TLS
+  Secret, and network policies that keep the controller out. The first broken
+  link is the verdict.
 - **Checks** (`insights.go`): Warning events across the selected clusters
   (the context's namespace when RBAC denies cluster-wide); certificates and
   tokens with an end date (the kubeconfig's client certificate or JWT, the API

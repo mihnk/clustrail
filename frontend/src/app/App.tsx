@@ -28,6 +28,7 @@ import { AccessWorkspace } from "@/features/insights/AccessWorkspace";
 import { HelmUpgradeWorkspace } from "@/features/helm/HelmUpgradeWorkspace";
 import { StorageWorkspace } from "@/features/storage/StorageWorkspace";
 import { NetworkWorkspace } from "@/features/network/NetworkWorkspace";
+import { ServiceChainWorkspace } from "@/features/chain/ServiceChainWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
 // xterm.js and Monaco only load when a Shell or YAML tab renders.
@@ -209,6 +210,8 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <StorageWorkspace active={active} />;
     case "network":
       return <NetworkWorkspace tab={tab} active={active} />;
+    case "chain":
+      return <ServiceChainWorkspace tab={tab} active={active} />;
     case "connections":
       return <ConnectionsWorkspace active={active} />;
     case "settings":

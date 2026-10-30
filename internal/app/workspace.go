@@ -199,6 +199,10 @@ func (w *Workspace) UpgradeRelease(req kube.HelmUpgradeRequest) (string, error) 
 	return job, err
 }
 
+func (w *Workspace) ServiceChain(cluster, ns, kind, name string) (kube.ServiceChain, error) {
+	return w.m.ServiceChain(cluster, ns, kind, name)
+}
+
 func (w *Workspace) Storage(cluster string) (kube.StorageReport, error) { return w.m.Storage(cluster) }
 
 func (w *Workspace) PodNetworkPolicies(cluster, ns, pod string) (kube.NetPolView, error) {

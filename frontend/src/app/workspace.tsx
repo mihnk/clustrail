@@ -33,6 +33,7 @@ export type WorkspaceTabKind =
   | "gitops"
   | "warnings"
   | "helm-upgrade"
+  | "chain"
   | "storage"
   | "network"
   | "certificates"
@@ -53,7 +54,7 @@ export interface WorkspaceTab {
 
 const SAVED_TABS = "workspace.desktop.tabs";
 /** Tabs that reopen on launch. Streams (Logs, Shell) and unsaved drafts (Create) start fresh. */
-const RESTORABLE: WorkspaceTabKind[] = ["clusters", "pods", "deployments", "nodes", "helm", "gitops", "warnings", "certificates", "access", "storage", "network", "connections", "settings", "list", "yaml", "investigation", "compare"];
+const RESTORABLE: WorkspaceTabKind[] = ["clusters", "pods", "deployments", "nodes", "helm", "gitops", "warnings", "certificates", "access", "storage", "network", "chain", "connections", "settings", "list", "yaml", "investigation", "compare"];
 const DEFAULT_TABS: WorkspaceTab[] = [
   { id: "clusters", kind: "clusters", title: tt("Clusters") },
   { id: "pods", kind: "pods", title: tt("Pods") },

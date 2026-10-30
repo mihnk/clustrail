@@ -320,3 +320,14 @@ test("network policies of a pod, and a connection check", async ({ page }) => {
   await expect(visible(page, "Denied")).toBeVisible();
   expect(backend.argsOf("CheckConnection")[0]).toEqual(["prod-eu-west-1", "payments", "checkout-api-7d9f8b6c4-9rkzd", "payments", "checkout-api-7d9f8b6c4-h2pqs", "", 5432, "TCP"]);
 });
+
+test("service chain explains why a Service has nothing to route to", async ({ page }) => {
+  await sidebar(page, /^Services/).click();
+  await visible(page, "10.96.12.4").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Service chain" }).click();
+  await expect(visible(page, "Likely cause: service/checkout-api has no ready endpoints")).toBeVisible();
+  await expect(page.getByRole("status").getByText(/Readiness probe failed: connection refused/)).toBeVisible();
+  await expect(visible(page, "Selector app=checkout-api matches 1 pods")).toBeVisible();
+  await expect(visible(page, "0 ready · 1 not ready")).toBeVisible();
+  expect(backend.argsOf("ServiceChain")[0]).toEqual(["prod-eu-west-1", "payments", "Service", "checkout-api"]);
+});

@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
-import { Cable, PanelTop, Check, Code, Copy, LayoutGrid, Pencil, Plus, RefreshCw, Search, SearchX, Trash2, X } from "lucide-react";
+import { Cable, PanelTop, Route, Check, Code, Copy, LayoutGrid, Pencil, Plus, RefreshCw, Search, SearchX, Trash2, X } from "lucide-react";
 import { openPortForward } from "@/features/portforward/PortForward";
 import { useNamespaceFilter } from "@/app/namespaceFilter";
 import { SYSTEM_NAMESPACES, useWorkspace, type WorkspaceTab } from "@/app/workspace";
@@ -38,6 +38,7 @@ import { cn } from "@/lib/cn";
 import { kindName, kubectlResource, listLabel, resourceTab } from "./kinds";
 import { SecretKeys } from "./SecretKeys";
 import { JobAttempts, ScaleDialog, workloadActions, type WorkloadTarget } from "./workloadActions";
+import { chainTab } from "@/features/chain/ServiceChainWorkspace";
 import { t as tt } from "@/i18n";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
@@ -298,6 +299,9 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         ...extra.filter((a) => a.group === "observe"),
         { id: "open", group: "observe", label: tt("Open in tab"), icon: <PanelTop />, onSelect: () => ws.openView(resourceTab(r.cluster, kind, r.namespace ?? "", r.name)) },
         { id: "yaml", group: "observe", label: tt("View YAML"), icon: <Code />, shortcut: "Y", onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params }) },
+        ...(kind === "Service" || kind === "networking.k8s.io/Ingress"
+          ? [{ id: "chain", group: "observe" as const, label: tt("Service chain"), icon: <Route />, disabled: !backend, onSelect: () => ws.openView(chainTab(r.cluster, kind === "Service" ? "Service" : "Ingress", r.namespace ?? "", r.name)) }]
+          : []),
         ...(kind === "Service"
           ? [{ id: "forward", group: "observe" as const, label: c?.readOnly ? tt("Port forward · read-only context") : tt("Port forward…"), icon: <Cable />, disabled: c?.readOnly, onSelect: () => openPortForward({ cluster: r.cluster, namespace: r.namespace ?? "", kind: "Service", name: r.name }) }]
           : []),

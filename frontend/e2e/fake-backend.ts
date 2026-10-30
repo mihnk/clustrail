@@ -214,6 +214,20 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       };
     case "CheckConnection":
       return { allowed: false, egress: true, egressVia: "no policy selects the pod", ingress: false, ingressVia: "denied: selected by default-deny and no rule matches" };
+    case "ServiceChain":
+      return {
+        cluster: args[0], namespace: args[1],
+        services: [{
+          name: "checkout-api", found: true, type: "ClusterIP", clusterIP: "10.96.12.4", selector: "app=checkout-api",
+          ports: [{ name: "http", port: 80, targetPort: "http", protocol: "TCP" }], ready: [], notReady: ["10.1.4.17"],
+          pods: [{ name: "checkout-api-7d9f8b6c4-9rkzd", phase: "Running", ready: false, reason: "Readiness probe failed: connection refused" }], ingresses: ["shop"],
+        }],
+        checks: [
+          { status: "ok", text: "Selector app=checkout-api matches 1 pods", template: "Selector {v0} matches {v1} pods", args: ["app=checkout-api", "1"] },
+          { status: "error", text: "service/checkout-api has no ready endpoints", template: "service/{v0} has no ready endpoints", args: ["checkout-api"], hint: "checkout-api-7d9f8b6c4-9rkzd: Readiness probe failed: connection refused" },
+        ],
+        verdict: { status: "error", text: "service/checkout-api has no ready endpoints", template: "service/{v0} has no ready endpoints", args: ["checkout-api"], hint: "checkout-api-7d9f8b6c4-9rkzd: Readiness probe failed: connection refused" },
+      };
     case "TriggerCronJob":
       return "nightly-report-manual-10301200123";
     case "StartPortForward": {

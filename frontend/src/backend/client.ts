@@ -510,6 +510,50 @@ export interface ConnectionCheck {
   ingressVia: string;
 }
 
+// Service chain (internal/kube/servicechain.go).
+export interface ChainCheck {
+  status: "ok" | "warning" | "error" | "info";
+  /** English, filled in; the UI shows template with args, translated. */
+  text: string;
+  template: string;
+  args?: string[];
+  /** Data (pod names, event messages) unless hintTemplate is set. */
+  hint?: string;
+  hintTemplate?: string;
+  hintArgs?: string[];
+}
+
+export interface ChainService {
+  name: string;
+  found: boolean;
+  type?: string;
+  clusterIP?: string;
+  external?: string;
+  selector: string;
+  ports: { name?: string; port: number; targetPort: string; protocol: string }[];
+  ready: string[];
+  notReady: string[];
+  pods: { name: string; phase: string; ready: boolean; ip?: string; node?: string; reason?: string }[];
+  ingresses: string[];
+}
+
+export interface ServiceChain {
+  cluster: string;
+  namespace: string;
+  ingress?: {
+    name: string;
+    class?: string;
+    controller?: string;
+    controllerPods: number;
+    routes: { host: string; path: string; service: string; port: string }[];
+    tls: { secret: string; hosts: string[]; found: boolean; daysLeft?: number }[];
+    address: string[];
+  };
+  services: ChainService[];
+  checks: ChainCheck[];
+  verdict: ChainCheck;
+}
+
 // Debugging (internal/kube/debug.go).
 export interface DebugRequest {
   cluster: string;
@@ -690,6 +734,7 @@ export const backendApi = {
   planHelmUpgrade: (req: HelmUpgradeRequest) => call<HelmUpgradePlan>("PlanHelmUpgrade", req),
   upgradeRelease: (req: HelmUpgradeRequest) => call<string>("UpgradeRelease", req),
   storage: (cluster: string) => call<StorageReport>("Storage", cluster),
+  serviceChain: (cluster: string, ns: string, kind: string, name: string) => call<ServiceChain>("ServiceChain", cluster, ns, kind, name),
   podNetworkPolicies: (cluster: string, ns: string, pod: string) => call<NetPolView>("PodNetworkPolicies", cluster, ns, pod),
   checkConnection: (cluster: string, srcNS: string, srcPod: string, dstNS: string, dstPod: string, dstIP: string, port: number, protocol: string) =>
     call<ConnectionCheck>("CheckConnection", cluster, srcNS, srcPod, dstNS, dstPod, dstIP, port, protocol),

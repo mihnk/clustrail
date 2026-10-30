@@ -22,6 +22,7 @@ import {
   ArrowUpCircle,
   HardDrive,
   Waypoints,
+  Route,
 } from "lucide-react";
 import { IS_MOCK } from "@/data/mock";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -241,6 +242,8 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
       return <HardDrive className={cls} aria-hidden />;
     case "network":
       return <Waypoints className={cls} aria-hidden />;
+    case "chain":
+      return <Route className={cls} aria-hidden />;
     case "connections":
       return <KeyRound className={cls} aria-hidden />;
     case "settings":

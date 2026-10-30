@@ -144,6 +144,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       ["Access", <ShieldCheck key="a" />, () => ws.openView({ kind: "access", title: t("Access") })],
       ["Storage", <HardDrive key="st" />, () => ws.openView({ kind: "storage", title: t("Storage") })],
       ["Network policies", <Waypoints key="np" />, () => ws.openView({ kind: "network", title: t("Network policies") })],
+      ["Service chain", <Route key="sc" />, () => ws.openView({ kind: "chain", title: t("Service chain") })],
       ["Connections", <KeyRound key="k" />, () => ws.openView({ kind: "connections", title: t("Connections") })],
       ["Settings", <Settings key="s" />, () => ws.openView({ kind: "settings", title: t("Settings") })],
     ];
