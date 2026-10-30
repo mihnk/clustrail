@@ -256,44 +256,7 @@ func (m *Manager) GetPodDetail(cluster, ns, name string) (PodDetail, error) {
 	}
 
 	// ConfigMaps and Secrets referenced by volumes and env (names only; Secret values are never read).
-	var uses []RelationObject
-	seen := map[string]bool{}
-	use := func(kind, n string) {
-		if n != "" && !seen[kind+n] {
-			seen[kind+n] = true
-			uses = append(uses, RelationObject{Kind: kind, Name: n})
-		}
-	}
-	for _, v := range p.Spec.Volumes {
-		if v.ConfigMap != nil {
-			use("cm", v.ConfigMap.Name)
-		}
-		if v.Secret != nil {
-			use("secret", v.Secret.SecretName)
-		}
-		if v.PersistentVolumeClaim != nil {
-			use("pvc", v.PersistentVolumeClaim.ClaimName)
-		}
-	}
-	for _, ct := range p.Spec.Containers {
-		for _, ef := range ct.EnvFrom {
-			if ef.ConfigMapRef != nil {
-				use("cm", ef.ConfigMapRef.Name)
-			}
-			if ef.SecretRef != nil {
-				use("secret", ef.SecretRef.Name)
-			}
-		}
-		for _, e := range ct.Env {
-			if e.ValueFrom != nil && e.ValueFrom.ConfigMapKeyRef != nil {
-				use("cm", e.ValueFrom.ConfigMapKeyRef.Name)
-			}
-			if e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
-				use("secret", e.ValueFrom.SecretKeyRef.Name)
-			}
-		}
-	}
-	if len(uses) > 0 {
+	if uses := templateUses(p.Spec); len(uses) > 0 {
 		d.Relations = append(d.Relations, PodRelation{Label: "Uses", Objects: uses, Via: "volumes and env references"})
 	}
 	if p.Spec.NodeName != "" {
@@ -313,10 +276,8 @@ func (m *Manager) GetPodDetail(cluster, ns, name string) (PodDetail, error) {
 			}
 		}
 	}
-	if inst := p.Labels["app.kubernetes.io/instance"]; inst != "" {
-		if lbl := p.Labels["argocd.argoproj.io/instance"]; lbl != "" {
-			d.Relations = append(d.Relations, PodRelation{Label: "Managed by", Objects: []RelationObject{{Kind: "argocd", Name: lbl}}, Via: "label argocd.argoproj.io/instance"})
-		}
+	if mb := managedBy(p.ObjectMeta); mb != nil {
+		d.Relations = append(d.Relations, *mb)
 	}
 	return d, nil
 }

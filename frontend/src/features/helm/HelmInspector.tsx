@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpCircle, Code, Diff, History, Info, LifeBuoy, Lock, X } from "lucide-react";
 import type { Cluster } from "@/data/types";
-import { rollbackPlan, type HelmRelease } from "@/data/helm";
+import { planFromManifests, rollbackPlan, type HelmRelease, type RollbackPlan } from "@/data/helm";
+import { backend } from "@/backend/client";
+import { useHelmRevision, type HelmRevisionInfo } from "@/backend/hooks";
 import { hunks, lineDiff } from "@/data/compare";
 import { Button, IconButton } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -11,7 +13,11 @@ import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
-const HELM_SDK = "3.16";
+// Desktop: the Helm SDK linked into the backend. The mock shows the design's version.
+// A function: `backend` is set after modules load.
+const helmSdk = () => (backend ? "4.3" : "3.16");
+
+const loaded = (d: HelmRevisionInfo | { error: string } | null): d is HelmRevisionInfo => !!d && !("error" in d);
 
 function manifestFor(r: HelmRelease, appVersion: string, rev: number): string {
   const parts = r.resources
@@ -54,7 +60,7 @@ export function HelmInspector({
   release: HelmRelease;
   cluster: Cluster | undefined;
   onClose: () => void;
-  onRollback: (rev: number) => void;
+  onRollback: (rev: number, plan: RollbackPlan) => void;
 }) {
   const current = r.history[0]!;
   const lastGood = r.history.find((h) => h.rev !== r.revision && (h.status === "deployed" || h.status === "superseded"));
@@ -70,12 +76,23 @@ export function HelmInspector({
     setShowDiff(false);
   }, [r.id]);
 
-  const plan = target !== null ? rollbackPlan(r, target) : null;
   const targetRev = r.history.find((h) => h.rev === target);
-  const diff = useMemo(
-    () => (targetRev ? hunks(lineDiff(manifestFor(r, current.appVersion, current.rev), manifestFor(r, targetRev.appVersion, targetRev.rev)), 1) : []),
-    [r, current, targetRev],
-  );
+  // Desktop: manifests, values and hooks as Helm stored them for each revision.
+  const curDetail = useHelmRevision(r.cluster, r.namespace, r.name, backend ? r.revision : null);
+  const tgtDetail = useHelmRevision(r.cluster, r.namespace, r.name, backend ? target : null);
+  const curManifest = backend ? (loaded(curDetail) ? curDetail.manifest : null) : manifestFor(r, current.appVersion, current.rev);
+  const tgtManifest = backend ? (loaded(tgtDetail) ? tgtDetail.manifest : null) : targetRev ? manifestFor(r, targetRev.appVersion, targetRev.rev) : null;
+  const plan: RollbackPlan | null =
+    target === null
+      ? null
+      : backend
+        ? curManifest !== null && tgtManifest !== null && loaded(tgtDetail)
+          ? planFromManifests(curManifest, tgtManifest, tgtDetail.hooks)
+          : null
+        : rollbackPlan(r, target);
+  const diff = useMemo(() => (curManifest !== null && tgtManifest !== null ? hunks(lineDiff(curManifest, tgtManifest), 1) : []), [curManifest, tgtManifest]);
+  const loadError = (curDetail && "error" in curDetail && curDetail.error) || (tgtDetail && "error" in tgtDetail && tgtDetail.error) || null;
+  const values = backend ? (loaded(curDetail) ? (valuesMode === "user" ? curDetail.values : curDetail.computed) : "") : valuesMode === "user" ? r.values : computedValues(r);
 
   return (
     <>
@@ -97,7 +114,7 @@ export function HelmInspector({
         </div>
         <h1 className="selectable m-0 truncate font-mono text-mono-title font-semibold">{r.name}</h1>
         <span className="truncate text-meta text-fg-muted">
-          {r.namespace} · {r.cluster} · {r.repoKnown ? r.chart : `acme/${r.chart}`} {r.chartVersion} · app {r.appVersion}
+          {r.namespace} · {r.cluster} · {r.repoKnown || backend ? r.chart : `acme/${r.chart}`} {r.chartVersion} · app {r.appVersion}
         </span>
 
         {r.status === "failed" && (
@@ -108,7 +125,7 @@ export function HelmInspector({
                 <b className="font-semibold text-status-critical">Upgrade to revision {r.revision} failed</b> · {formatAge(r.updatedSeconds)} ago
               </span>
               <span className="selectable font-mono text-fg-secondary">
-                context deadline exceeded: Deployment {r.name} not ready within --timeout 5m
+                {backend ? current.description : `context deadline exceeded: Deployment ${r.name} not ready within --timeout 5m`}
               </span>
             </div>
           </div>
@@ -136,7 +153,7 @@ export function HelmInspector({
           <span className="flex min-w-0 items-center gap-2">
             <SourceBadge op>Helm ops</SourceBadge>
             <span className="truncate text-fg-secondary">
-              bundled Helm SDK {HELM_SDK} · chart repo {r.repoKnown ? <span className="text-fg">configured</span> : <span className="text-status-warning">unknown</span>}
+              bundled Helm SDK {helmSdk()} · chart repo {r.repoKnown ? <span className="text-fg">configured</span> : <span className="text-status-warning">unknown</span>}
             </span>
           </span>
         </div>
@@ -149,7 +166,7 @@ export function HelmInspector({
           <div className="flex-1" />
           <Button
             disabled
-            title={r.repoKnown ? "Upgrades run from your CI pipeline in this build" : `Chart repository for acme/${r.chart} is not configured`}
+            title={r.repoKnown ? "Upgrades run from your CI pipeline in this build" : `Chart repository for ${backend ? "" : "acme/"}${r.chart} is not configured`}
           >
             <ArrowUpCircle aria-hidden />
             Upgrade…
@@ -218,14 +235,14 @@ export function HelmInspector({
             credentials are redacted.
           </span>
           <pre className="selectable m-0 overflow-x-auto rounded-md bg-term-bg px-2.5 py-2 font-mono text-[11.5px] leading-[17px] text-term-fg">
-            {valuesMode === "user" ? r.values : computedValues(r)}
+            {values || (loadError ?? "Reading values…")}
           </pre>
         </TabsContent>
 
         <TabsContent value="manifest" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">
           <span className="text-meta text-fg-muted">Rendered manifest stored in the release Secret of revision {r.revision}.</span>
           <pre className="selectable m-0 overflow-x-auto rounded-md bg-term-bg px-2.5 py-2 font-mono text-[11.5px] leading-[17px] text-term-fg">
-            {manifestFor(r, current.appVersion, current.rev)}
+            {curManifest ?? loadError ?? "Reading manifest…"}
           </pre>
         </TabsContent>
 
@@ -270,6 +287,9 @@ export function HelmInspector({
             })}
           </div>
 
+          {target !== null && !plan && (
+            <p className="m-0 text-meta text-fg-muted">{loadError ?? `Reading revisions ${r.revision} and ${target}…`}</p>
+          )}
           {plan && targetRev && (
             <section aria-label={`Roll back to revision ${target}`} className="flex flex-col gap-2 rounded-lg border border-line p-2.5">
               <div className="flex items-center gap-2">
@@ -283,6 +303,12 @@ export function HelmInspector({
                   <>
                     <dt className="text-fg-muted">Removed</dt>
                     <dd className="m-0">{plan.removed}</dd>
+                  </>
+                )}
+                {plan.added && (
+                  <>
+                    <dt className="text-fg-muted">Added</dt>
+                    <dd className="m-0">{plan.added}</dd>
                   </>
                 )}
                 {plan.hooks && (
@@ -319,7 +345,7 @@ export function HelmInspector({
                   Manifest diff
                 </Button>
                 <div className="flex-1" />
-                <Button size="sm" variant="primary" disabled={busy || cluster?.readOnly} onClick={() => onRollback(targetRev.rev)}>
+                <Button size="sm" variant="primary" disabled={busy || cluster?.readOnly} onClick={() => onRollback(targetRev.rev, plan)}>
                   Roll back…
                 </Button>
               </div>
@@ -330,8 +356,9 @@ export function HelmInspector({
             <div role="status" className="flex gap-2 rounded-lg bg-status-progressing-soft px-2.5 py-2 text-ui">
               <Info className="mt-px size-3.5 shrink-0 text-status-progressing" aria-hidden />
               <span>
-                Upgrade needs the chart. Add the repo that hosts <span className="font-mono">acme/{r.chart}</span> in Settings › Helm, or upgrade from your CI
-                pipeline.
+                Upgrade needs the chart. Add the repo that hosts{" "}
+                <span className="font-mono">{backend ? r.chart : `acme/${r.chart}`}</span>{" "}
+                {backend ? "with helm repo add, or upgrade from your CI pipeline." : "in Settings › Helm, or upgrade from your CI pipeline."}
               </span>
             </div>
           )}

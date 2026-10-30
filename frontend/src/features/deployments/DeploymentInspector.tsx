@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Activity, Box, Diff, GitBranch, Layers, Lock, Minus, Plus, ScrollText, X } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
-import type { Cluster, DeploymentRow } from "@/data/types";
+import type { Cluster, DeploymentRow, PodRelation } from "@/data/types";
 import { Button, IconButton } from "@/components/ui/button";
 import { Meter } from "@/components/ui/meter";
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabCount } from "@/components/ui/tabs";
@@ -11,7 +11,8 @@ import { ModifyMenuButton, type ResourceAction } from "@/components/resource-act
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { useEvents } from "@/backend/hooks";
-import { EventsPanel } from "@/features/pods/PodInspector";
+import { EventsPanel, RelatedList } from "@/features/pods/PodInspector";
+import { backend, errorText } from "@/backend/client";
 import { formatMemory } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { rollbackDeploymentRequest, scaleDeploymentRequest, strategyText } from "./requests";
@@ -280,24 +281,28 @@ export function DeploymentInspector({
         </Panel>
 
         <Panel value="related">
-          <dl className="m-0 flex flex-col text-ui">
-            <Rel label="Selected by" via="Service selector">
-              svc/{d.name}
-            </Rel>
-            {d.hpa && (
-              <Rel label="Scaled by" via="scaleTargetRef">
-                hpa/{d.hpa.name} · {d.hpa.min}–{d.hpa.max}
+          {backend ? (
+            <DeploymentRelated d={d} />
+          ) : (
+            <dl className="m-0 flex flex-col text-ui">
+              <Rel label="Selected by" via="Service selector">
+                svc/{d.name}
               </Rel>
-            )}
-            <Rel label="Disruption" via="PDB selector">
-              pdb/{d.name}
-            </Rel>
-            {d.argoApp && (
-              <Rel label="Managed by" via="Argo CD tracking annotation">
-                Argo CD · {d.argoApp}
+              {d.hpa && (
+                <Rel label="Scaled by" via="scaleTargetRef">
+                  hpa/{d.hpa.name} · {d.hpa.min}–{d.hpa.max}
+                </Rel>
+              )}
+              <Rel label="Disruption" via="PDB selector">
+                pdb/{d.name}
               </Rel>
-            )}
-          </dl>
+              {d.argoApp && (
+                <Rel label="Managed by" via="Argo CD tracking annotation">
+                  Argo CD · {d.argoApp}
+                </Rel>
+              )}
+            </dl>
+          )}
         </Panel>
       </Tabs>
     </>
@@ -437,4 +442,24 @@ function ObjectEvents({ cluster, namespace, kind, name }: { cluster: string; nam
   if (events === null) return <EmptyState title="Reading events…" />;
   if (!events.length) return <EmptyState title="No recent events">The API server keeps events for about 1 hour by default.</EmptyState>;
   return <EventsPanel events={events} />;
+}
+
+/** Desktop: what selects, scales, protects and configures this Deployment, as the API server reports it. */
+function DeploymentRelated({ d }: { d: DeploymentRow }) {
+  const [rels, setRels] = useState<PodRelation[] | { error: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setRels(null);
+    void backend
+      ?.deploymentRelations(d.cluster, d.namespace, d.name)
+      .then((r) => !cancelled && setRels(r))
+      .catch((e) => !cancelled && setRels({ error: errorText(e) }));
+    return () => {
+      cancelled = true;
+    };
+  }, [d.id]);
+  if (rels === null) return <EmptyState title="Finding related objects…" />;
+  if ("error" in rels) return <EmptyState title="Could not read related objects">{rels.error}</EmptyState>;
+  if (!rels.length) return <EmptyState title="No related objects">No Service, HPA, PodDisruptionBudget or configuration references this Deployment.</EmptyState>;
+  return <RelatedList relations={rels} />;
 }

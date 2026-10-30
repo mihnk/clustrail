@@ -4,7 +4,7 @@ import { History, LifeBuoy, Search, SearchX } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { isAttention } from "@/data/health";
-import { rollbackPlan, type HelmRelease, type HelmStatus } from "@/data/helm";
+import { planFromManifests, rollbackPlan, type HelmRelease, type HelmStatus, type RollbackPlan } from "@/data/helm";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
 import type { ResourceAction } from "@/components/resource-actions/ResourceActions";
 import { useConfirm, type ConfirmationRequest } from "@/components/safety/ConfirmationDialog";
@@ -27,7 +27,8 @@ import { EmptyState } from "@/components/EmptyState";
 import type { Cluster } from "@/data/types";
 import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { backend } from "@/backend/client";
+import { backend, errorText } from "@/backend/client";
+import { useToast } from "@/components/ui/toast";
 import { helmColumns } from "./columns";
 import { HelmInspector } from "./HelmInspector";
 
@@ -35,8 +36,7 @@ const BAR = "bg-surface-panel dark:bg-transparent";
 /** Namespaces whose release Secrets this kubeconfig user cannot list (from a SelfSubjectAccessReview per namespace). */
 const UNREADABLE_NAMESPACES = ["security", "vault"];
 
-function rollbackRequest(r: HelmRelease, rev: number, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {
-  const plan = rollbackPlan(r, rev);
+function rollbackRequest(r: HelmRelease, rev: number, plan: RollbackPlan, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {
   const target = r.history.find((h) => h.rev === rev);
   return {
     action: "Roll back release",
@@ -52,6 +52,7 @@ function rollbackRequest(r: HelmRelease, rev: number, cluster: Cluster | undefin
       <>
         Creates revision {r.revision + 1} with the manifest of revision {rev}. Changed: {plan.changed}.
         {plan.removed && <> Removed: {plan.removed}.</>}
+        {plan.added && <> Added: {plan.added}.</>}
         {plan.hooks && <> Runs {plan.hooks}.</>} Waits up to 5m for resources to become ready.
       </>
     ),
@@ -104,9 +105,23 @@ export function HelmWorkspace({ active }: { active: boolean }) {
     getSortedRowModel: getSortedRowModel(),
   });
 
+  const toast = useToast();
   const requestRollback = useCallback(
-    (r: HelmRelease, rev: number) => confirm(rollbackRequest(r, rev, clusterById(r.cluster), () => rollbackRelease(r.id, rev))),
-    [confirm, clusterById, rollbackRelease],
+    async (r: HelmRelease, rev: number, known?: RollbackPlan) => {
+      let plan = known ?? (backend ? null : rollbackPlan(r, rev));
+      if (!plan && backend) {
+        // From a row menu: read both stored revisions first, so the confirmation states what really changes.
+        try {
+          const [cur, tgt] = await Promise.all([backend.helmRevision(r.cluster, r.namespace, r.name, r.revision), backend.helmRevision(r.cluster, r.namespace, r.name, rev)]);
+          plan = planFromManifests(cur.manifest, tgt.manifest, tgt.hooks);
+        } catch (e) {
+          toast.show({ kind: "error", title: "Could not read the revisions", target: r.name, detail: errorText(e), copyText: errorText(e) });
+          return;
+        }
+      }
+      confirm(rollbackRequest(r, rev, plan!, clusterById(r.cluster), () => rollbackRelease(r.id, rev)));
+    },
+    [confirm, clusterById, rollbackRelease, toast],
   );
 
   const actionsFor = useCallback(
@@ -119,7 +134,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
           label: lastGood ? `Roll back to ${lastGood.rev}…` : "Roll back…",
           icon: <History />,
           disabled: !lastGood,
-          onSelect: () => lastGood && requestRollback(r, lastGood.rev),
+          onSelect: () => lastGood && void requestRollback(r, lastGood.rev),
         },
       ];
     },
@@ -302,7 +317,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
             release={selected}
             cluster={clusterById(selected.cluster)}
             onClose={() => setInspectorOpen(false)}
-            onRollback={(rev) => requestRollback(selected, rev)}
+            onRollback={(rev, plan) => void requestRollback(selected, rev, plan)}
           />
         </InspectorPanel>
       )}

@@ -307,8 +307,12 @@ func TestHelmReleasesFromSecrets(t *testing.T) {
 			Type:       "helm.sh/release.v1",
 			Data: map[string][]byte{"release": encodeRelease(t, map[string]any{
 				"name": "payments-workers", "namespace": "payments", "version": version,
-				"info":     map[string]any{"status": status, "last_deployed": now.Add(-time.Duration(10-version) * time.Hour).Format(time.RFC3339), "description": "Upgrade complete"},
-				"chart":    map[string]any{"metadata": map[string]any{"name": "payments-workers", "version": chartVersion, "appVersion": app}},
+				"info": map[string]any{"status": status, "last_deployed": now.Add(-time.Duration(10-version) * time.Hour).Format(time.RFC3339), "description": "Upgrade complete"},
+				"chart": map[string]any{
+					"metadata": map[string]any{"name": "payments-workers", "version": chartVersion, "appVersion": app},
+					"values":   map[string]any{"replicaCount": 1, "queue": map[string]any{"url": "amqp://q", "password": "default-secret"}, "image": map[string]any{"tag": "latest"}},
+				},
+				"hooks":    []any{map[string]any{"name": "db-migrate-check", "kind": "Job", "events": []any{"post-upgrade", "post-rollback"}}},
 				"config":   map[string]any{"replicaCount": 3, "queue": map[string]any{"password": "hunter2"}},
 				"manifest": "---\nkind: Deployment\nmetadata:\n  name: payments-workers\n---\nkind: CronJob\nmetadata:\n  name: reconcile\n",
 			})},
@@ -333,6 +337,30 @@ func TestHelmReleasesFromSecrets(t *testing.T) {
 	}
 	if len(r.Resources) != 2 || r.Resources[1].Kind != "CronJob" {
 		t.Fatalf("resources = %+v", r.Resources)
+	}
+
+	m := managerWith(c, false)
+	d, err := m.GetHelmRevision("test", "payments", "payments-workers", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// User values win over chart defaults, maps merge, credentials stay redacted.
+	for _, want := range []string{"replicaCount: 3", "url: amqp://q", "tag: latest", "redacted"} {
+		if !strings.Contains(d.Computed, want) {
+			t.Errorf("computed values lack %q:\n%s", want, d.Computed)
+		}
+	}
+	if strings.Contains(d.Computed, "default-secret") || strings.Contains(d.Computed, "hunter2") {
+		t.Errorf("computed values leak a credential:\n%s", d.Computed)
+	}
+	if len(d.Hooks) != 1 || d.Hooks[0].Kind != "Job" || d.Hooks[0].Events[1] != "post-rollback" {
+		t.Errorf("hooks = %+v", d.Hooks)
+	}
+	if !strings.Contains(d.Manifest, "kind: CronJob") {
+		t.Errorf("manifest = %q", d.Manifest)
+	}
+	if _, err := m.GetHelmRevision("test", "payments", "payments-workers", 3); err == nil {
+		t.Error("a missing revision must be an error")
 	}
 }
 
@@ -509,5 +537,37 @@ func TestCachedChartNames(t *testing.T) {
 	}
 	if got["generated"] || got["apiVersion"] || got["name"] || len(got) != 4 {
 		t.Errorf("unexpected names: %v", got)
+	}
+}
+
+func TestDeploymentRelations(t *testing.T) {
+	d := deployment(func(d *appsv1.Deployment) {
+		d.Annotations = map[string]string{"meta.helm.sh/release-name": "checkout"}
+		d.Spec.Template.Labels = map[string]string{"app": "checkout-api"}
+		d.Spec.Template.Spec.Volumes = []corev1.Volume{{Name: "cfg", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "checkout-config"}}}}}
+		d.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "DB_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "checkout-db"}, Key: "password"}}}}
+	})
+	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "checkout-api", Namespace: "payments"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "checkout-api"}}}
+	other := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "payments"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "other"}}}
+	pdb := &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: "checkout-api", Namespace: "payments"},
+		Spec: policyv1.PodDisruptionBudgetSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "checkout-api"}}}}
+	c, _, _ := newFakeConn(t, d, svc, other, pdb)
+	rels, err := managerWith(c, false).DeploymentRelations("test", "payments", "checkout-api")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, r := range rels {
+		names := []string{}
+		for _, o := range r.Objects {
+			names = append(names, o.Kind+"/"+o.Name)
+		}
+		got[r.Label] = strings.Join(names, ",")
+	}
+	want := map[string]string{"Selected by": "svc/checkout-api", "Disruption": "pdb/checkout-api", "Uses": "cm/checkout-config,secret/checkout-db", "Managed by": "helm/checkout"}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %q, want %q (all: %v)", k, got[k], v, got)
+		}
 	}
 }

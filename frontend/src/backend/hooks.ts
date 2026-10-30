@@ -1,7 +1,7 @@
 // Data that views read on demand. In desktop mode it comes from the Go
 // backend; in a plain browser from the mock layer, so every view works in both.
 import { useEffect, useMemo, useState } from "react";
-import { backend } from "./client";
+import { backend, errorText } from "./client";
 import { getPodDetail } from "@/data/mock";
 import type { PodDetail, PodRow, ResourceEvent } from "@/data/types";
 import { drainPreflight, type DrainPreflight, type NodeRow } from "@/data/nodes";
@@ -95,4 +95,30 @@ export function useEvents(cluster: string, namespace: string, kind: string, name
     };
   }, [cluster, namespace, kind, name, active]);
   return events;
+}
+
+export interface HelmRevisionInfo {
+  rev: number;
+  manifest: string;
+  values: string;
+  computed: string;
+  hooks: { name: string; kind: string; events: string[] }[];
+}
+
+/** One stored Helm revision (desktop). null while loading or in the mock. */
+export function useHelmRevision(cluster: string, namespace: string, name: string, rev: number | null): HelmRevisionInfo | { error: string } | null {
+  const [state, setState] = useState<{ key: string; value: HelmRevisionInfo | { error: string } } | null>(null);
+  const key = `${cluster}/${namespace}/${name}@${rev}`;
+  useEffect(() => {
+    if (!backend || rev === null) return;
+    let cancelled = false;
+    void backend
+      .helmRevision(cluster, namespace, name, rev)
+      .then((d) => !cancelled && setState({ key, value: d }))
+      .catch((e) => !cancelled && setState({ key, value: { error: errorText(e) } }));
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return state?.key === key ? state.value : null;
 }

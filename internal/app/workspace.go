@@ -182,3 +182,11 @@ func (w *Workspace) AddKubeconfig() (string, error) {
 }
 
 func (w *Workspace) HelmRepositories() ([]kube.HelmRepository, error) { return kube.HelmRepositories() }
+
+func (w *Workspace) HelmRevision(cluster, ns, name string, rev int) (kube.HelmRevisionDetail, error) {
+	return w.m.GetHelmRevision(cluster, ns, name, rev)
+}
+
+func (w *Workspace) DeploymentRelations(cluster, ns, name string) ([]kube.PodRelation, error) {
+	return w.m.DeploymentRelations(cluster, ns, name)
+}

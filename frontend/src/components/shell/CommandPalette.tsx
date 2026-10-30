@@ -2,7 +2,9 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Dialog } from "radix-ui";
 import {
   Box,
+  GitBranch,
   KeyRound,
+  LifeBuoy,
   Layers,
   Lock,
   Moon,
@@ -125,6 +127,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         <Route key="i" />,
         () => ws.openTab("inv-checkout-api") || ws.openView({ id: "inv-checkout-api", kind: "investigation", title: "Investigation" }),
       ],
+      ["Helm releases", <LifeBuoy key="h" />, () => ws.openView({ kind: "helm", title: "Helm releases" })],
+      ["GitOps", <GitBranch key="g" />, () => ws.openView({ kind: "gitops", title: "GitOps" })],
       ["Connections", <KeyRound key="k" />, () => ws.openView({ kind: "connections", title: "Connections" })],
       ["Settings", <Settings key="s" />, () => ws.openView({ kind: "settings", title: "Settings" })],
     ];

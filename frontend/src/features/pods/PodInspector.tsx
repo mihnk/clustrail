@@ -327,7 +327,7 @@ function KV({ k, v }: { k: string; v: ReactNode }) {
  * Related objects as a list, not a graph: it scales to hundreds of objects
  * and reads well with a screen reader. Each line says how it was found.
  */
-function RelatedList({ relations }: { relations: PodDetail["relations"] }) {
+export function RelatedList({ relations }: { relations: PodDetail["relations"] }) {
   return (
     <dl className="m-0 flex flex-col">
       {relations.map((r) => (

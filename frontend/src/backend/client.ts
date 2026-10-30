@@ -2,7 +2,7 @@
 // and events it emits. Running in a plain browser (vite dev) there is no Go
 // side, so the app falls back to the mock data layer.
 import { Call, Events } from "@wailsio/runtime";
-import type { Cluster, DeploymentRow, Environment, PodDetail, PodRow, ResourceEvent } from "@/data/types";
+import type { Cluster, DeploymentRow, Environment, PodDetail, PodRelation, PodRow, ResourceEvent } from "@/data/types";
 import type { NodeRow } from "@/data/nodes";
 import type { HelmRelease } from "@/data/helm";
 import type { GitOpsObject, GitOpsTool } from "@/data/gitops";
@@ -197,6 +197,9 @@ export const backendApi = {
   applyYaml: (cluster: string, text: string, openedVersion: string, dryRun: boolean, force: boolean) =>
     call<ApplyResult>("ApplyYAML", cluster, text, openedVersion, dryRun, force),
 
+  deploymentRelations: (cluster: string, ns: string, name: string) => call<PodRelation[]>("DeploymentRelations", cluster, ns, name),
+  helmRevision: (cluster: string, ns: string, name: string, rev: number) =>
+    call<{ rev: number; manifest: string; values: string; computed: string; hooks: { name: string; kind: string; events: string[] }[] }>("HelmRevision", cluster, ns, name, rev),
   rollbackRelease: (cluster: string, ns: string, name: string, rev: number) => call<string>("RollbackRelease", cluster, ns, name, rev),
   refreshGitOps: (cluster: string, kind: string, ns: string, name: string) => call<void>("RefreshGitOps", cluster, kind, ns, name),
   syncGitOps: (cluster: string, kind: string, ns: string, name: string) => call<void>("SyncGitOps", cluster, kind, ns, name),

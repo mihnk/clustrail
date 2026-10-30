@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -76,9 +77,16 @@ type storedRelease struct {
 			Version    string `json:"version"`
 			AppVersion string `json:"appVersion"`
 		} `json:"metadata"`
+		// The chart's own values.yaml defaults.
+		Values map[string]any `json:"values"`
 	} `json:"chart"`
 	Config   map[string]any `json:"config"`
 	Manifest string         `json:"manifest"`
+	Hooks    []struct {
+		Name   string   `json:"name"`
+		Kind   string   `json:"kind"`
+		Events []string `json:"events"`
+	} `json:"hooks"`
 }
 
 // decodeRelease decodes the "release" field of a Helm storage Secret:
@@ -351,20 +359,87 @@ func (h *helmWatcher) releases() []HelmRelease {
 	return out
 }
 
-// manifestOf returns the stored manifest of one revision, for rollback diffs.
-func (h *helmWatcher) manifestOf(ns, name string, rev int) (string, bool) {
+type HelmHook struct {
+	Name   string   `json:"name"`
+	Kind   string   `json:"kind"`
+	Events []string `json:"events"`
+}
+
+// HelmRevisionDetail is what one stored revision contains.
+type HelmRevisionDetail struct {
+	Rev      int    `json:"rev"`
+	Manifest string `json:"manifest"`
+	// User-supplied values (helm get values) and those merged over the chart defaults (--all); redacted.
+	Values   string     `json:"values"`
+	Computed string     `json:"computed"`
+	Hooks    []HelmHook `json:"hooks"`
+}
+
+func (h *helmWatcher) revision(ns, name string, rev int) (*storedRelease, error) {
 	if h.lister == nil {
-		return "", false
+		return nil, fmt.Errorf("Helm release Secrets are not readable on %s", h.c.id)
 	}
 	s, err := h.lister.Secrets(ns).Get("sh.helm.release.v1." + name + ".v" + itoa(rev))
 	if err != nil {
-		return "", false
+		return nil, err
 	}
-	r, err := decodeRelease(s.Data["release"])
+	return decodeRelease(s.Data["release"])
+}
+
+// mergeValues overlays user values on chart defaults the way Helm coalesces them:
+// maps merge key by key, anything else is replaced.
+func mergeValues(base, over map[string]any) map[string]any {
+	out := make(map[string]any, len(base)+len(over))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range over {
+		if bm, ok := out[k].(map[string]any); ok {
+			if om, ok := v.(map[string]any); ok {
+				out[k] = mergeValues(bm, om)
+				continue
+			}
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func toYAML(v map[string]any, empty string) string {
+	if len(v) == 0 {
+		return empty
+	}
+	b, err := yaml.Marshal(redact(v))
 	if err != nil {
-		return "", false
+		return err.Error()
 	}
-	return r.Manifest, true
+	return string(b)
+}
+
+// GetHelmRevision returns the stored manifest, values and hooks of one revision.
+func (m *Manager) GetHelmRevision(cluster, ns, name string, rev int) (HelmRevisionDetail, error) {
+	c, err := m.conn(cluster)
+	if err != nil {
+		return HelmRevisionDetail{}, err
+	}
+	if c.helm == nil {
+		return HelmRevisionDetail{}, fmt.Errorf("Helm releases are not read on %s", cluster)
+	}
+	r, err := c.helm.revision(ns, name, rev)
+	if err != nil {
+		return HelmRevisionDetail{}, err
+	}
+	d := HelmRevisionDetail{
+		Rev:      rev,
+		Manifest: r.Manifest,
+		Values:   toYAML(r.Config, "# no user-supplied values (chart defaults)\n"),
+		Computed: toYAML(mergeValues(r.Chart.Values, r.Config), "# the chart has no values\n"),
+		Hooks:    []HelmHook{},
+	}
+	for _, hk := range r.Hooks {
+		d.Hooks = append(d.Hooks, HelmHook{Name: hk.Name, Kind: hk.Kind, Events: hk.Events})
+	}
+	return d, nil
 }
 
 func itoa(i int) string { return strconv.Itoa(i) }
