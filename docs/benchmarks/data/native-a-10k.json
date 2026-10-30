@@ -1,0 +1,243 @@
+{
+  "scenario": "table",
+  "synthetic": "pods=10000",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+    "cores": 4,
+    "screen": "1440x900@1",
+    "build": "production"
+  },
+  "loadMs": 1860,
+  "rows": 10000,
+  "domRows": 37,
+  "idle": {
+    "seconds": 2.98,
+    "fps": 24.5,
+    "frameMs": {
+      "n": 73,
+      "p50": 35,
+      "p95": 54,
+      "p99": 667,
+      "max": 667,
+      "mean": 40.88
+    },
+    "over34ms": 37,
+    "over50ms": 7,
+    "over100ms": 1,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "scrollSteady": {
+    "seconds": 6.01,
+    "fps": 11.5,
+    "frameMs": {
+      "n": 69,
+      "p50": 87,
+      "p95": 107,
+      "p99": 127,
+      "max": 127,
+      "mean": 87.12
+    },
+    "over34ms": 68,
+    "over50ms": 67,
+    "over100ms": 7,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "scrollJump": {
+    "seconds": 3.93,
+    "fps": 7.9,
+    "frameMs": {
+      "n": 31,
+      "p50": 120,
+      "p95": 236,
+      "p99": 251,
+      "max": 251,
+      "mean": 126.68
+    },
+    "over34ms": 31,
+    "over50ms": 31,
+    "over100ms": 26,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "search": {
+    "ms": {
+      "n": 18,
+      "p50": 203,
+      "p95": 271,
+      "p99": 271,
+      "max": 271,
+      "mean": 188.61
+    },
+    "unchangedCount": 0,
+    "queries": [
+      "checkout",
+      "team-01",
+      "crash",
+      "node-001",
+      "zzzz-none",
+      ""
+    ]
+  },
+  "sort": {
+    "Status": {
+      "n": 4,
+      "p50": 165,
+      "p95": 181,
+      "p99": 181,
+      "max": 181,
+      "mean": 160.75
+    },
+    "Restarts": {
+      "n": 4,
+      "p50": 153,
+      "p95": 207,
+      "p99": 207,
+      "max": 207,
+      "mean": 153.5
+    },
+    "Age": {
+      "n": 4,
+      "p50": 181,
+      "p95": 192,
+      "p99": 192,
+      "max": 192,
+      "mean": 179.5
+    }
+  },
+  "inspector": {
+    "n": 15,
+    "p50": 231,
+    "p95": 482,
+    "p99": 482,
+    "max": 482,
+    "mean": 249.53
+  },
+  "stream": {
+    "frames": 4,
+    "gaps": 0,
+    "applyMs": {
+      "n": 4,
+      "p50": 1,
+      "p95": 5,
+      "p99": 5,
+      "max": 5,
+      "mean": 1.5
+    },
+    "receiveToPaintMs": {
+      "n": 2,
+      "p50": 2144,
+      "p95": 2144,
+      "p99": 2144,
+      "max": 2144,
+      "mean": 2024
+    },
+    "updateCostMs": {
+      "n": 1,
+      "p50": 1093,
+      "p95": 1093,
+      "p99": 1093,
+      "max": 1093,
+      "mean": 1093
+    }
+  },
+  "backend": {
+    "process": {
+      "cpuPercent": 43.99327743989622,
+      "heapAllocMB": 23.745338439941406,
+      "heapInuseMB": 26.2578125,
+      "sysMB": 42.11548614501953,
+      "totalAllocMB": 36.07054138183594,
+      "numGC": 7,
+      "gcPauseMs": 3.624473,
+      "gcCPU": 0.004522051859762137,
+      "goroutines": 19
+    },
+    "watches": 1,
+    "consumers": 1,
+    "rows": 10000,
+    "pending": 0,
+    "events": 10000,
+    "frames": 4,
+    "bytes": 3974744,
+    "snapshots": 2,
+    "sendFull": 0,
+    "resyncs": 0,
+    "maxBatch": 0,
+    "queue": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "encode": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "round": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "ui": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "visible": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "size": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "at": 1793349368210
+  },
+  "totalMs": 27244,
+  "osMemoryMB": {
+    "go": {
+      "max": 440,
+      "last": 435,
+      "samples": 30
+    },
+    "webview": {
+      "max": 752,
+      "last": 752,
+      "samples": 30
+    }
+  }
+}

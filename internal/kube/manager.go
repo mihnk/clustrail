@@ -30,6 +30,9 @@ type Manager struct {
 	streams  streams
 	forwards forwards
 	lists    listWatches
+	// StreamPods sends pods through the streaming hub instead of delta events (set by the app).
+	StreamPods bool
+	synthetic  map[string]bool
 }
 
 func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
@@ -79,7 +82,7 @@ func (m *Manager) reload() {
 	}
 	var gone []*clusterConn
 	for name := range m.state {
-		if !present[name] {
+		if !present[name] && !m.synthetic[name] {
 			delete(m.state, name)
 			if conn := m.conns[name]; conn != nil {
 				gone = append(gone, conn)
@@ -149,8 +152,16 @@ func (m *Manager) List() ClusterList {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := ClusterList{Clusters: []Cluster{}, Discovered: []Cluster{}, Sources: m.kc.Sources, Forbidden: []Forbidden{}, Controllers: []Controller{}, Selected: m.store.Selected()}
+	if len(m.synthetic) > 0 {
+		out.Selected = []string{}
+	}
 	for name, c := range m.state {
 		if m.hidden[name] {
+			continue
+		}
+		if m.synthetic[name] {
+			out.Clusters = append(out.Clusters, *c)
+			out.Selected = append(out.Selected, name)
 			continue
 		}
 		if m.store.IsNew(c.Context) {
@@ -234,7 +245,7 @@ func (m *Manager) contextNamespace(id string) string {
 // Connect connects a context in the background; progress arrives as cluster events.
 func (m *Manager) Connect(id string) {
 	m.mu.Lock()
-	if _, ok := m.state[id]; !ok || m.conns[id] != nil {
+	if _, ok := m.state[id]; !ok || m.conns[id] != nil || m.synthetic[id] {
 		m.mu.Unlock()
 		return
 	}
@@ -273,6 +284,7 @@ func (m *Manager) connect(id string) {
 		return
 	}
 	conn.fallbackNS = m.contextNamespace(id)
+	conn.streamPods = m.StreamPods
 	ctx, cancel := context.WithTimeout(m.ctx, 25*time.Second)
 	info, err := conn.probe(ctx)
 	cancel()
@@ -463,6 +475,9 @@ func (m *Manager) AutoConnect() {
 func (m *Manager) conn(id string) (*clusterConn, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.synthetic[id] {
+		return nil, ErrSynthetic
+	}
 	c := m.conns[id]
 	if c == nil {
 		return nil, fmt.Errorf("%s is not connected", id)
@@ -486,7 +501,9 @@ func (m *Manager) Snapshot() Snapshot {
 			continue
 		}
 		env := c.env()
-		snap.Pods = append(snap.Pods, c.allPodRows(env, now)...)
+		if !c.streamPods {
+			snap.Pods = append(snap.Pods, c.allPodRows(env, now)...)
+		}
 		snap.Deployments = append(snap.Deployments, c.allDeploymentRows(env, now)...)
 		snap.Nodes = append(snap.Nodes, c.allNodeRows(env, now)...)
 		if c.helm != nil && c.helm.lister != nil {

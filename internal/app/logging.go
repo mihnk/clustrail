@@ -44,7 +44,7 @@ func SetupLogging() {
 			out = io.MultiWriter(w, os.Stderr)
 		}
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{Level: logLevel()})))
 	log.SetOutput(out)
 	slog.Info("clustrail starting", "version", Version, "os", runtime.GOOS, "arch", runtime.GOARCH, "go", runtime.Version())
 	if err != nil {
@@ -150,4 +150,12 @@ func revealInFileManager(path string) error {
 		return fmt.Errorf("could not open the file manager: %w", err)
 	}
 	return nil
+}
+
+// logLevel is Info, or Debug with CLUSTRAIL_DEBUG=1.
+func logLevel() slog.Level {
+	if os.Getenv("CLUSTRAIL_DEBUG") == "1" {
+		return slog.LevelDebug
+	}
+	return slog.LevelInfo
 }

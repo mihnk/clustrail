@@ -1,0 +1,416 @@
+{
+  "scenario": "storm",
+  "synthetic": "pods=50000,rate=1000",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+    "cores": 4,
+    "screen": "1440x900@1",
+    "build": "production"
+  },
+  "loadMs": 2779,
+  "rows": 50000,
+  "domRows": 35,
+  "idle": {
+    "seconds": 3,
+    "fps": 37.4,
+    "frameMs": {
+      "n": 112,
+      "p50": 16.7,
+      "p95": 116.6,
+      "p99": 166.7,
+      "max": 183.4,
+      "mean": 26.74
+    },
+    "over34ms": 12,
+    "over50ms": 10,
+    "over100ms": 6,
+    "longTasks": {
+      "n": 10,
+      "p50": 124,
+      "p95": 195,
+      "p99": 195,
+      "max": 195,
+      "mean": 132
+    }
+  },
+  "backendSamples": [
+    {
+      "t": 0,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 4,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 6.2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 8.3,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 10.4,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 12.4,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 14.6,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 16.8,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 19.2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 21.2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 23.3,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 25.4,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 27.6,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 29.6,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 31.6,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 33.9,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 36,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 38,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 40,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 42.2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 44.3,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 46.3,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 48.4,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 50.5,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 52.7,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 55,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 57,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    },
+    {
+      "t": 59.2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 50000
+    }
+  ],
+  "frames": {
+    "seconds": 61.17,
+    "fps": 31.8,
+    "frameMs": {
+      "n": 1946,
+      "p50": 16.7,
+      "p95": 150,
+      "p99": 200,
+      "max": 733.3,
+      "mean": 31.43
+    },
+    "over34ms": 191,
+    "over50ms": 188,
+    "over100ms": 172,
+    "longTasks": {
+      "n": 185,
+      "p50": 170,
+      "p95": 232,
+      "p99": 312,
+      "max": 715,
+      "mean": 176.11
+    }
+  },
+  "scrollDuringStorm": {
+    "seconds": 5,
+    "fps": 23.8,
+    "frameMs": {
+      "n": 119,
+      "p50": 16.7,
+      "p95": 216.7,
+      "p99": 266.6,
+      "max": 300,
+      "mean": 42.03
+    },
+    "over34ms": 15,
+    "over50ms": 12,
+    "over100ms": 12,
+    "longTasks": {
+      "n": 12,
+      "p50": 212,
+      "p95": 264,
+      "p99": 264,
+      "max": 264,
+      "mean": 206.17
+    }
+  },
+  "consistency": {
+    "ui": {
+      "count": 50000,
+      "sum": 819416744
+    },
+    "go": {
+      "count": 50000,
+      "sum": 819416744
+    },
+    "equal": true
+  },
+  "stream": {
+    "frames": 3493,
+    "gaps": 1,
+    "applyMs": {
+      "n": 2048,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.2,
+      "max": 1.3,
+      "mean": 0.04
+    },
+    "receiveToPaintMs": {
+      "n": 2048,
+      "p50": 339.5,
+      "p95": 520.4,
+      "p99": 920.4,
+      "max": 956.1,
+      "mean": 355.53
+    },
+    "updateCostMs": {
+      "n": 194,
+      "p50": 172.3,
+      "p95": 247.9,
+      "p99": 628.6,
+      "max": 749,
+      "mean": 181.03
+    }
+  },
+  "backend": {
+    "process": {
+      "cpuPercent": 0,
+      "heapAllocMB": 0,
+      "heapInuseMB": 0,
+      "sysMB": 0,
+      "totalAllocMB": 0,
+      "numGC": 0,
+      "gcPauseMs": 0,
+      "gcCPU": 0,
+      "goroutines": 0
+    },
+    "watches": 1,
+    "consumers": 1,
+    "rows": 50000,
+    "pending": 0,
+    "events": 0,
+    "frames": 0,
+    "bytes": 0,
+    "snapshots": 1,
+    "sendFull": 0,
+    "resyncs": 0,
+    "maxBatch": 0,
+    "queue": {},
+    "encode": {},
+    "round": {},
+    "ui": {},
+    "visible": {},
+    "size": {},
+    "at": 0
+  },
+  "totalMs": 73679
+}

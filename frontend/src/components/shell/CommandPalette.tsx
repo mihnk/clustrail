@@ -58,6 +58,8 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
 
   const all = useMemo<Item[]>(() => {
     const items: Item[] = [];
+    // Closed: nothing to list (it would otherwise rebuild on every watch batch).
+    if (!open) return items;
     for (const d of ws.deployments) {
       if (!ws.selectedClusterIds.includes(d.cluster)) continue;
       const cluster = ws.clusterById(d.cluster);
@@ -159,7 +161,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       run: () => ws.setTheme(ws.theme === "dark" ? "light" : "dark"),
     });
     return items;
-  }, [ws, confirm]);
+  }, [ws, confirm, open]);
 
   const results = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);

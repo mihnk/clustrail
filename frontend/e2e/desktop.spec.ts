@@ -19,7 +19,7 @@ test.afterEach(() => {
   expect(backend.errors, "console errors").toEqual([]);
 });
 
-test("loads the snapshot, shows RBAC limits and pod details", async ({ page }) => {
+test("loads the snapshot, streams pods, shows RBAC limits and pod details", async ({ page }) => {
   await expect(page.getByRole("tab", { name: /^Pods/ })).toBeVisible();
   expect(backend.calls).toEqual(expect.arrayContaining(["Hello", "Snapshot", "AutoConnect"]));
   await expect(page.getByText("MOCK DATA")).toHaveCount(0);
@@ -32,8 +32,13 @@ test("loads the snapshot, shows RBAC limits and pod details", async ({ page }) =
 
   // A watch delta adds a row.
   const extra = { ...backend.fixture.snapshot.pods[0], id: "prod-eu-west-1/payments/checkout-api-7d9f8b6c4-new01", name: "checkout-api-7d9f8b6c4-new01", status: "Creating", health: "progressing", reason: "ContainerCreating" };
-  await backend.emit("clustrail:delta", { cluster: "prod-eu-west-1", kind: "pods", upserts: [extra], deletes: [] });
+  backend.podDelta("prod-eu-west-1", [extra]);
   await expect(visible(page, "checkout-api-7d9f8b6c4-new01")).toBeVisible();
+  // The page subscribed to the selected cluster on the pods stream and acknowledged what it rendered.
+  expect(backend.streamMessages().some((m) => m.op === "sub" && m.key?.cluster === "prod-eu-west-1")).toBe(true);
+  await expect.poll(() => backend.streamMessages().some((m) => m.op === "ack")).toBe(true);
+  backend.podDelta("prod-eu-west-1", [], [extra.id]);
+  await expect(page.getByText("checkout-api-7d9f8b6c4-new01")).toHaveCount(0);
 });
 
 test("streams logs from the backend", async ({ page }) => {

@@ -149,6 +149,37 @@ export interface GenericList {
   shown?: string;
 }
 
+export interface LatencySummary {
+  n: number;
+  p50: number;
+  p95: number;
+  p99: number;
+  max: number;
+}
+
+/** The Go side's pipeline and process numbers (internal/app/pods.go). */
+export interface BackendDiagnostics {
+  process: { cpuPercent: number; heapAllocMB: number; heapInuseMB: number; sysMB: number; totalAllocMB: number; numGC: number; gcPauseMs: number; gcCPU: number; goroutines: number };
+  watches: number;
+  consumers: number;
+  rows: number;
+  pending: number;
+  events: number;
+  frames: number;
+  bytes: number;
+  snapshots: number;
+  sendFull: number;
+  resyncs: number;
+  maxBatch: number;
+  queue: LatencySummary;
+  encode: LatencySummary;
+  round: LatencySummary;
+  ui: LatencySummary;
+  visible: LatencySummary;
+  size: LatencySummary;
+  at: number;
+}
+
 export interface ListUpdate {
   id: string;
   cluster: string;
@@ -276,6 +307,12 @@ export const backendApi = {
   pauseWatches: () => call<string[]>("PauseWatches"),
   resumeWatches: () => call<void>("ResumeWatches"),
   logFile: () => call<{ path: string; size: number }>("LogFile"),
+  diagnostics: () => call<BackendDiagnostics>("Diagnostics"),
+  resetDiagnostics: () => call<void>("ResetDiagnostics"),
+  benchConfig: () => call<Record<string, string> | null>("BenchConfig"),
+  reportBench: (result: string) => call<void>("ReportBench", result),
+  setSyntheticPaused: (on: boolean) => call<void>("SetSyntheticPaused", on),
+  podChecksum: (cluster: string) => call<{ count: number; sum: number }>("PodChecksum", cluster),
   revealLog: () => call<void>("RevealLog"),
   testConnection: (id: string) => call<{ name: string; result: "ok" | "failed" | "skipped"; detail?: string; ms?: number }[]>("TestConnection", id),
 

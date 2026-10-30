@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   Activity,
   Box,
@@ -59,7 +59,7 @@ export function ClusterNavigation() {
       />
     );
   };
-  const attention = pods.filter((p) => isAttention(p.health)).length;
+  const attention = useMemo(() => pods.filter((p) => isAttention(p.health)).length, [pods]);
   // Mock: the design's numbers. Desktop: counts over the selected clusters; kinds Clustrail does not list yet show none.
   const inSel = <T extends { cluster: string }>(rows: T[]) => rows.filter((r) => selectedClusterIds.includes(r.cluster));
   const real = !IS_MOCK;

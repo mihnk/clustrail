@@ -51,6 +51,13 @@ through one Wails service (`internal/app.Workspace`) and its events.
   (`clustrail:delta`), never as full lists. Informer indexes (pods by node,
   ReplicaSets by owner) keep a change to one object from rebuilding unrelated
   rows.
+- **Pod stream** (`internal/streaming`, `podstream.go`): pods take a faster
+  path over a Wails stream (`clustrail.pods`). There is one shared
+  subscription per cluster and scope, coalesced batches every 16–100 ms,
+  sequence numbers with snapshot/resync, and bounded backpressure. The pod
+  informer is reused, so no second watch is opened. See
+  [docs/architecture/performance.md](docs/architecture/performance.md) and the
+  measured results in [docs/benchmarks/m0-results.md](docs/benchmarks/m0-results.md).
 - **Secrets** (`secrets.go`): like Lens, keys and sizes are shown and values
   stay hidden until you reveal one key; the log records who revealed which
   key, never the value. In YAML each value reads `(hidden, N bytes)`; an edit
@@ -95,6 +102,11 @@ through one Wails service (`internal/app.Workspace`) and its events.
 main.go                       Wails application, window and Workspace service
 internal/app/                 Wails service: the API the frontend calls
 internal/kube/                Kubeconfig, connections, informers, rows, actions, streams
+internal/streaming/           Hub (shared subscriptions, coalescing), stream protocol, latency stats
+internal/mock/                Deterministic synthetic pod provider for benchmarks
+internal/diagnostics/         Process stats (CPU, heap, GC, goroutines)
+hack/bench.sh                 In-app benchmarks against synthetic clusters
+docs/                         Performance architecture and benchmark results
 build/                        App icon, macOS Info.plist, Windows installer (NSIS), Linux .desktop
 hack/kind-smoke.sh            Local kind cluster with workloads that exercise the app
 frontend/
@@ -169,6 +181,39 @@ cd frontend && npm run build && npx playwright install chromium && npm run e2e
 
 ```bash
 CLUSTRAIL_FIXTURE=$PWD/frontend/e2e/fixtures/desktop.json go test -run TestWriteUIFixture ./internal/kube
+```
+
+### Performance and synthetic clusters
+
+Synthetic clusters stand in for real ones (read-only, never saved):
+
+```bash
+CLUSTRAIL_SYNTHETIC=clusters=3,pods=10000,rate=1000 bin/clustrail
+```
+
+Spec keys: `clusters`, `pods` (per cluster), `rate` (changes/s per cluster),
+`slow=1` (5 s lists), `drop=1` (disconnect every 20 s for 3 s), `vary=1`
+(sizes and rates from ½× to 2×), `seed`. Press ⌘⇧D (Ctrl+Shift+D) for the
+diagnostics overlay: backend queue and encode times, stream latency, frame
+times, heap and goroutines.
+
+Benchmarks run a scenario in the real app window, write JSON and quit (under
+`xvfb-run` on Linux without a display):
+
+```bash
+hack/bench.sh table pods=50000 bench-a.json
+```
+
+```bash
+hack/bench.sh storm pods=10000,rate=1000 bench-b.json 60
+```
+
+```bash
+hack/bench.sh multi clusters=20,pods=2500,rate=100,vary=1,slow=1,drop=2 bench-c.json 45
+```
+
+```bash
+go test -run - -bench . -benchmem ./internal/mock
 ```
 
 ### Against a real cluster

@@ -1,5 +1,7 @@
 import { usePersistentState } from "@/app/preferences";
 import {
+  memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -141,7 +143,6 @@ export function ResourceTable<T>({
   const gridTemplateColumns = (bulk ? "20px " : "") +
     columns.map((c) => (c.columnDef.meta?.width === "fill" ? "minmax(0,1fr)" : `${c.columnDef.meta?.width ?? 80}px`)).join(" ");
   const anchor = useRef<string | null>(null);
-  const gridStyle = { gridTemplateColumns, columnGap, paddingInline: paddingX };
 
   const liveRows = table.getRowModel().rows;
   const [frozenOrder, setFrozenOrder] = useState<string[] | null>(null);
@@ -167,20 +168,24 @@ export function ResourceTable<T>({
   // Keyboard navigation moves between rows only, skipping group headers.
   const rowPositions = useMemo(() => items.flatMap((it, i) => (it.kind === "row" ? [i] : [])), [items]);
 
-  const virtualizer = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => (items[i]?.kind === "group" ? GROUP_HEIGHT : rowHeight),
-    overscan: OVERSCAN,
-    getItemKey: (i) => {
+  // Stable between renders: the virtualizer recomputes every item's position
+  // when these change, which must happen per data change, not per scroll frame.
+  const estimateSize = useCallback((i: number) => (items[i]?.kind === "group" ? GROUP_HEIGHT : rowHeight), [items, rowHeight]);
+  const getItemKey = useCallback(
+    (i: number) => {
       const it = items[i];
       return it ? (it.kind === "group" ? `group:${it.key}` : it.row.id) : i;
     },
-  });
-  useLayoutEffect(() => virtualizer.measure(), [rowHeight, items, virtualizer]);
+    [items],
+  );
+  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scrollRef.current, estimateSize, overscan: OVERSCAN, getItemKey });
+  useLayoutEffect(() => virtualizer.measure(), [rowHeight, grouping !== undefined, virtualizer]);
 
-  const selectedItem = selectedId === null ? -1 : items.findIndex((it) => it.kind === "row" && it.row.id === selectedId);
-  const selectedPos = rowPositions.indexOf(selectedItem);
+  const selectedItem = useMemo(
+    () => (selectedId === null ? -1 : items.findIndex((it) => it.kind === "row" && it.row.id === selectedId)),
+    [items, selectedId],
+  );
+  const selectedPos = useMemo(() => rowPositions.indexOf(selectedItem), [rowPositions, selectedItem]);
 
   const moveTo = (pos: number) => {
     const p = Math.max(0, Math.min(rowPositions.length - 1, pos));
@@ -192,6 +197,8 @@ export function ResourceTable<T>({
   };
 
   const rowIds = () => rowPositions.map((i) => (items[i] as { row: Row<T> }).row.id);
+  // Row callbacks through a ref: rows stay memoized while these change identity every render.
+  const live = useRef({ onSelect, onOpen, toggleChecked: (_: string) => {}, checkRange: (_: string) => {} });
   const toggleChecked = (id: string) => {
     if (!bulk) return;
     const next = new Set(checked);
@@ -208,6 +215,20 @@ export function ResourceTable<T>({
     const [from, until] = a < b ? [a, b] : [b, a];
     onCheckedChange(new Set([...checked, ...ids.slice(Math.max(0, from), until + 1)]));
   };
+  live.current = { onSelect, onOpen, toggleChecked, checkRange };
+  const handlers = useMemo<RowHandlers>(
+    () => ({
+      click: (id, e) => {
+        if (e.shiftKey) live.current.checkRange(id);
+        else if (e.metaKey || e.ctrlKey) live.current.toggleChecked(id);
+        live.current.onSelect(id);
+      },
+      doubleClick: (id) => live.current.onOpen?.(id),
+      toggle: (id) => live.current.toggleChecked(id),
+    }),
+    [],
+  );
+
   /** Opens the row menu for the selected row from the keyboard (⇧F10 / Menu key). */
   const openRowMenu = () => {
     const el = selectedItem >= 0 ? scrollRef.current?.querySelector<HTMLElement>(`#${rowDomId(selectedItem)}`) : null;
@@ -286,7 +307,7 @@ export function ResourceTable<T>({
       <div
         role="row"
         className="grid h-[30px] shrink-0 items-center border-b border-line bg-surface-panel text-meta font-medium text-fg-muted dark:bg-transparent"
-        style={gridStyle}
+        style={{ gridTemplateColumns, columnGap, paddingInline: paddingX }}
       >
         {bulk && (
           <div role="columnheader" className="flex items-center">
@@ -361,59 +382,23 @@ export function ResourceTable<T>({
                       </div>
                     );
                   }
-                  const row = it.row;
-                  const selected = row.id === selectedId;
-                  const isChecked = bulk && checked.has(row.id);
                   return (
-                    <div
+                    <TableRow
                       key={v.key}
-                      id={rowDomId(v.index)}
-                      data-row-id={row.id}
-                      role="row"
-                      aria-rowindex={v.index + 2}
-                      aria-selected={selected}
-                      onClick={(e) => {
-                        if (bulk && e.shiftKey) checkRange(row.id);
-                        else if (bulk && (e.metaKey || e.ctrlKey)) toggleChecked(row.id);
-                        onSelect(row.id);
-                      }}
-                      onDoubleClick={() => onOpen?.(row.id)}
-                      className={cn(
-                        "absolute left-0 top-0 grid w-full items-center border-b border-line-row text-cell text-fg-secondary",
-                        selected
-                          ? "bg-surface-selected text-fg shadow-[inset_0_0_0_1px_var(--line-selected)]"
-                          : isChecked
-                            ? "bg-accent-soft"
-                            : "bg-surface-panel hover:bg-surface-hover dark:bg-transparent dark:hover:bg-surface-hover",
-                        rowClassName?.(row.original),
-                      )}
-                      style={{ ...gridStyle, height: rowHeight, transform: `translateY(${v.start}px)` }}
-                    >
-                      {bulk && (
-                        <div role="gridcell" className="flex items-center" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            aria-label={`Select ${row.id}`}
-                            checked={isChecked}
-                            onCheckedChange={() => toggleChecked(row.id)}
-                          />
-                        </div>
-                      )}
-                      {columns.map((column) => {
-                        const cell = row.getAllCells().find((c) => c.column.id === column.id)!;
-                        return (
-                          <div
-                            key={column.id}
-                            role="gridcell"
-                            className={cn(
-                              "min-w-0",
-                              column.columnDef.meta?.align === "right" && "text-right font-mono text-ui tabular-nums",
-                            )}
-                          >
-                            {flexRender(column.columnDef.cell, cell.getContext())}
-                          </div>
-                        );
-                      })}
-                    </div>
+                      row={it.row}
+                      index={v.index}
+                      start={v.start}
+                      height={rowHeight}
+                      selected={it.row.id === selectedId}
+                      checked={bulk && checked.has(it.row.id)}
+                      bulk={bulk}
+                      columns={columns}
+                      gridTemplateColumns={gridTemplateColumns}
+                      columnGap={columnGap}
+                      paddingX={paddingX}
+                      extraClass={rowClassName?.(it.row.original)}
+                      handlers={handlers}
+                    />
                   );
                 })}
               </div>
@@ -427,6 +412,72 @@ export function ResourceTable<T>({
     </div>
   );
 }
+
+interface RowHandlers {
+  click: (id: string, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => void;
+  doubleClick: (id: string) => void;
+  toggle: (id: string) => void;
+}
+
+interface TableRowProps<T> {
+  row: Row<T>;
+  index: number;
+  start: number;
+  height: number;
+  selected: boolean;
+  checked: boolean;
+  bulk: boolean;
+  columns: Column<T, unknown>[];
+  gridTemplateColumns: string;
+  columnGap: number;
+  paddingX: number;
+  extraClass?: string;
+  handlers: RowHandlers;
+}
+
+/**
+ * One row. Memoized: while scrolling, rows that stay in view keep their props
+ * (same row object, same offset) and are not rendered again; a watch update
+ * re-renders only rows whose data changed.
+ */
+const TableRow = memo(function TableRow<T>({ row, index, start, height, selected, checked, bulk, columns, gridTemplateColumns, columnGap, paddingX, extraClass, handlers }: TableRowProps<T>) {
+  return (
+    <div
+      id={rowDomId(index)}
+      data-row-id={row.id}
+      role="row"
+      aria-rowindex={index + 2}
+      aria-selected={selected}
+      onClick={(e) => handlers.click(row.id, e)}
+      onDoubleClick={() => handlers.doubleClick(row.id)}
+      className={cn(
+        // contain: rows have a fixed size, so layout and paint stay inside each row.
+        "absolute left-0 top-0 grid w-full items-center border-b border-line-row text-cell text-fg-secondary [contain:strict]",
+        selected
+          ? "bg-surface-selected text-fg shadow-[inset_0_0_0_1px_var(--line-selected)]"
+          : checked
+            ? "bg-accent-soft"
+            : "bg-surface-panel hover:bg-surface-hover dark:bg-transparent dark:hover:bg-surface-hover",
+        extraClass,
+      )}
+      style={{ gridTemplateColumns, columnGap, paddingInline: paddingX, height, transform: `translateY(${start}px)` }}
+    >
+      {bulk && (
+        <div role="gridcell" className="flex items-center" onClick={(e) => e.stopPropagation()}>
+          <Checkbox aria-label={`Select ${row.id}`} checked={checked} onCheckedChange={() => handlers.toggle(row.id)} />
+        </div>
+      )}
+      {columns.map((column) => {
+        const cell = row.getAllCells().find((c) => c.column.id === column.id)!;
+        return (
+          <div key={column.id} role="gridcell" className={cn("min-w-0", column.columnDef.meta?.align === "right" && "text-right font-mono text-ui tabular-nums")}>
+            {flexRender(column.columnDef.cell, cell.getContext())}
+          </div>
+        );
+      })}
+    </div>
+  );
+}) as <T>(props: TableRowProps<T>) => ReactNode;
 
 function HeaderCell<T>({ column }: { column: Column<T, unknown> }) {
   const meta = column.columnDef.meta;

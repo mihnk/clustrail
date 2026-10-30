@@ -1,7 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
-  getCoreRowModel,
-  getSortedRowModel,
   useReactTable,
   type SortingState,
   type VisibilityState,
@@ -46,6 +44,8 @@ import { matchesFilter, matchesLabel, parseFilter } from "./filter";
 import { PodInspector, type InspectorTab } from "./PodInspector";
 import { resourceTab } from "@/features/resources/kinds";
 import { deploymentNameOf, podActions } from "./actions";
+import { podSorter } from "./sort";
+import { cachedCoreRowModel } from "@/lib/rowModel";
 
 type HealthFilter = "all" | "attention";
 type OwnerFilter = "any" | "ReplicaSet" | "StatefulSet" | "Job" | "none";
@@ -82,15 +82,16 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   // loading), reconnecting clusters keep their rows but mark them stale.
   const pods = useMemo<PodRow[]>(() => {
     const state = new Map(selectedClusters.map((c) => [c.id, c]));
-    return allPods.flatMap((p) => {
+    const out: PodRow[] = [];
+    for (const p of allPods) {
       const c = state.get(p.cluster);
-      if (!c || c.connection === "connecting") return [];
+      if (!c || c.connection === "connecting") continue;
       if (c.connection === "reconnecting" && c.stale) {
         const age = Math.round((Date.now() - c.stale.since) / 1000);
-        return [{ ...p, health: "unknown" as const, status: `${p.status}?`, reason: `Last update ${age}s ago`, staleSeconds: age }];
-      }
-      return [p];
-    });
+        out.push({ ...p, health: "unknown" as const, status: `${p.status}?`, reason: `Last update ${age}s ago`, staleSeconds: age });
+      } else out.push(p);
+    }
+    return out;
   }, [allPods, selectedClusters]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
 
@@ -156,14 +157,17 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     [userColumns, inspectorOpen, grouped],
   );
 
+  // Sorted here, not by TanStack (see sort.ts); TanStack keeps the header state.
+  const sorter = useMemo(podSorter, []);
+  const sortedRows = useMemo(() => sorter(rows, sorting), [sorter, rows, sorting]);
   const table = useReactTable({
-    data: rows,
+    data: sortedRows,
     columns: podColumns,
     state: { sorting, columnVisibility },
     onSortingChange: setSorting,
+    manualSorting: true,
     getRowId: (p) => p.id,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    getCoreRowModel: cachedCoreRowModel(),
   });
 
   const selectedPod = useMemo(() => pods.find((p) => p.id === selectedId) ?? null, [pods, selectedId]);
@@ -281,7 +285,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     setInspectorOpen(true);
   }, [reveal?.seq]);
 
-  const checkedPods = pods.filter((p) => checked.has(p.id));
+  const checkedPods = checked.size === 0 ? [] : pods.filter((p) => checked.has(p.id));
   const bulkDelete = () => {
     const groups = [...new Set(checkedPods.map((p) => p.cluster))].map((id) => {
       const c = clusterById(id);

@@ -3,6 +3,7 @@
 // watch events instead of patching rows itself.
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { backend, errorText, EVENTS, onEvent, type ClusterList, type Delta, type JobEvent } from "@/backend/client";
+import { podStream } from "@/backend/podStream";
 import type { Cluster, DeploymentRow, PodRow } from "@/data/types";
 import type { NodeRow } from "@/data/nodes";
 import type { HelmRelease } from "@/data/helm";
@@ -119,6 +120,22 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
       }
       a.setJobs((js) => [...js.filter((x) => x.id !== j.id), { id: j.id, title: j.title, progress: j.progress, detail: j.detail }]);
     });
+    // Pods come on their own stream (backend/podStream.ts), applied once per animation frame.
+    const offPods = podStream.listen(() => a.setAllPods(podStream.rows()));
+    const offPodState = podStream.onState((cluster, state, detail) => {
+      // Synthetic clusters have no connection of their own: the stream's state is theirs.
+      a.setClusters((cs) =>
+        cs.map((c) =>
+          c.id !== cluster || c.source !== "CLUSTRAIL_SYNTHETIC"
+            ? c
+            : state === "live"
+              ? { ...c, connection: "connected", stale: undefined, error: undefined }
+              : state === "connecting"
+                ? { ...c, connection: "connecting" }
+                : { ...c, connection: "reconnecting", error: detail, stale: c.stale ?? { since: Date.now(), attempt: 1, nextRetrySec: 3 } },
+        ),
+      );
+    });
     void Promise.all([api.clusters(), api.snapshot()])
       .then(([list, snap]) => {
         if (cancelled) return;
@@ -139,6 +156,8 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
       cancelled = true;
       offClusters();
       offDelta();
+      offPods();
+      offPodState();
       offJob();
       if (frame) cancelAnimationFrame(frame);
     };
@@ -147,6 +166,8 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
   // The selection is stored by the backend so the next launch connects the same clusters.
   useEffect(() => {
     if (backend && loaded.current) void backend.setSelected(a.selectedClusterIds);
+    // Pods are streamed for the selected clusters only: one shared watch each.
+    if (backend) podStream.setClusters(a.selectedClusterIds);
   }, [a.selectedClusterIds]);
 
   const fail = useCallback(

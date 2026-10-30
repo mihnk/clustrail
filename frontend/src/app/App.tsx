@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmationProvider } from "@/components/safety/ConfirmationDialog";
@@ -31,6 +31,9 @@ import { usePersistentState } from "@/app/preferences";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
 import { useBackendSync } from "./backendSync";
+import { backend } from "@/backend/client";
+import { DiagnosticsPanel } from "@/features/bench/DiagnosticsPanel";
+import { runBenchmark } from "@/features/bench/runner";
 
 export function App() {
   return (
@@ -50,8 +53,28 @@ export function App() {
 }
 
 function AppShell() {
-  const { theme, density, tabs, activeTabId, activeTab, clusterById } = useWorkspace();
+  const ws = useWorkspace();
+  const { theme, density, tabs, activeTabId, activeTab, clusterById } = ws;
   useBackendSync();
+  // Development diagnostics (⌘⇧D) and the in-app benchmark runner (CLUSTRAIL_BENCH).
+  const [diagnostics, setDiagnostics] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        setDiagnostics((x) => !x);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    if (backend) {
+      void backend.benchConfig().then((cfg) => {
+        if (!cfg) return;
+        setDiagnostics(true);
+        setTimeout(() => void runBenchmark(cfg, () => ws.openTab("pods") || ws.openView({ kind: "pods", title: "Pods" })), 500);
+      });
+    }
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const scopedCluster = activeTab?.cluster ? clusterById(activeTab.cluster) : undefined;
   // Single-cluster workspaces and investigations need the width: the sidebar collapses to a rail.
   // Investigations, single-cluster lists and tool tabs (Logs, Shell, YAML, Compare) need the width.
@@ -88,6 +111,7 @@ function AppShell() {
         ))}
       </div>
       <StatusBar />
+      {diagnostics && backend && <DiagnosticsPanel onClose={() => setDiagnostics(false)} />}
     </div>
   );
 }

@@ -1,0 +1,195 @@
+{
+  "scenario": "table",
+  "synthetic": "pods=50000,rate=1000",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+    "cores": 4,
+    "screen": "1440x900@1",
+    "build": "production"
+  },
+  "loadMs": 1504,
+  "rows": 50000,
+  "domRows": 35,
+  "idle": {
+    "seconds": 2.9,
+    "fps": 59,
+    "frameMs": {
+      "n": 171,
+      "p50": 16.7,
+      "p95": 16.8,
+      "p99": 33.3,
+      "max": 50.1,
+      "mean": 16.95
+    },
+    "over34ms": 1,
+    "over50ms": 1,
+    "over100ms": 0,
+    "longTasks": {
+      "n": 1,
+      "p50": 160,
+      "p95": 160,
+      "p99": 160,
+      "max": 160,
+      "mean": 160
+    }
+  },
+  "scrollSteady": {
+    "seconds": 6.01,
+    "fps": 47.6,
+    "frameMs": {
+      "n": 286,
+      "p50": 16.7,
+      "p95": 33.4,
+      "p99": 50,
+      "max": 150.1,
+      "mean": 21
+    },
+    "over34ms": 4,
+    "over50ms": 2,
+    "over100ms": 1,
+    "longTasks": {
+      "n": 1,
+      "p50": 156,
+      "p95": 156,
+      "p99": 156,
+      "max": 156,
+      "mean": 156
+    }
+  },
+  "scrollJump": {
+    "seconds": 3.82,
+    "fps": 23,
+    "frameMs": {
+      "n": 88,
+      "p50": 33.4,
+      "p95": 66.7,
+      "p99": 183.3,
+      "max": 183.3,
+      "mean": 43.44
+    },
+    "over34ms": 35,
+    "over50ms": 20,
+    "over100ms": 1,
+    "longTasks": {
+      "n": 23,
+      "p50": 54,
+      "p95": 88,
+      "p99": 178,
+      "max": 178,
+      "mean": 63.91
+    }
+  },
+  "search": {
+    "ms": {
+      "n": 18,
+      "p50": 144.3,
+      "p95": 283.2,
+      "p99": 283.2,
+      "max": 283.2,
+      "mean": 150.27
+    },
+    "unchangedCount": 0,
+    "queries": [
+      "checkout",
+      "team-01",
+      "crash",
+      "node-001",
+      "zzzz-none",
+      ""
+    ]
+  },
+  "sort": {
+    "Status": {
+      "n": 4,
+      "p50": 170.7,
+      "p95": 204.7,
+      "p99": 204.7,
+      "max": 204.7,
+      "mean": 141.35
+    },
+    "Restarts": {
+      "n": 4,
+      "p50": 231.2,
+      "p95": 246.3,
+      "p99": 246.3,
+      "max": 246.3,
+      "mean": 191.63
+    },
+    "Age": {
+      "n": 4,
+      "p50": 92.7,
+      "p95": 101,
+      "p99": 101,
+      "max": 101,
+      "mean": 83.25
+    }
+  },
+  "inspector": {
+    "n": 15,
+    "p50": 93.7,
+    "p95": 125.1,
+    "p99": 125.1,
+    "max": 125.1,
+    "mean": 97.64
+  },
+  "stream": {
+    "frames": 1,
+    "gaps": 0,
+    "applyMs": {
+      "n": 1,
+      "p50": 28.2,
+      "p95": 28.2,
+      "p99": 28.2,
+      "max": 28.2,
+      "mean": 28.2
+    },
+    "receiveToPaintMs": {
+      "n": 1,
+      "p50": 788.4,
+      "p95": 788.4,
+      "p99": 788.4,
+      "max": 788.4,
+      "mean": 788.4
+    },
+    "updateCostMs": {
+      "n": 1,
+      "p50": 758.5,
+      "p95": 758.5,
+      "p99": 758.5,
+      "max": 758.5,
+      "mean": 758.5
+    }
+  },
+  "backend": {
+    "process": {
+      "cpuPercent": 0,
+      "heapAllocMB": 0,
+      "heapInuseMB": 0,
+      "sysMB": 0,
+      "totalAllocMB": 0,
+      "numGC": 0,
+      "gcPauseMs": 0,
+      "gcCPU": 0,
+      "goroutines": 0
+    },
+    "watches": 1,
+    "consumers": 1,
+    "rows": 50000,
+    "pending": 0,
+    "events": 0,
+    "frames": 0,
+    "bytes": 0,
+    "snapshots": 1,
+    "sendFull": 0,
+    "resyncs": 0,
+    "maxBatch": 0,
+    "queue": {},
+    "encode": {},
+    "round": {},
+    "ui": {},
+    "visible": {},
+    "size": {},
+    "at": 0
+  },
+  "totalMs": 21767
+}

@@ -91,6 +91,12 @@ type clusterConn struct {
 	// podsNS is "" when pods are watched cluster-wide, else fallbackNS.
 	podsNS  string
 	syncFns []cache.InformerSynced
+	// streamPods: pods go to the UI through the streaming hub (podstream.go),
+	// not as clustrail:delta events.
+	streamPods bool
+	podSubs    podSubscribers
+	// started is set once start has filled the listers; readers on other goroutines check it first.
+	started atomic.Bool
 	kinds   kindIndex
 
 	mu        sync.Mutex
@@ -355,6 +361,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			}},
 			func(obj any) {
 				if p, ok := obj.(*corev1.Pod); ok {
+					c.publishPod(p.Namespace, p.Name)
 					c.mu.Lock()
 					c.dirtyPods[p.Namespace+"/"+p.Name] = true
 					if p.Spec.NodeName != "" {
@@ -459,6 +466,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 	c.gitops.start(ctx)
 
 	go c.flushLoop(ctx)
+	defer c.started.Store(true)
 	if withMetrics {
 		go c.metricsLoop(ctx)
 	}
@@ -542,12 +550,14 @@ func (c *clusterConn) flush() {
 	c.mu.Unlock()
 
 	if first {
-		c.emit.Emit(EventDelta, Delta{Cluster: c.id, Kind: "pods", Reset: true, Upserts: toAny(c.allPodRows(env, now)), Deletes: []string{}})
+		if !c.streamPods {
+			c.emit.Emit(EventDelta, Delta{Cluster: c.id, Kind: "pods", Reset: true, Upserts: toAny(c.allPodRows(env, now)), Deletes: []string{}})
+		}
 		c.emit.Emit(EventDelta, Delta{Cluster: c.id, Kind: "deployments", Reset: true, Upserts: toAny(c.allDeploymentRows(env, now)), Deletes: []string{}})
 		c.emit.Emit(EventDelta, Delta{Cluster: c.id, Kind: "nodes", Reset: true, Upserts: toAny(c.allNodeRows(env, now)), Deletes: []string{}})
 		return
 	}
-	if len(pods) > 0 && c.pods != nil {
+	if len(pods) > 0 && c.pods != nil && !c.streamPods {
 		d := Delta{Cluster: c.id, Kind: "pods", Upserts: []any{}, Deletes: []string{}}
 		for key := range pods {
 			ns, name, _ := strings.Cut(key, "/")
@@ -775,6 +785,10 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 				c.dirtyPods[k] = true
 			}
 			c.mu.Unlock()
+			for _, k := range changed {
+				ns, name, _ := strings.Cut(k, "/")
+				c.publishPod(ns, name)
+			}
 			// Owner lookups use the listers only; c.mu is not held.
 			deps := map[string]bool{}
 			for _, k := range changed {

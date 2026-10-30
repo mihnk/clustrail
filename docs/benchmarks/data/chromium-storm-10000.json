@@ -1,0 +1,425 @@
+{
+  "scenario": "storm",
+  "synthetic": "pods=10000,rate=1000",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+    "cores": 4,
+    "screen": "1440x900@1",
+    "build": "production"
+  },
+  "loadMs": 122,
+  "rows": 10000,
+  "domRows": 35,
+  "idle": {
+    "seconds": 3,
+    "fps": 51.9,
+    "frameMs": {
+      "n": 156,
+      "p50": 16.7,
+      "p95": 33.4,
+      "p99": 49.9,
+      "max": 50,
+      "mean": 19.26
+    },
+    "over34ms": 2,
+    "over50ms": 0,
+    "over100ms": 0,
+    "longTasks": {
+      "n": 1,
+      "p50": 54,
+      "p95": 54,
+      "p99": 54,
+      "max": 54,
+      "mean": 54
+    }
+  },
+  "backendSamples": [
+    {
+      "t": 0,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 2.1,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 4.1,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 6.2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 8.2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 10.3,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 12.3,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 14.3,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 16.4,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 18.4,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 20.5,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 22.5,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 24.5,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 26.5,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 28.6,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 30.6,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 32.6,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 34.7,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 36.7,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 38.7,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 40.7,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 42.8,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 44.8,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 46.9,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 48.9,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 51,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 53,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 55.1,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 57.1,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    },
+    {
+      "t": 59.2,
+      "heapMB": 0,
+      "cpu": 0,
+      "pending": 0,
+      "events": 0,
+      "goroutines": 0,
+      "rows": 10000
+    }
+  ],
+  "frames": {
+    "seconds": 61.15,
+    "fps": 52.7,
+    "frameMs": {
+      "n": 3222,
+      "p50": 16.7,
+      "p95": 33.4,
+      "p99": 33.5,
+      "max": 283.4,
+      "mean": 18.98
+    },
+    "over34ms": 32,
+    "over50ms": 10,
+    "over100ms": 1,
+    "longTasks": {
+      "n": 29,
+      "p50": 55,
+      "p95": 86,
+      "p99": 286,
+      "max": 286,
+      "mean": 64.72
+    }
+  },
+  "scrollDuringStorm": {
+    "seconds": 4.96,
+    "fps": 37.3,
+    "frameMs": {
+      "n": 185,
+      "p50": 16.7,
+      "p95": 50,
+      "p99": 66.7,
+      "max": 83.4,
+      "mean": 26.79
+    },
+    "over34ms": 22,
+    "over50ms": 8,
+    "over100ms": 0,
+    "longTasks": {
+      "n": 9,
+      "p50": 52,
+      "p95": 68,
+      "p99": 68,
+      "max": 68,
+      "mean": 55.11
+    }
+  },
+  "consistency": {
+    "ui": {
+      "count": 10000,
+      "sum": 2430562401
+    },
+    "go": {
+      "count": 10000,
+      "sum": 2430562401
+    },
+    "equal": true
+  },
+  "stream": {
+    "frames": 3433,
+    "gaps": 1,
+    "applyMs": {
+      "n": 2048,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 0.5,
+      "mean": 0.03
+    },
+    "receiveToPaintMs": {
+      "n": 2048,
+      "p50": 59.2,
+      "p95": 104.6,
+      "p99": 276.6,
+      "max": 352.9,
+      "mean": 64.28
+    },
+    "updateCostMs": {
+      "n": 909,
+      "p50": 32,
+      "p95": 52.5,
+      "p99": 68.9,
+      "max": 297.3,
+      "mean": 35.18
+    }
+  },
+  "backend": {
+    "process": {
+      "cpuPercent": 0,
+      "heapAllocMB": 0,
+      "heapInuseMB": 0,
+      "sysMB": 0,
+      "totalAllocMB": 0,
+      "numGC": 0,
+      "gcPauseMs": 0,
+      "gcCPU": 0,
+      "goroutines": 0
+    },
+    "watches": 1,
+    "consumers": 1,
+    "rows": 10000,
+    "pending": 0,
+    "events": 0,
+    "frames": 0,
+    "bytes": 0,
+    "snapshots": 1,
+    "sendFull": 0,
+    "resyncs": 0,
+    "maxBatch": 0,
+    "queue": {},
+    "encode": {},
+    "round": {},
+    "ui": {},
+    "visible": {},
+    "size": {},
+    "at": 0
+  },
+  "totalMs": 70974
+}

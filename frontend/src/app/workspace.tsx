@@ -232,6 +232,16 @@ const initialTabs: WorkspaceTab[] = [
 
 const RETRY_SECONDS = 4;
 
+// The copy is cached per row object so an unchanged pod keeps its identity
+// across updates (memoized table rows and the row model rely on that).
+const usageless = new WeakMap<PodRow, PodRow>();
+function withoutUsage(p: PodRow): PodRow {
+  if (p.cpuMilli === null && p.memoryMiB === null) return p;
+  let copy = usageless.get(p);
+  if (!copy) usageless.set(p, (copy = { ...p, cpuMilli: null, memoryMiB: null }));
+  return copy;
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const [themePreference, setTheme] = usePersistentState<ThemePreference>("theme", "dark");
@@ -729,6 +739,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<WorkspaceState>(() => {
     const selected = new Set(selectedClusterIds);
     const clusterById = (id: string) => clusters.find((c) => c.id === id);
+    const noMetrics = new Set(clusters.filter((c) => c.metrics === null).map((c) => c.id));
     const openTab = (id: string) => {
       if (!tabs.some((t) => t.id === id)) return false;
       setActiveTabId(id);
@@ -772,7 +783,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       pods: allPods
         .filter((p) => selected.has(p.cluster) && !(hideSystemNamespaces && SYSTEM_NAMESPACES.includes(p.namespace)))
         // Without metrics.k8s.io there is no usage: never show 0, show nothing.
-        .map((p) => (clusterById(p.cluster)?.metrics === null ? { ...p, cpuMilli: null, memoryMiB: null } : p)),
+        .map((p) => (noMetrics.has(p.cluster) ? withoutUsage(p) : p)),
       allPods,
       deployments,
       nodes,

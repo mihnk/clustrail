@@ -27,13 +27,14 @@ func main() {
 	// Exec auth plugins (aws, gcloud, kubelogin) must be on PATH even when started from Finder.
 	app.FixPath()
 
+	ws := &app.Workspace{}
 	wails := application.New(application.Options{
 		Name:        "Clustrail",
 		Description: "Kubernetes desktop workspace",
 		Icon:        appIcon,
 		// The Workspace service is the only way the UI reaches clusters.
 		Services: []application.Service{
-			application.NewService(&app.Workspace{}),
+			application.NewService(ws),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -42,6 +43,9 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+
+	// Pods reach the UI as incremental frames on a Wails stream (no extra listener).
+	wails.HandleStream(app.PodsStream, ws.ServePods)
 
 	wails.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:     "Clustrail",

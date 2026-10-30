@@ -78,6 +78,9 @@ type Cluster struct {
 	Paused bool `json:"paused,omitempty"`
 }
 
+// RowID is the row's stable identity (cluster/namespace/name) for streaming.
+func (p PodRow) RowID() string { return p.ID }
+
 type OwnerRef struct {
 	Kind string `json:"kind"`
 	Name string `json:"name"`

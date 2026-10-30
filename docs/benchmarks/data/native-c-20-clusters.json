@@ -1,0 +1,428 @@
+{
+  "scenario": "multi",
+  "synthetic": "clusters=20,pods=2500,rate=100,vary=1,slow=1,drop=2",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+    "cores": 4,
+    "screen": "1440x900@1",
+    "build": "production"
+  },
+  "loadMs": 2869,
+  "rows": 61246,
+  "domRows": 37,
+  "idle": {
+    "seconds": 2.91,
+    "fps": 1.7,
+    "frameMs": {
+      "n": 5,
+      "p50": 593,
+      "p95": 935,
+      "p99": 935,
+      "max": 935,
+      "mean": 582.6
+    },
+    "over34ms": 5,
+    "over50ms": 5,
+    "over100ms": 5,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "backendSamples": [
+    {
+      "t": 0,
+      "heapMB": 184,
+      "cpu": 38,
+      "pending": 24,
+      "events": 77830,
+      "goroutines": 57,
+      "rows": 62429
+    },
+    {
+      "t": 3.2,
+      "heapMB": 198,
+      "cpu": 38,
+      "pending": 8,
+      "events": 85853,
+      "goroutines": 57,
+      "rows": 62452
+    },
+    {
+      "t": 6.9,
+      "heapMB": 210,
+      "cpu": 29,
+      "pending": 937,
+      "events": 93459,
+      "goroutines": 57,
+      "rows": 62471
+    },
+    {
+      "t": 9.9,
+      "heapMB": 111,
+      "cpu": 30,
+      "pending": 1038,
+      "events": 102374,
+      "goroutines": 57,
+      "rows": 62420
+    },
+    {
+      "t": 13.4,
+      "heapMB": 123,
+      "cpu": 29,
+      "pending": 820,
+      "events": 111259,
+      "goroutines": 57,
+      "rows": 62403
+    },
+    {
+      "t": 16.6,
+      "heapMB": 134,
+      "cpu": 164,
+      "pending": 2158,
+      "events": 126735,
+      "goroutines": 56,
+      "rows": 62393
+    },
+    {
+      "t": 21.1,
+      "heapMB": 101,
+      "cpu": 38,
+      "pending": 6422,
+      "events": 134476,
+      "goroutines": 57,
+      "rows": 62420
+    },
+    {
+      "t": 24.4,
+      "heapMB": 126,
+      "cpu": 31,
+      "pending": 258,
+      "events": 146054,
+      "goroutines": 56,
+      "rows": 62470
+    },
+    {
+      "t": 27.6,
+      "heapMB": 135,
+      "cpu": 32,
+      "pending": 1005,
+      "events": 153947,
+      "goroutines": 56,
+      "rows": 62495
+    },
+    {
+      "t": 30.7,
+      "heapMB": 145,
+      "cpu": 140,
+      "pending": 215,
+      "events": 161633,
+      "goroutines": 56,
+      "rows": 62536
+    },
+    {
+      "t": 33.8,
+      "heapMB": 109,
+      "cpu": 29,
+      "pending": 427,
+      "events": 169318,
+      "goroutines": 56,
+      "rows": 62500
+    },
+    {
+      "t": 37.4,
+      "heapMB": 118,
+      "cpu": 21,
+      "pending": 2168,
+      "events": 177914,
+      "goroutines": 58,
+      "rows": 62471
+    },
+    {
+      "t": 42.2,
+      "heapMB": 141,
+      "cpu": 32,
+      "pending": 3794,
+      "events": 194431,
+      "goroutines": 56,
+      "rows": 62407
+    }
+  ],
+  "frames": {
+    "seconds": 43.79,
+    "fps": 4.9,
+    "frameMs": {
+      "n": 213,
+      "p50": 18,
+      "p95": 878,
+      "p99": 1594,
+      "max": 2057,
+      "mean": 205.58
+    },
+    "over34ms": 96,
+    "over50ms": 85,
+    "over100ms": 68,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "clusters": [
+    {
+      "cluster": "synthetic-01",
+      "state": "live",
+      "detail": "",
+      "rows": 1278,
+      "snapshotMs": 147
+    },
+    {
+      "cluster": "synthetic-08",
+      "state": "live",
+      "detail": "",
+      "rows": 5005,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-10",
+      "state": "live",
+      "detail": "",
+      "rows": 2481,
+      "snapshotMs": 381
+    },
+    {
+      "cluster": "synthetic-13",
+      "state": "live",
+      "detail": "",
+      "rows": 1215,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-15",
+      "state": "live",
+      "detail": "",
+      "rows": 3778,
+      "snapshotMs": 390
+    },
+    {
+      "cluster": "synthetic-17",
+      "state": "live",
+      "detail": "",
+      "rows": 1265,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-18",
+      "state": "live",
+      "detail": "",
+      "rows": 2473,
+      "snapshotMs": 390
+    },
+    {
+      "cluster": "synthetic-19",
+      "state": "disconnected",
+      "detail": "synthetic connection drop",
+      "rows": 3754,
+      "snapshotMs": 390
+    },
+    {
+      "cluster": "synthetic-03",
+      "state": "live",
+      "detail": "",
+      "rows": 3721,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-06",
+      "state": "live",
+      "detail": "",
+      "rows": 2491,
+      "snapshotMs": 381
+    },
+    {
+      "cluster": "synthetic-07",
+      "state": "live",
+      "detail": "",
+      "rows": 3729,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-04",
+      "state": "live",
+      "detail": "",
+      "rows": 4970,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-11",
+      "state": "live",
+      "detail": "",
+      "rows": 3749,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-12",
+      "state": "live",
+      "detail": "",
+      "rows": 5007,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-20",
+      "state": "disconnected",
+      "detail": "synthetic connection drop",
+      "rows": 4999,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-02",
+      "state": "live",
+      "detail": "",
+      "rows": 2537,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-05",
+      "state": "live",
+      "detail": "",
+      "rows": 1249,
+      "snapshotMs": 372
+    },
+    {
+      "cluster": "synthetic-09",
+      "state": "live",
+      "detail": "",
+      "rows": 1248,
+      "snapshotMs": 378
+    },
+    {
+      "cluster": "synthetic-14",
+      "state": "live",
+      "detail": "",
+      "rows": 2536,
+      "snapshotMs": 371
+    },
+    {
+      "cluster": "synthetic-16",
+      "state": "live",
+      "detail": "",
+      "rows": 4973,
+      "snapshotMs": 371
+    }
+  ],
+  "stream": {
+    "frames": 19860,
+    "gaps": 0,
+    "applyMs": {
+      "n": 2048,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 7,
+      "mean": 0.01
+    },
+    "receiveToPaintMs": {
+      "n": 2048,
+      "p50": 1501,
+      "p95": 3374,
+      "p99": 3514,
+      "max": 3517,
+      "mean": 2026.82
+    },
+    "updateCostMs": {
+      "n": 56,
+      "p50": 543,
+      "p95": 1594,
+      "p99": 2058,
+      "max": 2058,
+      "mean": 617.3
+    }
+  },
+  "backend": {
+    "process": {
+      "cpuPercent": 52.39479046083418,
+      "heapAllocMB": 94.58829498291016,
+      "heapInuseMB": 107.7890625,
+      "sysMB": 229.72881317138672,
+      "totalAllocMB": 435.50435638427734,
+      "numGC": 13,
+      "gcPauseMs": 21.999502,
+      "gcCPU": 0.0025202141344834966,
+      "goroutines": 56
+    },
+    "watches": 20,
+    "consumers": 20,
+    "rows": 62485,
+    "pending": 9682,
+    "events": 207393,
+    "frames": 20117,
+    "bytes": 76036966,
+    "snapshots": 44,
+    "sendFull": 49576,
+    "resyncs": 0,
+    "maxBatch": 853,
+    "queue": {
+      "n": 2048,
+      "p50": 14.31,
+      "p95": 410.39,
+      "p99": 1283.674,
+      "max": 2788.213
+    },
+    "encode": {
+      "n": 2048,
+      "p50": 0.025,
+      "p95": 0.249,
+      "p99": 0.941,
+      "max": 42.486
+    },
+    "round": {
+      "n": 2048,
+      "p50": 3997.086,
+      "p95": 6287.56,
+      "p99": 6876.188,
+      "max": 7502.378
+    },
+    "ui": {
+      "n": 2048,
+      "p50": 1499,
+      "p95": 3374,
+      "p99": 3514,
+      "max": 3517
+    },
+    "visible": {
+      "n": 2048,
+      "p50": 2751.0029999999997,
+      "p95": 4935.333500000001,
+      "p99": 5426.0085,
+      "max": 5920.5875
+    },
+    "size": {
+      "n": 2048,
+      "p50": 2,
+      "p95": 48,
+      "p99": 188,
+      "max": 338
+    },
+    "at": 1793349537097
+  },
+  "totalMs": 52296,
+  "osMemoryMB": {
+    "go": {
+      "max": 626,
+      "last": 569,
+      "samples": 54
+    },
+    "webview": {
+      "max": 2592,
+      "last": 2592,
+      "samples": 54
+    }
+  }
+}

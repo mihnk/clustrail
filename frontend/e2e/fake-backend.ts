@@ -149,6 +149,73 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
   }
 }
 
+// The Wails stream transport (runtime/stream.js): POST /wails/stream/send
+// carries open/data/close frames from the page, GET /wails/stream/poll returns
+// queued frames as "WS1\0" + flags + count + [conn u32, kind u8, len u32, payload].
+const KIND_DATA = 0;
+const KIND_OPEN = 1;
+
+class FakeStreams {
+  private queue: { conn: number; kind: number; payload: Buffer }[] = [];
+  private subs = new Map<string, { conn: number; cluster: string; seq: number }>();
+  messages: { op: string; sub?: string; key?: { cluster: string } }[] = [];
+
+  constructor(private pods: (cluster: string) => unknown[]) {}
+
+  frame(conn: number, kind: number, payload: unknown = null) {
+    this.queue.push({ conn, kind, payload: payload === null ? Buffer.alloc(0) : Buffer.from(JSON.stringify(payload)) });
+  }
+
+  receive(conn: number, kind: number, body: Buffer, batch: string | null) {
+    if (kind === KIND_OPEN) return this.frame(conn, KIND_OPEN);
+    if (kind !== KIND_DATA) return;
+    const frames: Buffer[] = [];
+    if (batch !== null) {
+      let off = 4;
+      for (let i = 0; i < body.readUInt32BE(0); i++) {
+        const len = body.readUInt32BE(off);
+        frames.push(body.subarray(off + 4, off + 4 + len));
+        off += 4 + len;
+      }
+    } else frames.push(body);
+    for (const f of frames) {
+      const m = JSON.parse(f.toString()) as { op: string; sub: string; key?: { cluster: string } };
+      this.messages.push(m);
+      if (m.op === "sub" || m.op === "resync") {
+        const cluster = m.op === "sub" ? m.key!.cluster : this.subs.get(m.sub)?.cluster;
+        if (!cluster) continue;
+        const sub = this.subs.get(m.sub) ?? { conn, cluster, seq: 0 };
+        this.subs.set(m.sub, sub);
+        this.frame(conn, KIND_DATA, { t: "snap", sub: m.sub, seq: ++sub.seq, final: true, rows: this.pods(cluster), state: "live", tok: 1 });
+      } else if (m.op === "unsub") this.subs.delete(m.sub);
+    }
+  }
+
+  /** Sends a delta on every subscription of the cluster. */
+  delta(cluster: string, up: unknown[], del: string[] = []) {
+    for (const [sub, s] of this.subs) if (s.cluster === cluster) this.frame(s.conn, KIND_DATA, { t: "delta", sub, seq: ++s.seq, up, del, tok: 2 });
+  }
+
+  /** Drains the queue as one poll response, or null when there is nothing. */
+  poll(): Buffer | null {
+    if (!this.queue.length) return null;
+    const frames = this.queue.splice(0);
+    const head = Buffer.alloc(9);
+    head.write("WS1\0", 0, "latin1");
+    head.writeUInt8(0, 4);
+    head.writeUInt32BE(frames.length, 5);
+    const parts: Buffer[] = [head];
+    for (const f of frames) {
+      const h = Buffer.alloc(9);
+      h.writeUInt32BE(f.conn, 0);
+      h.writeUInt8(f.kind, 4);
+      h.writeUInt32BE(f.payload.length, 5);
+      parts.push(h, f.payload);
+    }
+    return Buffer.concat(parts);
+  }
+}
+
 export interface FakeBackend {
   /** Backend methods called so far, in order. */
   calls: string[];
@@ -159,13 +226,32 @@ export interface FakeBackend {
   errors: string[];
   /** The id of the latest list watch started for a kind. */
   watchOf: (kind: string) => string | undefined;
+  /** Pushes a pod delta through the pods stream. */
+  podDelta: (cluster: string, up: unknown[], del?: string[]) => void;
+  /** Messages the page sent on the pods stream (sub, unsub, resync, ack). */
+  streamMessages: () => { op: string; sub?: string; key?: { cluster: string } }[];
 }
 
 const EVENT_LIST = "clustrail:list";
 
+export interface FakeOptions {
+  /** Extra or replaced answers, by method name. */
+  answers?: Record<string, (args: Args) => unknown>;
+  /** Pods the stream serves per cluster (default: the fixture's). */
+  pods?: (cluster: string) => unknown[];
+  /** Clusters as the backend lists them (default: the fixture's). */
+  clusters?: unknown[];
+}
+
 /** Opens the app in desktop mode against the fake backend, with fresh local storage. */
-export async function openDesktop(page: Page): Promise<FakeBackend> {
+export async function openDesktop(page: Page, opts: FakeOptions = {}): Promise<FakeBackend> {
   const d = data();
+  if (opts.clusters) {
+    d.list.clusters = opts.clusters as typeof d.list.clusters;
+    d.list.selected = (opts.clusters as { id: string }[]).map((c) => c.id);
+    d.list.forbidden = [];
+    (d as { clusters: unknown[] }).clusters = opts.clusters;
+  }
   const calls: string[] = [];
   const errors: string[] = [];
   let lists = 0;
@@ -190,7 +276,24 @@ export async function openDesktop(page: Page): Promise<FakeBackend> {
       setTimeout(() => void emit(EVENT_LIST, { id, cluster: args[0], reset: true, columns: l.columns, namespaced: l.namespaced, shown: l.shown, upserts: l.rows, deletes: [], mode: "watch" }), 50);
       return;
     }
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(answer(d, method, args)) });
+    const res = opts.answers?.[method] ? opts.answers[method]!(args) : answer(d, method, args);
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(res ?? null) });
+  });
+  const streams = new FakeStreams(opts.pods ?? ((cluster) => (d.fx.snapshot.pods as { cluster: string }[]).filter((p) => p.cluster === cluster)));
+  await page.route("**/wails/stream/send", async (route) => {
+    const req = route.request();
+    const h = req.headers();
+    streams.receive(Number(h["x-wails-stream-conn"]), Number(h["x-wails-stream-kind"]), req.postDataBuffer() ?? Buffer.alloc(0), h["x-wails-stream-batch"] ?? null);
+    await route.fulfill({ status: 200, body: "" });
+  });
+  await page.route("**/wails/stream/poll", async (route) => {
+    // Held briefly like the real poll, so the page does not spin.
+    for (let i = 0; i < 10; i++) {
+      const body = streams.poll();
+      if (body) return route.fulfill({ status: 200, contentType: "application/octet-stream", body });
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    await route.fulfill({ status: 204, body: "" });
   });
   await page.goto("/?backend=1");
   await page.evaluate(() => localStorage.clear());
@@ -201,5 +304,7 @@ export async function openDesktop(page: Page): Promise<FakeBackend> {
     fixture: d.fx,
     emit,
     watchOf: (kind) => watches.get(kind),
+    podDelta: (cluster, up, del = []) => streams.delta(cluster, up, del),
+    streamMessages: () => streams.messages,
   };
 }

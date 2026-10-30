@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { ArrowLeftRight, Box, KeyRound, Layers, Lock, Network, Search } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
@@ -56,9 +56,11 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const selected = useMemo(() => new Set(selectedClusterIds), [selectedClusterIds]);
 
+  // Computed while the tab is visible only: in the background it would redo this on every pod batch.
+  const frozen = useRef<ClusterRow[]>([]);
   const allRows = useMemo<ClusterRow[]>(
     () =>
-      clusters.map((c) => {
+      !active ? frozen.current : (frozen.current = clusters.map((c) => {
         const pods = isOffline(c) ? [] : allPods.filter((p) => p.cluster === c.id);
         return {
           id: c.id,
@@ -73,8 +75,9 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
           pods: pods.length,
           podsAttention: pods.filter((p) => isAttention(p.health)).length,
         };
-      }),
-    [clusters, allPods, ws.deployments, ws.nodes, ws.helmReleases, ws.gitops, ws.backendMeta],
+      })),
+    // While hidden every dependency reads `false`, so nothing recomputes.
+    [active, active && clusters, active && allPods, active && ws.deployments, active && ws.nodes, active && ws.helmReleases, active && ws.gitops, active && ws.backendMeta],
   );
 
   const rows = useMemo(() => {

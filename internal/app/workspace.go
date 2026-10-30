@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/mihnk/clustrail/internal/kube"
+	"github.com/mihnk/clustrail/internal/streaming"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"sigs.k8s.io/yaml"
 )
@@ -22,6 +23,7 @@ var Version = "0.9.0-dev"
 type Workspace struct {
 	m    *kube.Manager
 	user string
+	pods *streaming.Hub[kube.PodRow]
 }
 
 type eventEmitter struct{ app *application.App }
@@ -43,6 +45,7 @@ func (w *Workspace) ServiceStartup(ctx context.Context, _ application.ServiceOpt
 		return err
 	}
 	w.m = kube.NewManager(ctx, store, eventEmitter{application.Get()})
+	w.startPods(ctx)
 	if u, err := user.Current(); err == nil {
 		w.user = u.Username
 	}
