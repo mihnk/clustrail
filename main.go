@@ -9,6 +9,7 @@ import (
 	"embed"
 	"log"
 
+	"github.com/mihnk/clustrail/internal/app"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -22,10 +23,14 @@ var assets embed.FS
 var appIcon []byte
 
 func main() {
-	app := application.New(application.Options{
+	wails := application.New(application.Options{
 		Name:        "Clustrail",
 		Description: "Kubernetes desktop workspace",
 		Icon:        appIcon,
+		// The Workspace service is the only way the UI reaches clusters.
+		Services: []application.Service{
+			application.NewService(&app.Workspace{}),
+		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
@@ -34,7 +39,7 @@ func main() {
 		},
 	})
 
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	wails.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:     "Clustrail",
 		Width:     1440,
 		Height:    900,
@@ -51,7 +56,7 @@ func main() {
 		URL: "/",
 	})
 
-	if err := app.Run(); err != nil {
+	if err := wails.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
