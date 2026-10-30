@@ -4,6 +4,7 @@ import type { Environment } from "@/data/types";
 import { Button, IconButton } from "./button";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
+import { t as tt } from "@/i18n";
 
 export interface ToastInput {
   kind: "progress" | "success" | "error";
@@ -74,7 +75,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       <ol
-        aria-label="Notifications"
+        aria-label={tt("Notifications")}
         aria-live="polite"
         className="pointer-events-none fixed bottom-8 right-3 z-50 m-0 flex w-[340px] list-none flex-col gap-2 p-0"
       >
@@ -133,12 +134,10 @@ function ToastCard({ toast: t, onDismiss }: { toast: Toast; onDismiss: () => voi
         )}
       </div>
       {t.kind === "progress" && t.onCancel ? (
-        <Button size="sm" variant="ghost" onClick={t.onCancel}>
-          Cancel
-        </Button>
+        <Button size="sm" variant="ghost" onClick={t.onCancel}>{tt("Cancel")}</Button>
       ) : t.copyText ? (
         <IconButton
-          aria-label={copied ? "Copied" : "Copy error"}
+          aria-label={copied ? tt("Copied") : tt("Copy error")}
           className="size-[22px] [&_svg]:size-3"
           onClick={() =>
             void navigator.clipboard?.writeText(t.copyText!).then(() => {
@@ -150,7 +149,7 @@ function ToastCard({ toast: t, onDismiss }: { toast: Toast; onDismiss: () => voi
           {copied ? <Check /> : <Copy />}
         </IconButton>
       ) : t.kind !== "progress" ? (
-        <IconButton aria-label="Dismiss" className="size-[22px] [&_svg]:size-3" onClick={onDismiss}>
+        <IconButton aria-label={tt("Dismiss")} className="size-[22px] [&_svg]:size-3" onClick={onDismiss}>
           <X />
         </IconButton>
       ) : null}

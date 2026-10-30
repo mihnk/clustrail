@@ -40,6 +40,7 @@ import { cn } from "@/lib/cn";
 import { isMac, modKey } from "@/lib/platform";
 import { Logo } from "./Logo";
 import { useOverlays } from "@/app/shortcuts";
+import { t as tt } from "@/i18n";
 
 export function WindowToolbar() {
   const { openPalette } = useOverlays();
@@ -58,7 +59,7 @@ export function WindowToolbar() {
         className="focus-ring no-drag flex h-7 w-[300px] items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-cell text-fg-muted"
       >
         <Search className="size-3.5" aria-hidden />
-        <span className="flex-1 text-left">Go to resource or run command…</span>
+        <span className="flex-1 text-left">{tt("Go to resource or run command…")}</span>
         <Kbd>{modKey}K</Kbd>
       </button>
       <SettingsMenu />
@@ -92,7 +93,7 @@ function WorkspaceTabs() {
   // Tabs shrink first (non-active tabs lose their secondary label), then
   // overflow into a list. The active tab is always shown; prod tabs keep their tag.
   const compact = tabs.length > 3;
-  const podsLabel = `${selectedClusterIds.length} ${selectedClusterIds.length === 1 ? "cluster" : "clusters"}`;
+  const podsLabel = tt(selectedClusterIds.length === 1 ? "1 cluster" : "{n} clusters", { n: selectedClusterIds.length });
   // Room for the "+N" overflow button and the new-tab button.
   const budget = width - 96;
   const widthOf = (t: WorkspaceTab) => tabWidth(t, t.id === activeTabId, compact, podsLabel) + 4;
@@ -115,7 +116,7 @@ function WorkspaceTabs() {
   const overflow = tabs.filter((t) => !visible.includes(t));
 
   return (
-    <nav ref={navRef} aria-label="Workspace tabs" className="no-drag flex min-w-0 flex-1 items-center gap-1">
+    <nav ref={navRef} aria-label={tt("Workspace tabs")} className="no-drag flex min-w-0 flex-1 items-center gap-1">
       <div role="tablist" className="flex min-w-0 items-center gap-1 overflow-hidden">
         {visible.map((tab) => {
           const isActive = tab.id === activeTabId;
@@ -123,7 +124,7 @@ function WorkspaceTabs() {
             <span className="font-mono text-label text-fg-muted">{tab.cluster}</span>
           ) : tab.kind === "pods" ? (
             <span className="font-mono text-label text-fg-muted">
-              {selectedClusterIds.length} {selectedClusterIds.length === 1 ? "cluster" : "clusters"}
+              {podsLabel}
             </span>
           ) : tab.subtitle ? (
             <span className="text-label text-fg-muted">{tab.subtitle}</span>
@@ -158,7 +159,7 @@ function WorkspaceTabs() {
                 {(isActive || !compact) && secondary}
               </button>
               {isActive && tabs.length > 1 && (
-                <IconButton aria-label={`Close ${tab.title}`} className="mr-1 size-[18px] [&_svg]:size-3" onClick={() => closeTab(tab.id)}>
+                <IconButton aria-label={tt("Close {title}", { title: tab.title })} className="mr-1 size-[18px] [&_svg]:size-3" onClick={() => closeTab(tab.id)}>
                   <X />
                 </IconButton>
               )}
@@ -169,7 +170,7 @@ function WorkspaceTabs() {
       {overflow.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="ghost" aria-label={`${overflow.length} more tabs`}>
+            <Button size="sm" variant="ghost" aria-label={tt("{length} more tabs", { length: overflow.length })}>
               +{overflow.length}
               <ChevronDown aria-hidden />
             </Button>
@@ -187,7 +188,7 @@ function WorkspaceTabs() {
         </DropdownMenu>
       )}
       <Tooltip content={`New tab: open anything from the command palette (${modKey}K)`}>
-        <IconButton aria-label="New tab" onClick={openPalette}>
+        <IconButton aria-label={tt("New tab")} onClick={openPalette}>
           <Plus className="!size-3.5" />
         </IconButton>
       </Tooltip>
@@ -234,54 +235,44 @@ function SettingsMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <IconButton aria-label="Settings">
+        <IconButton aria-label={tt("Settings")}>
           <Settings />
         </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Theme</DropdownMenuLabel>
+        <DropdownMenuLabel>{tt("Theme")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={themePreference} onValueChange={(v) => setTheme(v as ThemePreference)}>
-          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">{tt("System")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">{tt("Dark")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="light">{tt("Light")}</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Table density</DropdownMenuLabel>
+        <DropdownMenuLabel>{tt("Table density")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={density} onValueChange={(v) => setDensity(v as Density)}>
-          <DropdownMenuRadioItem value="compact">Compact · 24px</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="default">Default · 28px</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="comfortable">Comfortable · 34px</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="compact">{tt("Compact · 24px")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="default">{tt("Default · 28px")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="comfortable">{tt("Comfortable · 34px")}</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => openView({ kind: "settings", title: "Settings" })}>
-          <Settings aria-hidden />
-          All settings…
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={openHelp}>
-          Keyboard shortcuts
-          <span className="ml-auto font-mono text-label text-fg-muted">?</span>
+          <Settings aria-hidden />{tt("All settings…")}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={openHelp}>{tt("Keyboard shortcuts")}<span className="ml-auto font-mono text-label text-fg-muted">?</span>
         </DropdownMenuItem>
         {IS_MOCK && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Mock scenarios</DropdownMenuLabel>
+            <DropdownMenuLabel>{tt("Mock scenarios")}</DropdownMenuLabel>
             <DropdownMenuCheckboxItem
               checked={scenarios.watchLost}
               onCheckedChange={(on) => setScenario("watchLost", on)}
               onSelect={(e) => e.preventDefault()}
-            >
-              Watch lost · prod-us-east-1
-            </DropdownMenuCheckboxItem>
+            >{tt("Watch lost · prod-us-east-1")}</DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem
               checked={scenarios.noMetrics}
               onCheckedChange={(on) => setScenario("noMetrics", on)}
               onSelect={(e) => e.preventDefault()}
-            >
-              No metrics · staging-eu-1
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuItem className="pl-7" onSelect={simulateSlowList}>
-              Slow initial list · prod-us-east-1
-            </DropdownMenuItem>
+            >{tt("No metrics · staging-eu-1")}</DropdownMenuCheckboxItem>
+            <DropdownMenuItem className="pl-7" onSelect={simulateSlowList}>{tt("Slow initial list · prod-us-east-1")}</DropdownMenuItem>
           </>
         )}
       </DropdownMenuContent>

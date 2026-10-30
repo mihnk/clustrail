@@ -23,6 +23,7 @@ import {
 } from "@/components/resource-actions/ResourceActions";
 import { cn } from "@/lib/cn";
 import { matchesShortcut } from "@/lib/shortcuts";
+import { t } from "@/i18n";
 
 declare module "@tanstack/react-table" {
   interface ColumnMeta<TData extends RowData, TValue> {
@@ -312,7 +313,7 @@ export function ResourceTable<T>({
         {bulk && (
           <div role="columnheader" className="flex items-center">
             <Checkbox
-              aria-label="Select all rows"
+              aria-label={t("Select all rows")}
               checked={checked.size === 0 ? false : checked.size >= rowPositions.length ? true : "indeterminate"}
               onCheckedChange={(on) => onCheckedChange(on ? new Set(rowIds()) : new Set())}
             />
@@ -464,7 +465,7 @@ const TableRow = memo(function TableRow<T>({ row, index, start, height, selected
     >
       {bulk && (
         <div role="gridcell" className="flex items-center" onClick={(e) => e.stopPropagation()}>
-          <Checkbox aria-label={`Select ${row.id}`} checked={checked} onCheckedChange={() => handlers.toggle(row.id)} />
+          <Checkbox aria-label={t("Select {id}", { id: row.id })} checked={checked} onCheckedChange={() => handlers.toggle(row.id)} />
         </div>
       )}
       {columns.map((column) => {

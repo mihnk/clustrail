@@ -6,16 +6,17 @@ import type { Environment } from "@/data/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EnvironmentBadge, connectionLabel } from "@/components/status/EnvironmentBadge";
 import { cn } from "@/lib/cn";
+import { locale, t } from "@/i18n";
 
 const GROUPS: { env: Environment; label: string }[] = [
-  { env: "prod", label: "Production" },
-  { env: "stg", label: "Staging" },
-  { env: "dev", label: "Development" },
+  { env: "prod", label: t("Production") },
+  { env: "stg", label: t("Staging") },
+  { env: "dev", label: t("Development") },
 ];
 
 /** Quick selections by group: every cluster of one environment. */
 function groupSets(clusters: { id: string; env: Environment }[]): { name: string; ids: string[] }[] {
-  return GROUPS.map((g) => ({ name: `All ${g.label.toLowerCase()}`, ids: clusters.filter((c) => c.env === g.env).map((c) => c.id) })).filter((s) => s.ids.length > 1);
+  return GROUPS.map((g) => ({ name: t("All {group}", { group: g.label.toLocaleLowerCase(locale()) }), ids: clusters.filter((c) => c.env === g.env).map((c) => c.id) })).filter((s) => s.ids.length > 1);
 }
 
 /**
@@ -46,17 +47,17 @@ export function ClusterPicker({
           align="start"
           sideOffset={6}
           collisionPadding={8}
-          aria-label="Clusters"
+          aria-label={t("Clusters")}
           className="z-50 w-[300px] rounded-lg border border-line-strong bg-surface-elevated p-1.5 text-fg shadow-menu"
         >
           <label className="mb-1 flex h-7 items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel px-2 text-fg-muted focus-within:border-accent">
             <Search className="size-3.5" aria-hidden />
-            <span className="sr-only">Filter clusters</span>
+            <span className="sr-only">{t("Filter clusters")}</span>
             <input
               autoFocus
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter clusters…"
+              placeholder={t("Filter clusters…")}
               className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
             />
           </label>
@@ -69,7 +70,7 @@ export function ClusterPicker({
               <div key={env}>
                 <div className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-[.06em] text-fg-muted">
                   <Checkbox
-                    aria-label={`Select all ${label}`}
+                    aria-label={t("Select all {label}", { label })}
                     checked={on === 0 ? false : on === pickable.length ? true : "indeterminate"}
                     onCheckedChange={(v) => {
                       const ids = new Set(selectedClusterIds);
@@ -83,7 +84,7 @@ export function ClusterPicker({
                   <EnvironmentBadge env={env} />
                   {label}
                   <span className="flex-1" />
-                  {group.some((c) => c.protected) && <Lock className="size-3 text-env-prod-ink" aria-label="Protected" />}
+                  {group.some((c) => c.protected) && <Lock className="size-3 text-env-prod-ink" aria-label={t("Protected")} />}
                 </div>
                 {group.map((c) => {
                   const ok = usable(c);
@@ -96,7 +97,7 @@ export function ClusterPicker({
                       )}
                     >
                       <Checkbox
-                        aria-label={`Include ${c.name}`}
+                        aria-label={t("Include {name}", { name: c.name })}
                         checked={selected.has(c.id)}
                         onCheckedChange={(v) => ok && toggleCluster(c.id, v)}
                         className={ok ? undefined : "pointer-events-none opacity-50"}
@@ -105,15 +106,13 @@ export function ClusterPicker({
                       {ok ? (
                         <>
                           <span className="font-mono text-label text-fg-muted group-hover:hidden">
-                            {c.latencyMs !== null ? `${c.latencyMs}ms` : connectionLabel[c.connection].toLowerCase()}
+                            {c.latencyMs !== null ? `${c.latencyMs}ms` : t(connectionLabel[c.connection]).toLocaleLowerCase(locale())}
                           </span>
                           <button
                             type="button"
                             onClick={() => setSelectedClusterIds([c.id])}
                             className="focus-ring hidden rounded-sm border-0 bg-transparent p-0 font-mono text-label text-accent group-hover:inline"
-                          >
-                            Only this
-                          </button>
+                          >{t("Only this")}</button>
                         </>
                       ) : (
                         <span className="font-mono text-label text-status-warning">
@@ -129,9 +128,9 @@ export function ClusterPicker({
           <div className="my-1 h-px bg-line" />
           <div className="flex items-center gap-2 px-2 py-0.5 text-meta text-fg-muted">
             <span className="flex-1">
-              {selected.size} selected · {new Set(clusters.filter((c) => selected.has(c.id)).map((c) => c.env)).size} groups
+              {t("{selected} selected · {groups} groups", { selected: selected.size, groups: new Set(clusters.filter((c) => selected.has(c.id)).map((c) => c.env)).size })}
             </span>
-            <span>Saved:</span>
+            <span>{t("Saved:")}</span>
             {groupSets(clusters).map((s) => (
               <button
                 key={s.name}

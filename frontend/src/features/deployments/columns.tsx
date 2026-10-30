@@ -5,6 +5,7 @@ import { ResourceStatus } from "@/components/status/ResourceStatus";
 import { EnvMarker } from "@/components/status/EnvironmentBadge";
 import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { t } from "@/i18n";
 
 const col = createColumnHelper<DeploymentRow>();
 
@@ -16,13 +17,13 @@ export function strategyLabel(s: DeploymentRow["strategy"]): string {
 export const deploymentColumns = [
   col.accessor((d) => healthRank[d.health], {
     id: "status",
-    meta: { label: "Status", width: 110, priority: 100, sortNote: "status · attention first" },
+    meta: { label: t("Status"), width: 110, priority: 100, sortNote: t("status · attention first") },
     sortingFn: (a, b) =>
       healthRank[a.original.health] - healthRank[b.original.health] || a.original.name.localeCompare(b.original.name),
     cell: ({ row: { original: d } }) => <ResourceStatus health={d.health} label={d.status} />,
   }),
   col.accessor("name", {
-    meta: { label: "Name", width: "fill", priority: 100, sortNote: "name" },
+    meta: { label: t("Name"), width: "fill", priority: 100, sortNote: t("name") },
     cell: ({ getValue }) => (
       <span className="block truncate font-mono text-ui text-fg" title={getValue()}>
         {getValue()}
@@ -30,12 +31,12 @@ export const deploymentColumns = [
     ),
   }),
   col.accessor("namespace", {
-    meta: { label: "Namespace", width: 110, priority: 60, sortNote: "namespace" },
+    meta: { label: t("Namespace"), width: 110, priority: 60, sortNote: t("namespace") },
     cell: ({ getValue }) => <span className="block truncate">{getValue()}</span>,
   }),
   col.accessor((d) => d.readyReplicas / Math.max(1, d.replicas), {
     id: "ready",
-    meta: { label: "Ready", width: 70, align: "right", priority: 90, sortNote: "readiness" },
+    meta: { label: t("Ready"), width: 70, align: "right", priority: 90, sortNote: t("readiness") },
     cell: ({ row: { original: d } }) => (
       <span className={cn(d.readyReplicas < d.replicas && "text-status-warning")}>
         {d.readyReplicas}/{d.replicas}
@@ -44,20 +45,20 @@ export const deploymentColumns = [
   }),
   col.accessor("updatedReplicas", {
     id: "upToDate",
-    meta: { label: "Up-to-date", width: 90, align: "right", priority: 70, sortNote: "up-to-date replicas" },
+    meta: { label: t("Up-to-date"), width: 90, align: "right", priority: 70, sortNote: t("up-to-date replicas") },
   }),
   col.accessor("availableReplicas", {
     id: "available",
-    meta: { label: "Available", width: 90, align: "right", priority: 80, sortNote: "available replicas" },
+    meta: { label: t("Available"), width: 90, align: "right", priority: 80, sortNote: t("available replicas") },
   }),
   col.accessor((d) => strategyLabel(d.strategy), {
     id: "strategy",
-    meta: { label: "Strategy", width: 140, priority: 50, sortNote: "strategy" },
+    meta: { label: t("Strategy"), width: 140, priority: 50, sortNote: t("strategy") },
     cell: ({ getValue }) => <span className="font-mono text-meta">{getValue()}</span>,
   }),
   col.accessor("ageSeconds", {
     id: "age",
-    meta: { label: "Age", width: 60, align: "right", priority: 40, sortNote: "age" },
+    meta: { label: t("Age"), width: 60, align: "right", priority: 40, sortNote: t("age") },
     cell: ({ getValue }) => formatAge(getValue()),
   }),
 ];
@@ -66,13 +67,13 @@ export const deploymentColumns = [
 export const deploymentExplorerColumns = [
   col.accessor((d) => healthRank[d.health], {
     id: "rollout",
-    meta: { label: "Rollout", width: 100, priority: 100, sortNote: "rollout · attention first" },
+    meta: { label: t("Rollout"), width: 100, priority: 100, sortNote: t("rollout · attention first") },
     sortingFn: (a, b) =>
       healthRank[a.original.health] - healthRank[b.original.health] || a.original.name.localeCompare(b.original.name),
     cell: ({ row: { original: d } }) => <ResourceStatus health={d.health} label={d.rollout} title={d.reason} />,
   }),
   col.accessor("name", {
-    meta: { label: "Name", width: "fill", priority: 100, sortNote: "name" },
+    meta: { label: t("Name"), width: "fill", priority: 100, sortNote: t("name") },
     cell: ({ getValue }) => (
       <span className="block truncate font-mono text-ui text-fg" title={getValue()}>
         {getValue()}
@@ -80,11 +81,11 @@ export const deploymentExplorerColumns = [
     ),
   }),
   col.accessor("namespace", {
-    meta: { label: "Namespace", width: 80, priority: 70, sortNote: "namespace" },
+    meta: { label: t("Namespace"), width: 80, priority: 70, sortNote: t("namespace") },
     cell: ({ getValue }) => <span className="block truncate">{getValue()}</span>,
   }),
   col.accessor("cluster", {
-    meta: { label: "Cluster", width: 108, priority: 80, sortNote: "cluster" },
+    meta: { label: t("Cluster"), width: 108, priority: 80, sortNote: t("cluster") },
     cell: ({ row: { original: d } }) => (
       <span className="flex min-w-0 items-center gap-1.5">
         <EnvMarker env={d.env} />
@@ -94,7 +95,7 @@ export const deploymentExplorerColumns = [
   }),
   col.accessor((d) => d.readyReplicas / Math.max(1, d.replicas), {
     id: "ready",
-    meta: { label: "Ready", width: 44, align: "right", priority: 90, sortNote: "readiness" },
+    meta: { label: t("Ready"), width: 44, align: "right", priority: 90, sortNote: t("readiness") },
     cell: ({ row: { original: d } }) => (
       <span className={cn(d.readyReplicas < d.replicas && "text-status-warning")}>
         {d.readyReplicas}/{d.replicas}
@@ -103,14 +104,14 @@ export const deploymentExplorerColumns = [
   }),
   col.accessor("updatedReplicas", {
     id: "upToDate",
-    meta: { label: "Upd", width: 34, align: "right", priority: 60, sortNote: "up-to-date replicas" },
+    meta: { label: t("Upd"), width: 34, align: "right", priority: 60, sortNote: t("up-to-date replicas") },
   }),
   col.accessor("availableReplicas", {
     id: "available",
-    meta: { label: "Avail", width: 38, align: "right", priority: 65, sortNote: "available replicas" },
+    meta: { label: t("Avail"), width: 38, align: "right", priority: 65, sortNote: t("available replicas") },
   }),
   col.accessor("image", {
-    meta: { label: "Image tag", width: 92, priority: 40, sortNote: "image tag" },
+    meta: { label: t("Image tag"), width: 92, priority: 40, sortNote: t("image tag") },
     cell: ({ getValue }) => (
       <span className="block truncate font-mono text-meta" title={getValue()}>
         {getValue()}
@@ -119,7 +120,7 @@ export const deploymentExplorerColumns = [
   }),
   col.accessor("ageSeconds", {
     id: "age",
-    meta: { label: "Age", width: 36, align: "right", priority: 45, sortNote: "age" },
+    meta: { label: t("Age"), width: 36, align: "right", priority: 45, sortNote: t("age") },
     cell: ({ getValue }) => formatAge(getValue()),
   }),
 ];

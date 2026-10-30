@@ -224,6 +224,8 @@ func TestServeStaysConsistentUnderLoadAndBackpressure(t *testing.T) {
 			conn.full.Store(true)
 		}
 		if i == 12000 {
+			// Hold the stall until the sender has hit it at least once.
+			waitFor(t, func() bool { return h.Stats.SendFull.Load() > 0 })
 			conn.full.Store(false)
 		}
 		if i%500 == 0 {

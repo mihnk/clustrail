@@ -29,6 +29,7 @@ import { cn } from "@/lib/cn";
 import { modKey } from "@/lib/platform";
 import { clusterColumns, type ClusterRow } from "./columns";
 import { ClusterInspector } from "./ClusterInspector";
+import { t } from "@/i18n";
 
 const GROUP_LABEL: Record<Environment, string> = { prod: "Production", stg: "Staging", dev: "Development" };
 const BAR = "bg-surface-panel dark:bg-transparent";
@@ -145,34 +146,31 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
       <main className="@container flex min-w-0 flex-1 flex-col bg-surface-app">
         <div className={cn("flex h-12 shrink-0 items-center gap-2.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <Network className="size-4" aria-hidden />
-          <span className="text-title font-semibold">Clusters</span>
+          <span className="text-title font-semibold">{t("Clusters")}</span>
           <span className="truncate text-meta text-fg-muted">
-            {clusters.length} contexts · {connected} connected · {needAttention} need attention
-          </span>
+            {t("{nClusters} contexts · {connected} connected · {needAttention} need attention", { nClusters: clusters.length, connected, needAttention })}</span>
           <div className="flex-1" />
           <Segmented
-            aria-label="Show"
+            aria-label={t("Show")}
             value={show}
             onValueChange={setShow}
             options={[
-              { value: "all", label: <>All {clusters.length}</> },
-              { value: "selected", label: <>Selected {selected.size}</> },
+              { value: "all", label: <>{t("All {nClusters}", { nClusters: clusters.length })}</> },
+              { value: "selected", label: <>{t("Selected {size}", { size: selected.size })}</> },
             ]}
           />
           <Button onClick={() => openView({ kind: "connections", title: "Connections" })}>
-            <KeyRound aria-hidden />
-            Manage connections
-          </Button>
+            <KeyRound aria-hidden />{t("Manage connections")}</Button>
         </div>
 
         <div className={cn("flex h-11 shrink-0 items-center gap-1.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <label className="flex h-7 w-[240px] items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-fg-muted focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
             <Search className="size-3.5 shrink-0" aria-hidden />
-            <span className="sr-only">Filter clusters</span>
+            <span className="sr-only">{t("Filter clusters")}</span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filter name, region, version…"
+              placeholder={t("Filter name, region, version…")}
               className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
             />
             <Kbd>/</Kbd>
@@ -182,9 +180,9 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
               <FilterToken k="group" value={group === "all" ? "all" : GROUP_LABEL[group]} active={group !== "all"} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Environment group</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("Environment group")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={group} onValueChange={(v) => setGroup(v as typeof group)}>
-                <DropdownMenuRadioItem value="all">all</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="all">{t("all")}</DropdownMenuRadioItem>
                 {(["prod", "stg", "dev"] as const).map((e) => (
                   <DropdownMenuRadioItem key={e} value={e}>
                     {GROUP_LABEL[e]}
@@ -198,22 +196,22 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
               <FilterToken k="status" value={status} active={status !== "any"} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Status</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("Status")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
-                <DropdownMenuRadioItem value="any">any</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="connected">connected</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="attention">needs attention</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="offline">not connected</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="any">{t("any")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="connected">{t("connected")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="attention">{t("needs attention")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="offline">{t("not connected")}</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="flex-1" />
-          <span className="hidden text-meta text-fg-muted @[900px]:inline">Usage from metrics-server · current values</span>
+          <span className="hidden text-meta text-fg-muted @[900px]:inline">{t("Usage from metrics-server · current values")}</span>
         </div>
 
         <ResourceTable
           table={table}
-          aria-label="Clusters"
+          aria-label={t("Clusters")}
           rowHeight={46}
           fillMin={190}
           selectedId={selectedId}
@@ -241,7 +239,7 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
               const on = pickable.filter((r) => selected.has(r.id)).length;
               return (
                 <Checkbox
-                  aria-label={`Select ${GROUP_LABEL[k as Environment]}`}
+                  aria-label={t("Select {v0}", { v0: GROUP_LABEL[k as Environment] })}
                   checked={on === 0 ? false : on === pickable.length ? true : "indeterminate"}
                   onCheckedChange={(v) => {
                     const ids = new Set(selectedClusterIds);
@@ -261,47 +259,38 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
                   <EnvironmentBadge env={k as Environment} />
                   <b className="font-semibold">{GROUP_LABEL[k as Environment]}</b>
                   <span className="text-meta text-fg-muted">
-                    {groupRows.length} {groupRows.length === 1 ? "cluster" : "clusters"}
-                    {on > 0 && on < groupRows.length ? ` · ${on} selected` : ""}
+                    {t(groupRows.length === 1 ? "1 cluster" : "{n} clusters", { n: groupRows.length })}
+                    {on > 0 && on < groupRows.length ? t(" · {on} selected", { on }) : ""}
                   </span>
                   {groupRows.some((r) => r.cluster.protected) && (
                     <span className="flex items-center gap-1.5 text-meta text-env-prod-ink">
-                      <Lock className="size-3" aria-hidden />
-                      Protected
-                    </span>
+                      <Lock className="size-3" aria-hidden />{t("Protected")}</span>
                   )}
                 </>
               );
             },
           }}
-          empty={<EmptyState title="No clusters match">Clear the filters to see every context.</EmptyState>}
+          empty={<EmptyState title={t("No clusters match")}>{t("Clear the filters to see every context.")}</EmptyState>}
         />
 
         {selected.size > 0 && (
           <div className="flex h-11 shrink-0 items-center gap-2 border-t border-line-selected bg-accent-soft pl-3.5 pr-3">
             <b className="text-cell font-semibold">
-              {selected.size} {selected.size === 1 ? "cluster" : "clusters"} selected
-            </b>
+              {t(selected.size === 1 ? "{n} cluster selected" : "{n} clusters selected", { n: selected.size })}</b>
             <span className="hidden truncate text-meta text-fg-muted @[900px]:inline">{selectedNames.join(", ")}</span>
             <div className="flex-1" />
             <Button size="sm" onClick={() => openView({ kind: "pods", title: "Pods" })}>
-              <Box aria-hidden />
-              Open Pods
-            </Button>
+              <Box aria-hidden />{t("Open Pods")}</Button>
             <Button size="sm" onClick={() => openView({ kind: "deployments", title: "Deployments" })}>
-              <Layers aria-hidden />
-              Deployments
-            </Button>
+              <Layers aria-hidden />{t("Deployments")}</Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" disabled={selected.size < 2} title={selected.size < 2 ? "Select at least two clusters to compare" : undefined}>
-                  <ArrowLeftRight aria-hidden />
-                  Compare workload…
-                </Button>
+                <Button size="sm" disabled={selected.size < 2} title={selected.size < 2 ? t("Select at least two clusters to compare") : undefined}>
+                  <ArrowLeftRight aria-hidden />{t("Compare workload…")}</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="max-h-[360px] overflow-y-auto">
-                <DropdownMenuLabel>Deployments in {comparable.length ? "two or more selected clusters" : "the selection"}</DropdownMenuLabel>
-                {comparable.length === 0 && <div className="px-2 py-1.5 text-ui text-fg-muted">No Deployment exists in more than one selected cluster.</div>}
+                <DropdownMenuLabel>{t("Deployments in")}{" "}{comparable.length ? t("two or more selected clusters") : t("the selection")}</DropdownMenuLabel>
+                {comparable.length === 0 && <div className="px-2 py-1.5 text-ui text-fg-muted">{t("No Deployment exists in more than one selected cluster.")}</div>}
                 {comparable.map((w) => (
                   <DropdownMenuItem
                     key={w.key}
@@ -315,26 +304,23 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
                   >
                     <span className="font-mono">{w.name}</span>
                     <span className="ml-auto pl-3 text-label text-fg-muted">
-                      {w.namespace} · {w.clusters.length} clusters
-                    </span>
+                      {w.namespace} · {w.clusters.length}{" "}{t("clusters")}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" variant="ghost" onClick={() => setSelectedClusterIds([])}>
-              Clear
-            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedClusterIds([])}>{t("Clear")}</Button>
           </div>
         )}
         <div className={cn("flex h-7 shrink-0 items-center gap-3.5 border-t border-line px-3.5 text-meta text-fg-muted", BAR)}>
-          <span>Selection is shared with the sidebar and every explorer</span>
+          <span>{t("Selection is shared with the sidebar and every explorer")}</span>
           <div className="flex-1" />
-          <span>Space toggles · {modKey}A selects all that can connect</span>
+          <span>{t("Space toggles · {modKey}A selects all that can connect", { modKey })}</span>
         </div>
       </main>
 
       {inspectorOpen && selectedRow && (
-        <InspectorPanel label="Cluster inspector" storageKey="clusters" active={active}>
+        <InspectorPanel label={t("Cluster inspector")} storageKey="clusters" active={active}>
           <ClusterInspector
             cluster={selectedRow.cluster}
             ov={selectedRow.ov}

@@ -3,6 +3,7 @@ import { Lock } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { IS_MOCK, getAccessSummary } from "@/data/mock";
 import { ConnectionDot } from "@/components/status/EnvironmentBadge";
+import { t, tn } from "@/i18n";
 
 export function StatusBar() {
   const { clusters, selectedClusters, activeTab, clusterById, jobs, pins } = useWorkspace();
@@ -32,28 +33,29 @@ export function StatusBar() {
         <span className="flex items-center gap-1.5 whitespace-nowrap">
           <ConnectionDot state={scoped.connection} />
           <span className="text-fg-secondary">
-            {scoped.name} {scoped.connection === "connected" ? `connected · ${scoped.latencyMs}ms` : "not connected"}
+            {scoped.name} {scoped.connection === "connected" ? t("connected · {latencyMs}ms", { latencyMs: scoped.latencyMs }) : t("not connected")}
           </span>
         </span>
         {note ? (
-          <span className="truncate">{note}</span>
+          <span className="truncate">{t(note)}</span>
         ) : IS_MOCK ? (
           <span className="truncate">
-            RBAC: <span className="font-mono">{access.user}</span> {access.allowed ? "can" : "cannot"} {access.verb}{" "}
-            {access.resource} in {access.namespace}
+            {tn(access.allowed ? "RBAC: {user} can {verb} {resource} in {namespace}" : "RBAC: {user} cannot {verb} {resource} in {namespace}", {
+              user: <span className="font-mono">{access.user}</span>,
+              verb: access.verb,
+              resource: access.resource,
+              namespace: access.namespace,
+            })}
           </span>
         ) : scoped.identity ? (
-          <span className="truncate">
-            RBAC identity <span className="font-mono">{scoped.identity}</span>
+          <span className="truncate">{t("RBAC identity")}{" "}<span className="font-mono">{scoped.identity}</span>
           </span>
         ) : null}
         <div className="flex-1" />
         <PortForwardIndicator />
         {scoped.protected && (
           <span className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">
-            <Lock className="size-3" aria-hidden />
-            Protected
-          </span>
+            <Lock className="size-3" aria-hidden />{t("Protected")}</span>
         )}
         {IS_MOCK && (
           <span className="rounded border border-line-strong px-1.5 py-0.5 font-mono text-2xs tracking-[.06em]">MOCK DATA</span>
@@ -71,13 +73,12 @@ export function StatusBar() {
       <span className="flex items-center gap-1.5 whitespace-nowrap">
         <ConnectionDot state={allConnected ? "connected" : "reconnecting"} />
         <span className="text-fg-secondary">
-          {connected.length}/{selectedClusters.length} selected connected
-        </span>
+          {t("{nConnected}/{nSelectedClusters} selected connected", { nConnected: connected.length, nSelectedClusters: selectedClusters.length })}</span>
       </span>
       {investigating ? (
         // Investigations keep their own watches on the involved objects.
         <span className="whitespace-nowrap">
-          {IS_MOCK ? "Watching 12 objects · live" : `${pins.length} pinned · saved locally`}
+          {IS_MOCK ? t("Watching 12 objects · live") : t("{length} pinned · saved locally", { length: pins.length })}
         </span>
       ) : (
         <span className="truncate font-mono text-label max-[1360px]:hidden">
@@ -87,18 +88,16 @@ export function StatusBar() {
       {jobItem}
       {expired > 0 && (
         <span className="whitespace-nowrap text-status-warning">
-          {expired} {expired === 1 ? "credential" : "credentials"} expired
-        </span>
+          {t(expired === 1 ? "{n} credential expired" : "{n} credentials expired", { n: expired })}</span>
       )}
       <div className="flex-1" />
       <PortForwardIndicator />
       {protectedCount > 0 && (
         <span className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">
           <Lock className="size-3" aria-hidden />
-          {protectedCount} production {protectedCount === 1 ? "cluster" : "clusters"} protected
-        </span>
+          {t(protectedCount === 1 ? "{n} production cluster protected" : "{n} production clusters protected", { n: protectedCount })}</span>
       )}
-      {!investigating && <span className="whitespace-nowrap">Metrics: metrics-server</span>}
+      {!investigating && <span className="whitespace-nowrap">{t("Metrics: metrics-server")}</span>}
       {IS_MOCK && (
         <span className="rounded border border-line-strong px-1.5 py-0.5 font-mono text-2xs tracking-[.06em]">MOCK DATA</span>
       )}

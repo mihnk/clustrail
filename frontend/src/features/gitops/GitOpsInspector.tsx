@@ -9,6 +9,7 @@ import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { AppHealthStatus, SyncStatus } from "./columns";
+import { ago, t, tn } from "@/i18n";
 
 export function GitOpsInspector({
   object: o,
@@ -41,17 +42,15 @@ export function GitOpsInspector({
         <div className="flex items-center gap-1.5 text-ui text-fg-muted">
           <GitBranch className="size-3.5" aria-hidden />
           <span>
-            {argo ? "Argo CD" : "Flux"} {o.kind}
+            {argo ? t("Argo CD") : t("Flux")} {o.kind}
           </span>
           <EnvironmentBadge env={o.env} className="ml-1" />
           {prot && (
             <span className="flex items-center gap-1.5 text-env-prod-ink">
-              <Lock className="size-3.5" aria-hidden />
-              Protected
-            </span>
+              <Lock className="size-3.5" aria-hidden />{t("Protected")}</span>
           )}
           <div className="flex-1" />
-          <IconButton aria-label="Close inspector" onClick={onClose} className="[&_svg]:size-3.5">
+          <IconButton aria-label={t("Close inspector")} onClick={onClose} className="[&_svg]:size-3.5">
             <X />
           </IconButton>
         </div>
@@ -62,64 +61,60 @@ export function GitOpsInspector({
         <div className="flex items-center gap-3 text-cell">
           <SyncStatus sync={o.sync} />
           <AppHealthStatus health={o.appHealth} />
-          <span className="text-meta text-fg-muted">reconciled {o.reconciledSeconds < 3 ? "just now" : `${formatAge(o.reconciledSeconds)} ago`}</span>
+          <span className="text-meta text-fg-muted">{t("reconciled")}{" "}{o.reconciledSeconds < 3 ? t("just now") : `${formatAge(o.reconciledSeconds)} ago`}</span>
         </div>
         <dl className="m-0 grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1 text-ui">
-          <dt className="text-fg-muted">{o.kind === "HelmRelease" ? "Chart repo" : "Repository"}</dt>
+          <dt className="text-fg-muted">{o.kind === "HelmRelease" ? t("Chart repo") : t("Repository")}</dt>
           <dd className="m-0 truncate font-mono">{o.repo.replace(/^https?:\/\//, "")}</dd>
-          <dt className="text-fg-muted">{o.kind === "HelmRelease" ? "Chart" : "Path"}</dt>
+          <dt className="text-fg-muted">{o.kind === "HelmRelease" ? t("Chart") : t("Path")}</dt>
           <dd className="m-0 truncate font-mono">{o.path}</dd>
-          <dt className="text-fg-muted">Target</dt>
+          <dt className="text-fg-muted">{t("Target")}</dt>
           <dd className="m-0 truncate font-mono">
             {o.kind === "HelmRelease" ? o.target : `${o.target} @ ${o.revision}`}
           </dd>
-          <dt className="text-fg-muted">{argo ? "Sync policy" : "Interval"}</dt>
+          <dt className="text-fg-muted">{argo ? t("Sync policy") : t("Interval")}</dt>
           <dd className="m-0">
             {argo ? (
               <>
-                {o.policy.automated ? "automated" : "manual"} · selfHeal <b className="font-semibold">{o.policy.selfHeal ? "on" : "off"}</b> · prune{" "}
+                {o.policy.automated ? "automated" : "manual"}{" "}{t("· selfHeal")}{" "}<b className="font-semibold">{o.policy.selfHeal ? "on" : "off"}</b>{" "}{t("· prune")}{" "}
                 {o.policy.prune ? "on" : "off"}
               </>
             ) : (
-              <>5m · prune {o.policy.prune ? "on" : "off"}{o.suspended && <> · <b className="font-semibold">suspended</b></>}</>
+              <>{t("5m · prune")}{" "}{o.policy.prune ? "on" : "off"}{o.suspended && <> · <b className="font-semibold">{t("suspended")}</b></>}</>
             )}
           </dd>
         </dl>
         <div className="flex items-center gap-1.5">
           {argo && controller?.url && (
             <Button onClick={() => window.open(`${controller.url}/applications/${o.namespace}/${o.name}`, "_blank", "noopener")}>
-              <ExternalLink aria-hidden />
-              Argo CD
-            </Button>
+              <ExternalLink aria-hidden />{t("Argo CD")}</Button>
           )}
           {!argo && (
             <Button onClick={() => onSuspend(!o.suspended)} className={cn(prot && "border-env-prod text-env-prod-ink")}>
               {o.suspended ? <Play aria-hidden /> : <Pause aria-hidden />}
-              {o.suspended ? "Resume" : "Suspend"}
+              {o.suspended ? t("Resume") : t("Suspend")}
             </Button>
           )}
           <div className="flex-1" />
           <Button onClick={onRefresh} disabled={busy || cluster?.readOnly} className={cn(prot && "border-env-prod text-env-prod-ink")}>
             {prot ? <Lock aria-hidden /> : <RefreshCw aria-hidden />}
-            {argo ? "Refresh" : "Reconcile"}
+            {argo ? t("Refresh") : t("Reconcile")}
           </Button>
           <Button onClick={onSync} disabled={busy || o.suspended || cluster?.readOnly} className={cn(prot && "border-env-prod text-env-prod-ink")}>
             {prot ? <Lock aria-hidden /> : <RotateCw aria-hidden />}
-            {argo ? "Sync…" : "Reconcile with source…"}
+            {argo ? t("Sync…") : t("Reconcile with source…")}
           </Button>
         </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-        <TabsList aria-label="Application sections" className="mt-1 gap-3 px-3.5 pt-1.5">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="diff">
-            Diff <TabCount>{o.drift.length}</TabCount>
+        <TabsList aria-label={t("Application sections")} className="mt-1 gap-3 px-3.5 pt-1.5">
+          <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
+          <TabsTrigger value="diff">{t("Diff")}{" "}<TabCount>{o.drift.length}</TabCount>
           </TabsTrigger>
-          <TabsTrigger value="resources">
-            Resources <TabCount>{o.resources.length}</TabCount>
+          <TabsTrigger value="resources">{t("Resources")}{" "}<TabCount>{o.resources.length}</TabCount>
           </TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="history">{t("History")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">
@@ -135,25 +130,26 @@ export function GitOpsInspector({
         <TabsContent value="diff" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">
           {o.drift.length === 0 ? (
             <p className="m-0 text-cell text-fg-secondary">
-              Live state matches the desired state {argo ? "Argo CD compared" : "Flux applied"} at revision <span className="font-mono">{o.revision}</span>.
+              {tn(argo ? "Live state matches the desired state Argo CD compared at revision {revision}." : "Live state matches the desired state Flux applied at revision {revision}.", {
+                revision: <span className="font-mono">{o.revision}</span>,
+              })}
             </p>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-1.5 text-meta text-fg-muted">
-                <Tag>desired</Tag>from {argo ? "Argo CD compared state" : "the last applied revision"} <Tag>live</Tag>from cluster
-              </div>
+                <Tag>{t("desired")}</Tag>{t("from")}{" "}{argo ? t("Argo CD compared state") : t("the last applied revision")} <Tag>{t("live")}</Tag>{t("from cluster")}</div>
               {o.drift.map((d) => (
                 <div key={d.resource + d.field} className="flex flex-col overflow-hidden rounded-lg border border-line">
                   <div className="flex items-center gap-2 border-b border-line px-2.5 py-2 text-ui">
                     <Layers className="size-3.5 text-fg-muted" aria-hidden />
                     <span className="min-w-0 flex-1 truncate font-mono font-semibold">{d.resource}</span>
-                    <span className="rounded-[4px] bg-status-warning-soft px-1.5 font-mono text-label font-semibold text-status-warning">drift</span>
+                    <span className="rounded-[4px] bg-status-warning-soft px-1.5 font-mono text-label font-semibold text-status-warning">{t("drift")}</span>
                   </div>
                   <div className="px-2.5">
                     <div className="grid grid-cols-[minmax(0,1fr)_64px_64px] gap-x-2 py-1.5 text-ui text-fg-muted">
-                      <span>Field</span>
-                      <span>Desired</span>
-                      <span>Live</span>
+                      <span>{t("Field")}</span>
+                      <span>{t("Desired")}</span>
+                      <span>{t("Live")}</span>
                     </div>
                     <div className="grid grid-cols-[minmax(0,1fr)_64px_64px] items-center gap-x-2 border-t border-line-row py-1.5 text-ui">
                       <span className="truncate font-mono">{d.field}</span>
@@ -164,10 +160,10 @@ export function GitOpsInspector({
                   <div className="flex gap-2 border-t border-line px-2.5 py-2 text-ui text-fg-secondary">
                     <Code className="mt-px size-3.5 shrink-0 text-fg-muted" aria-hidden />
                     <span>
-                      Live value written by field manager <span className="font-mono text-fg">{d.manager}</span> {d.ago} ago (managedFields).{" "}
+                      {tn("Live value written by field manager {manager} {ago} ago (managedFields).", { manager: <span className="font-mono text-fg">{d.manager}</span>, ago: d.ago })}{" "}
                       {o.policy.selfHeal
-                        ? `selfHeal is on, so ${o.tool} will revert it on the next reconcile.`
-                        : `selfHeal is off, so ${o.tool} reports the drift but does not revert it.`}
+                        ? t("selfHeal is on, so {tool} will revert it on the next reconcile.", { tool: o.tool })
+                        : t("selfHeal is off, so {tool} reports the drift but does not revert it.", { tool: o.tool })}
                     </span>
                   </div>
                 </div>
@@ -178,8 +174,8 @@ export function GitOpsInspector({
                   <span className="flex gap-2 px-2.5 py-2">
                     <Lock className="mt-px size-3.5 shrink-0 text-env-prod-ink" aria-hidden />
                     <span>
-                      {argo ? "Sync and Refresh write" : "Reconcile writes"} to the {o.kind} resource on a protected cluster and ask for confirmation.{" "}
-                      {o.drift[0] && `Syncing would set ${o.drift[0].field.split(".").pop()} back to ${o.drift[0].desired}.`}
+                      {t(argo ? "Sync and Refresh write to the {kind} resource on a protected cluster and ask for confirmation." : "Reconcile writes to the {kind} resource on a protected cluster and asks for confirmation.", { kind: o.kind })}{" "}
+                      {o.drift[0] && t("Syncing would set {v0} back to {v1}.", { v0: o.drift[0].field.split(".").pop(), v1: o.drift[0].desired })}
                     </span>
                   </span>
                 </div>
@@ -195,7 +191,7 @@ export function GitOpsInspector({
               key={`${r.kind}/${r.name}`}
               type="button"
               onClick={() => onOpenYaml(r)}
-              title="Open YAML"
+              title={t("Open YAML")}
               className="focus-ring grid h-8 grid-cols-[minmax(0,1fr)_86px_88px] items-center gap-x-2 rounded-md border-0 border-t border-line-row bg-transparent px-1 text-left text-ui text-fg first:border-t-0 hover:bg-surface-hover"
             >
               <span className="truncate">
@@ -212,12 +208,11 @@ export function GitOpsInspector({
             <div key={i} className="grid h-8 grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-x-2 border-t border-line-row text-ui first:border-t-0">
               <span className="font-mono text-fg">{h.revision}</span>
               <span className="truncate text-fg-secondary">{h.message}</span>
-              <span className="text-meta text-fg-muted">{h.at}</span>
+              <span className="text-meta text-fg-muted">{ago(h.at)}</span>
             </div>
           ))}
           <p className="m-0 pt-2 text-meta text-fg-muted">
-            {o.tool === "Argo CD" ? "From status.history of the Application." : "From status.history of the object."} Commit messages come from git and are not read by Clustrail.
-          </p>
+            {o.tool === "Argo CD" ? t("From status.history of the Application.") : t("From status.history of the object.")}{" "}{t("Commit messages come from git and are not read by Clustrail.")}</p>
         </TabsContent>
       </Tabs>
     </>
@@ -231,12 +226,10 @@ function Tag({ children }: { children: string }) {
 function Conditions({ o }: { o: GitOpsObject }) {
   return (
     <section className="flex flex-col gap-1">
-      <span className="section-label">Conditions</span>
+      <span className="section-label">{t("Conditions")}</span>
       {o.conditions.length === 0 ? (
         <span className="flex items-center gap-2 text-ui text-fg-secondary">
-          <StatusGlyph health="completed" />
-          No error conditions reported
-        </span>
+          <StatusGlyph health="completed" />{t("No error conditions reported")}</span>
       ) : (
         o.conditions.map((c) => (
           <span key={c.type + c.at} className="flex items-center gap-2 text-ui">

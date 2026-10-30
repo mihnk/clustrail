@@ -12,6 +12,7 @@ import { StatusGlyph, healthTone } from "@/components/status/StatusGlyph";
 import { DisconnectedCluster, isOffline } from "@/components/cluster/ClusterStates";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
+import { t } from "@/i18n";
 
 export function ClusterInspector({
   cluster,
@@ -40,17 +41,15 @@ export function ClusterInspector({
       <div className="flex flex-col gap-2 pl-3.5 pr-3 pt-2.5">
         <div className="flex items-center gap-1.5 text-ui text-fg-muted">
           <Network className="size-3.5" aria-hidden />
-          <span>Cluster</span>
+          <span>{t("Cluster")}</span>
           <EnvironmentBadge env={cluster.env} className="ml-1" />
           {cluster.protected && (
             <span className="flex items-center gap-1.5 text-env-prod-ink">
-              <Lock className="size-3.5" aria-hidden />
-              Protected
-            </span>
+              <Lock className="size-3.5" aria-hidden />{t("Protected")}</span>
           )}
-          {cluster.readOnly && <span className="text-fg-secondary">Read-only</span>}
+          {cluster.readOnly && <span className="text-fg-secondary">{t("Read-only")}</span>}
           <div className="flex-1" />
-          <IconButton aria-label="Close inspector" onClick={onClose} className="[&_svg]:size-3.5">
+          <IconButton aria-label={t("Close inspector")} onClick={onClose} className="[&_svg]:size-3.5">
             <X />
           </IconButton>
         </div>
@@ -60,26 +59,26 @@ export function ClusterInspector({
         </span>
         {!offline && (
           <div className="grid grid-cols-3 gap-1.5">
-            <Quick icon={<Box />} label="Pods" onClick={() => scopeTo("pods")}>
+            <Quick icon={<Box />} label={t("Pods")} onClick={() => scopeTo("pods")}>
               {pods}
               {podsAttention > 0 && <CountPill tone="critical">{podsAttention}</CountPill>}
             </Quick>
-            <Quick icon={<Layers />} label="Deploys" onClick={() => scopeTo("deployments")}>
+            <Quick icon={<Layers />} label={t("Deploys")} onClick={() => scopeTo("deployments")}>
               {ov.quick.deployments}
               {ov.quick.deploymentsAttention > 0 && <CountPill tone="critical">{ov.quick.deploymentsAttention}</CountPill>}
             </Quick>
-            <Quick icon={<Server />} label="Nodes" onClick={() => scopeTo("nodes")}>
+            <Quick icon={<Server />} label={t("Nodes")} onClick={() => scopeTo("nodes")}>
               {ov.nodes.total}
             </Quick>
-            <Quick icon={<Activity />} label="Events" disabled>
+            <Quick icon={<Activity />} label={t("Events")} disabled>
               <CountPill tone="warning">{ov.quick.events}</CountPill>
               <span className="text-fg-muted">1h</span>
             </Quick>
-            <Quick icon={<LifeBuoy />} label="Helm" onClick={() => scopeTo("helm")}>
+            <Quick icon={<LifeBuoy />} label={t("Helm")} onClick={() => scopeTo("helm")}>
               {ov.quick.helm}
             </Quick>
-            <Quick icon={<GitBranch />} label="GitOps" disabled={!ov.quick.gitops} onClick={() => scopeTo("gitops")}>
-              {ov.quick.gitops ?? "not detected"}
+            <Quick icon={<GitBranch />} label={t("GitOps")} disabled={!ov.quick.gitops} onClick={() => scopeTo("gitops")}>
+              {ov.quick.gitops ?? t("not detected")}
             </Quick>
           </div>
         )}
@@ -91,18 +90,17 @@ export function ClusterInspector({
         </div>
       ) : (
         <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
-          <TabsList aria-label="Cluster sections" className="mt-2 px-3.5">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="capacity">Capacity</TabsTrigger>
-            <TabsTrigger value="components">Components</TabsTrigger>
-            <TabsTrigger value="events">
-              Events <TabCount>{ov.quick.events}</TabCount>
+          <TabsList aria-label={t("Cluster sections")} className="mt-2 px-3.5">
+            <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
+            <TabsTrigger value="capacity">{t("Capacity")}</TabsTrigger>
+            <TabsTrigger value="components">{t("Components")}</TabsTrigger>
+            <TabsTrigger value="events">{t("Events")}{" "}<TabCount>{ov.quick.events}</TabCount>
             </TabsTrigger>
           </TabsList>
           <Panel value="overview">
             {ov.attention.length > 0 && (
               <section className="flex flex-col">
-                <div className="section-label pb-1.5">Needs attention</div>
+                <div className="section-label pb-1.5">{t("Needs attention")}</div>
                 {ov.attention.map((a, i) => (
                   <div
                     key={a.name}
@@ -117,9 +115,7 @@ export function ClusterInspector({
                         type="button"
                         onClick={() => scopeTo("gitops")}
                         className="focus-ring rounded-sm border-0 bg-transparent p-0 text-ui text-accent hover:text-fg"
-                      >
-                        View
-                      </button>
+                      >{t("View")}</button>
                     ) : (
                       <span className={cn("font-mono", healthTone[a.health === "failed" ? "warning" : a.health])}>{a.fact}</span>
                     )}
@@ -129,29 +125,26 @@ export function ClusterInspector({
             )}
             <CapacitySection ov={ov} metrics={cluster.metrics !== null} />
             <section className="flex flex-col gap-2">
-              <div className="section-label">Connection</div>
+              <div className="section-label">{t("Connection")}</div>
               <dl className="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-2.5 gap-y-[5px] text-ui">
-                <KV k="API server" v={<span className="selectable font-mono text-meta">{ov.apiServer}</span>} />
-                <KV k="Latency" v={<span className="font-mono text-meta">{ov.latency.p50}ms p50{ov.latency.p95 !== null && ` · ${ov.latency.p95}ms p95`}</span>} />
-                <KV k="Auth" v={<span className="font-mono text-meta">{ov.auth}</span>} />
-                <KV k="Context" v={<span className="selectable font-mono text-meta break-all">{cluster.context}</span>} />
-                <KV k="Watching" v={`${ov.watching.types} resource types · ${ov.watching.objects.toLocaleString()} objects cached`} />
+                <KV k={t("API server")} v={<span className="selectable font-mono text-meta">{ov.apiServer}</span>} />
+                <KV k={t("Latency")} v={<span className="font-mono text-meta">{ov.latency.p50}{t("ms p50")}{ov.latency.p95 !== null && t(" · {p95}ms p95", { p95: ov.latency.p95 })}</span>} />
+                <KV k={t("Auth")} v={<span className="font-mono text-meta">{ov.auth}</span>} />
+                <KV k={t("Context")} v={<span className="selectable font-mono text-meta break-all">{cluster.context}</span>} />
+                <KV k={t("Watching")} v={`${ov.watching.types} resource types · ${ov.watching.objects.toLocaleString()} objects cached`} />
               </dl>
             </section>
             <ComponentsSection ov={ov} />
           </Panel>
           <Panel value="capacity">
             <CapacitySection ov={ov} metrics={cluster.metrics !== null} />
-            <p className="m-0 text-meta text-fg-muted">
-              Requested is the sum of pod requests on schedulable nodes; allocatable excludes system reservations. Usage comes
-              from metrics-server and is current only.
-            </p>
+            <p className="m-0 text-meta text-fg-muted">{t("Requested is the sum of pod requests on schedulable nodes; allocatable excludes system reservations. Usage comes from metrics-server and is current only.")}</p>
           </Panel>
           <Panel value="components">
             <ComponentsSection ov={ov} />
           </Panel>
           <Panel value="events">
-            <EmptyState title="Not available yet">The cluster Events view is not implemented in this build.</EmptyState>
+            <EmptyState title={t("Not available yet")}>{t("The cluster Events view is not implemented in this build.")}</EmptyState>
           </Panel>
         </Tabs>
       )}
@@ -211,7 +204,7 @@ function CapacitySection({ ov, metrics }: { ov: ClusterOverview; metrics: boolea
       <div className="flex items-center text-ui">
         <span className="flex-1">{label}</span>
         <span className="font-mono text-fg-secondary">
-          {metrics && c.used !== null ? `used ${c.used} · ` : ""}requested {c.requested} / {c.allocatable} {unit}
+          {metrics && c.used !== null ? t("used {used} · ", { used: c.used }) : ""}{t("requested")}{" "}{c.requested} / {c.allocatable} {unit}
         </span>
       </div>
       <CapacityBar used={metrics ? c.used : null} requested={c.requested} allocatable={c.allocatable} label={`${label} capacity`} />
@@ -219,19 +212,15 @@ function CapacitySection({ ov, metrics }: { ov: ClusterOverview; metrics: boolea
   );
   return (
     <section className="flex flex-col gap-2">
-      <div className="section-label">Capacity · allocatable</div>
+      <div className="section-label">{t("Capacity · allocatable")}</div>
       {row("CPU", ov.cpu, "cores")}
       {row("Memory", ov.memoryGiB, "GiB")}
       <div className="flex gap-3 text-meta text-fg-muted">
         <span className="flex items-center gap-1.5">
-          <i className="h-1.5 w-2.5 rounded-[1px] bg-accent" />
-          used
-        </span>
+          <i className="h-1.5 w-2.5 rounded-[1px] bg-accent" />{t("used")}</span>
         <span className="flex items-center gap-1.5">
-          <i className="h-1.5 w-2.5 rounded-[1px] bg-fg-muted opacity-45" />
-          requested
-        </span>
-        {!metrics && <span>No usage data: metrics.k8s.io is not available</span>}
+          <i className="h-1.5 w-2.5 rounded-[1px] bg-fg-muted opacity-45" />{t("requested")}</span>
+        {!metrics && <span>{t("No usage data: metrics.k8s.io is not available")}</span>}
       </div>
     </section>
   );
@@ -240,7 +229,7 @@ function CapacitySection({ ov, metrics }: { ov: ClusterOverview; metrics: boolea
 function ComponentsSection({ ov }: { ov: ClusterOverview }) {
   return (
     <section className="flex flex-col gap-2">
-      <div className="section-label">Detected components</div>
+      <div className="section-label">{t("Detected components")}</div>
       <dl className="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-2.5 gap-y-[5px] text-ui">
         {ov.components.map((c) => (
           <KV

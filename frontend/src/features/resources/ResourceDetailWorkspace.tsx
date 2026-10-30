@@ -13,6 +13,7 @@ import { useDeploymentDeps, type DeploymentNav } from "@/features/deployments/De
 import { EventsPanel } from "@/features/pods/PodInspector";
 import { kindName } from "./kinds";
 import { SecretKeys } from "./SecretKeys";
+import { t } from "@/i18n";
 
 /** One object in its own tab: the full Deployment inspector, or YAML and events for any other kind. */
 export function ResourceDetailWorkspace({ tab }: { tab: WorkspaceTab; active: boolean }) {
@@ -41,10 +42,10 @@ function DeploymentDetail({ tab }: { tab: WorkspaceTab }) {
   const depsFor = useDeploymentDeps(nav);
   if (!d) {
     return (
-      <EmptyState className="flex-1" icon={<Layers />} title={`${name} · Deployment`}>
+      <EmptyState className="flex-1" icon={<Layers />} title={t("{name} · Deployment", { name })}>
         {ws.clusterById(tab.cluster ?? "")?.connection === "connected"
-          ? `Not found in ${ns || "any namespace"} on ${tab.cluster}. It may have been deleted.`
-          : `Connect ${tab.cluster} to see this Deployment.`}
+          ? t("Not found in {v0} on {cluster}. It may have been deleted.", { v0: ns || "any namespace", cluster: tab.cluster })
+          : t("Connect {cluster} to see this Deployment.", { cluster: tab.cluster })}
       </EmptyState>
     );
   }
@@ -91,9 +92,7 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
   }, [tab.id]);
   if (!backend) {
     return (
-      <EmptyState className="flex-1" icon={<Layers />} title={`${name} · ${kindName(kind)}`}>
-        Object details read the cluster’s API server, so they need the desktop app.
-      </EmptyState>
+      <EmptyState className="flex-1" icon={<Layers />} title={`${name} · ${kindName(kind)}`}>{t("Object details read the cluster’s API server, so they need the desktop app.")}</EmptyState>
     );
   }
   const params = { kind, namespace: ns, name };
@@ -106,9 +105,7 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
             <span className="truncate font-mono text-title font-semibold">{name}</span>
             <div className="flex-1" />
             <Button onClick={() => ws.openView({ kind: "yaml", title: `YAML · ${name}`, cluster: tab.cluster, params: { ...params, mode: "edit" } })}>
-              <Code aria-hidden />
-              Edit YAML
-            </Button>
+              <Code aria-hidden />{t("Edit YAML")}</Button>
           </div>
           <span className="text-meta text-fg-muted">
             {kindName(kind)}
@@ -116,10 +113,10 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
           </span>
         </div>
         <Tabs defaultValue="yaml" className="flex min-h-0 flex-1 flex-col">
-          <TabsList aria-label="Sections" className="mt-1 gap-3 px-4 pt-1.5">
-            {secret && <TabsTrigger value="data">Data</TabsTrigger>}
+          <TabsList aria-label={t("Sections")} className="mt-1 gap-3 px-4 pt-1.5">
+            {secret && <TabsTrigger value="data">{t("Data")}</TabsTrigger>}
             <TabsTrigger value="yaml">YAML</TabsTrigger>
-            <TabsTrigger value="events">Events {events !== null && <TabCount>{events.length}</TabCount>}</TabsTrigger>
+            <TabsTrigger value="events">{t("Events")}{" "}{events !== null && <TabCount>{events.length}</TabCount>}</TabsTrigger>
           </TabsList>
           {secret && (
             <TabsContent value="data" className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -128,17 +125,17 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
           )}
           <TabsContent value="yaml" className="min-h-0 flex-1 overflow-auto">
             {error ? (
-              <EmptyState title="Could not read the object">
+              <EmptyState title={t("Could not read the object")}>
                 <span className="selectable font-mono">{error}</span>
               </EmptyState>
             ) : yaml === null ? (
-              <EmptyState title="Reading…" />
+              <EmptyState title={t("Reading…")} />
             ) : (
               <pre className="selectable m-0 whitespace-pre px-4 py-3 font-mono text-meta leading-5 text-fg">{yaml}</pre>
             )}
           </TabsContent>
           <TabsContent value="events" className="min-h-0 flex-1 overflow-y-auto">
-            {events === null ? <EmptyState title="Reading events…" /> : events.length ? <EventsPanel events={events} /> : <EmptyState title="No recent events" />}
+            {events === null ? <EmptyState title={t("Reading events…")} /> : events.length ? <EventsPanel events={events} /> : <EmptyState title={t("No recent events")} />}
           </TabsContent>
         </Tabs>
       </div>

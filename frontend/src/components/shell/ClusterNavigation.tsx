@@ -33,11 +33,12 @@ import { CountPill } from "@/components/status/ResourceStatus";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { cn } from "@/lib/cn";
 import { modKey } from "@/lib/platform";
+import { t } from "@/i18n";
 
 const envGroups: { env: Environment; label: string }[] = [
-  { env: "prod", label: "Production" },
-  { env: "stg", label: "Staging" },
-  { env: "dev", label: "Development" },
+  { env: "prod", label: t("Production") },
+  { env: "stg", label: t("Staging") },
+  { env: "dev", label: t("Development") },
 ];
 
 export function ClusterNavigation() {
@@ -79,15 +80,15 @@ export function ClusterNavigation() {
 
   return (
     <aside
-      aria-label="Navigation"
+      aria-label={t("Navigation")}
       className="flex w-[220px] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line bg-surface-side px-2 py-2.5 max-[1360px]:w-[196px]"
     >
       <ClusterList />
 
-      <NavSection title={<><span className="section-label">Resources</span><Pin className="size-3.5 text-fg-muted" aria-label="Pinned" /></>}>
-        <NavItem icon={<Network />} label="Overview" active={kind === "clusters"} onClick={() => openView({ kind: "clusters", title: "Clusters" })} trailing={<NavCount>{clusters.length}</NavCount>} />
-        <NavItem icon={<Box />} label="Pods" active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{pods.length}</NavCount></>} />
-        <NavItem icon={<Layers />} label="Deployments" active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })} trailing={real ? count(depsAttention, deps.length, "warning") : <><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
+      <NavSection title={<><span className="section-label">{t("Resources")}</span><Pin className="size-3.5 text-fg-muted" aria-label={t("Pinned")} /></>}>
+        <NavItem icon={<Network />} label={t("Overview")} active={kind === "clusters"} onClick={() => openView({ kind: "clusters", title: "Clusters" })} trailing={<NavCount>{clusters.length}</NavCount>} />
+        <NavItem icon={<Box />} label={t("Pods")} active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{pods.length}</NavCount></>} />
+        <NavItem icon={<Layers />} label={t("Deployments")} active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })} trailing={real ? count(depsAttention, deps.length, "warning") : <><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
         {real && (
           <>
             {list("apps/StatefulSet", <Database />)}
@@ -101,11 +102,11 @@ export function ClusterNavigation() {
         {list("ConfigMap", <FileText />, <NavCount>203</NavCount>)}
         {real && list("Secret", <KeyRound />)}
         {list("Event", <Activity />, <CountPill tone="warning" className="ml-auto">23</CountPill>)}
-        <NavItem icon={<Server />} label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={real ? count(nodesAttention, nodeRows.length, "warning") : <><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
-        <NavItem icon={<LayoutGrid />} label="All resource kinds" onClick={openKinds} trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />
+        <NavItem icon={<Server />} label={t("Nodes")} active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={real ? count(nodesAttention, nodeRows.length, "warning") : <><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
+        <NavItem icon={<LayoutGrid />} label={t("All resource kinds")} onClick={openKinds} trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />
       </NavSection>
 
-      <NavSection title={<span className="section-label">Investigations</span>}>
+      <NavSection title={<span className="section-label">{t("Investigations")}</span>}>
         {investigations.map((inv) =>
           IS_MOCK && inv.id === DEFAULT_INVESTIGATION ? (
             <NavItem key={inv.id} icon={<StatusGlyph health="failed" />} label={inv.title} active={activeTab?.id === inv.id} onClick={() => openTab(inv.id) || openInvestigation(inv.id)} trailing={<NavCount>12m</NavCount>} />
@@ -116,16 +117,16 @@ export function ClusterNavigation() {
               label={inv.title}
               active={activeTab?.id === inv.id}
               onClick={() => openInvestigation(inv.id)}
-              trailing={inv.id === currentInvestigation ? <NavCount className="flex items-center gap-0.5">{pins.length} <Pin className="size-3" aria-label="New pins land here" /></NavCount> : undefined}
+              trailing={inv.id === currentInvestigation ? <NavCount className="flex items-center gap-0.5">{pins.length} <Pin className="size-3" aria-label={t("New pins land here")} /></NavCount> : undefined}
             />
           ),
         )}
-        <NavItem icon={<Plus />} label="New investigation" onClick={newInvestigation} />
+        <NavItem icon={<Plus />} label={t("New investigation")} onClick={newInvestigation} />
       </NavSection>
 
-      <NavSection title={<span className="section-label">Delivery</span>}>
-        <NavItem icon={<LifeBuoy />} label="Helm releases" active={kind === "helm"} onClick={() => openView({ kind: "helm", title: "Helm releases" })} trailing={real ? count(releasesFailed, releases.length, "critical") : <><CountPill tone="critical" className="ml-auto">1</CountPill><NavCount className="ml-1.5">31</NavCount></>} />
-        <NavItem icon={<GitBranch />} label="GitOps" active={kind === "gitops"} onClick={() => openView({ kind: "gitops", title: "GitOps" })} trailing={real ? (drift > 0 ? <CountPill tone="warning" className="ml-auto">{drift} drift</CountPill> : undefined) : <CountPill tone="warning" className="ml-auto">2 drift</CountPill>} />
+      <NavSection title={<span className="section-label">{t("Delivery")}</span>}>
+        <NavItem icon={<LifeBuoy />} label={t("Helm releases")} active={kind === "helm"} onClick={() => openView({ kind: "helm", title: t("Helm releases") })} trailing={real ? count(releasesFailed, releases.length, "critical") : <><CountPill tone="critical" className="ml-auto">1</CountPill><NavCount className="ml-1.5">31</NavCount></>} />
+        <NavItem icon={<GitBranch />} label={t("GitOps")} active={kind === "gitops"} onClick={() => openView({ kind: "gitops", title: "GitOps" })} trailing={real ? (drift > 0 ? <CountPill tone="warning" className="ml-auto">{drift}{" "}{t("drift")}</CountPill> : undefined) : <CountPill tone="warning" className="ml-auto">{t("2 drift")}</CountPill>} />
       </NavSection>
     </aside>
   );
@@ -135,11 +136,11 @@ function ClusterList() {
   const { clusters, selectedClusterIds, toggleCluster } = useWorkspace();
   const selected = new Set(selectedClusterIds);
   return (
-    <section aria-label="Clusters" className="flex flex-col gap-0.5">
+    <section aria-label={t("Clusters")} className="flex flex-col gap-0.5">
       <div className="flex items-center justify-between px-2 pb-1">
-        <span className="section-label">Clusters</span>
+        <span className="section-label">{t("Clusters")}</span>
         <span className="font-mono text-label text-fg-muted">
-          {selected.size} of {clusters.length}
+          {selected.size}{" "}{t("of")}{" "}{clusters.length}
         </span>
       </div>
       {envGroups.map(({ env, label }, i) => {
@@ -151,7 +152,7 @@ function ClusterList() {
             <div className={cn("flex items-center gap-1.5 px-2 pb-0.5 text-meta text-fg-muted", i === 0 ? "pt-1" : "pt-2")}>
               <EnvironmentBadge env={env} />
               <span className="flex-1">{label}</span>
-              {anyProtected && <Lock className="size-3.5 text-env-prod-ink" aria-label="Protected" />}
+              {anyProtected && <Lock className="size-3.5 text-env-prod-ink" aria-label={t("Protected")} />}
             </div>
             {group.map((c) => {
               const on = selected.has(c.id);
@@ -163,7 +164,7 @@ function ClusterList() {
                     on ? "text-fg" : "text-fg-secondary",
                   )}
                 >
-                  <Checkbox checked={on} onCheckedChange={(v) => toggleCluster(c.id, v)} aria-label={`Include ${c.name}`} />
+                  <Checkbox checked={on} onCheckedChange={(v) => toggleCluster(c.id, v)} aria-label={t("Include {name}", { name: c.name })} />
                   <span className="min-w-0 flex-1 truncate">{c.name}</span>
                   <ConnectionDot state={c.connection} />
                 </label>

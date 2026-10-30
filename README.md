@@ -8,6 +8,9 @@ no SaaS backend.
 > your kubeconfig. Opened in a plain browser (Vite dev server), the UI runs on
 > mock data instead and the status bar says `MOCK DATA`.
 
+The interface is in English and Turkish (Settings › Appearance › Language;
+System follows the OS language).
+
 ## Stack
 
 | Layer | Technology |
@@ -126,6 +129,7 @@ frontend/
   src/backend/                Wails client, desktop-mode detection, on-demand data hooks
   src/app/desktop.ts          Snapshot + delta sync and backend actions (desktop mode)
   src/data/                   View-model types and mock data (browser mode)
+  src/i18n/                   t()/tn() and the Turkish strings (tr.ts); English text is the key
   e2e/                        Playwright tests (browser preview and desktop mode with a faked backend)
 ```
 

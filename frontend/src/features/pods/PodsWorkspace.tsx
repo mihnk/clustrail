@@ -46,6 +46,7 @@ import { resourceTab } from "@/features/resources/kinds";
 import { deploymentNameOf, podActions } from "./actions";
 import { podSorter } from "./sort";
 import { cachedCoreRowModel } from "@/lib/rowModel";
+import { t as tt, tn } from "@/i18n";
 
 type HealthFilter = "all" | "attention";
 type OwnerFilter = "any" | "ReplicaSet" | "StatefulSet" | "Job" | "none";
@@ -88,7 +89,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
       if (!c || c.connection === "connecting") continue;
       if (c.connection === "reconnecting" && c.stale) {
         const age = Math.round((Date.now() - c.stale.since) / 1000);
-        out.push({ ...p, health: "unknown" as const, status: `${p.status}?`, reason: `Last update ${age}s ago`, staleSeconds: age });
+        out.push({ ...p, health: "unknown" as const, status: `${p.status}?`, reason: tt("Last update {age}s ago", { age }), staleSeconds: age });
       } else out.push(p);
     }
     return out;
@@ -233,18 +234,18 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   const sortColumn = sortState ? table.getColumn(sortState.id) : undefined;
   const sortNote = sortColumn
     ? sortState?.id === "status" && !sortState.desc
-      ? "Sorted by status · attention first"
-      : `Sorted by ${sortColumn.columnDef.meta?.sortNote ?? sortState?.id} · ${sortState?.desc ? "descending" : "ascending"}`
-    : "Unsorted";
+      ? tt("Sorted by status · attention first")
+      : tt(sortState?.desc ? "Sorted by {column} · descending" : "Sorted by {column} · ascending", { column: sortColumn.columnDef.meta?.sortNote ?? sortState?.id })
+    : tt("Unsorted");
 
   const nsLabel =
     namespaces === null
       ? allNamespaces.length === 0
-        ? "any"
-        : `${allNamespaces.length} selected`
+        ? tt("any")
+        : tt("{n} selected", { n: allNamespaces.length })
       : namespaces.size === 1
         ? ([...namespaces][0] ?? "")
-        : `${namespaces.size} selected`;
+        : tt("{n} selected", { n: namespaces.size });
 
   const toggleNamespace = (ns: string, on: boolean) => {
     const next = new Set(namespaces ?? allNamespaces.map(([n]) => n));
@@ -298,15 +299,15 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           .map((p) => ({
             name: `${p.namespace}/${p.name}`,
             health: p.health,
-            note: p.owner && p.owner.kind !== "Job" ? `recreated by ${p.owner.kind === "ReplicaSet" ? "RS" : p.owner.kind}` : "not replaced",
+            note: p.owner && p.owner.kind !== "Job" ? tt("recreated by {v0}", { v0: p.owner.kind === "ReplicaSet" ? "RS" : p.owner.kind }) : tt("not replaced"),
           })),
       };
     });
     const n = checkedPods.length;
     confirm({
-      title: `Delete ${n} ${n === 1 ? "pod" : "pods"} in ${groups.length} ${groups.length === 1 ? "cluster" : "clusters"}?`,
-      action: "Delete pods",
-      targetName: `${n} pods`,
+      title: tt(groups.length === 1 ? "Delete {n} pods in 1 cluster?" : "Delete {n} pods in {clusters} clusters?", { n, clusters: groups.length }),
+      action: tt("Delete pods"),
+      targetName: tt("{n} pods", { n }),
       icon: <Trash2 />,
       env: groups.some((g) => g.env === "prod") ? "prod" : groups.some((g) => g.env === "stg") ? "stg" : "dev",
       cluster: groups.map((g) => g.cluster).join(", "),
@@ -314,11 +315,11 @@ export function PodsWorkspace({ active }: { active: boolean }) {
       destructive: true,
       targets: groups,
       phrase: `delete ${n} pods`,
-      whatHappens: "Each pod is deleted with its default grace period. Pods owned by a controller are replaced; the others are not.",
+      whatHappens: tt("Each pod is deleted with its default grace period. Pods owned by a controller are replaced; the others are not."),
       command: groups
         .map((g) => `kubectl --context ${g.cluster} delete pod ${g.items.map((i) => i.name.split("/")[1]).join(" ")}`)
         .join(" && "),
-      confirmLabel: `Delete ${n} pods`,
+      confirmLabel: tt("Delete {n} pods", { n }),
       onConfirm: () => {
         checkedPods.forEach((p) => deletePod(p.id));
         setChecked(new Set());
@@ -341,18 +342,18 @@ export function PodsWorkspace({ active }: { active: boolean }) {
         <div className={cn("flex h-12 shrink-0 items-center gap-2.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <Button variant="ghost" className="gap-2 px-1.5 text-fg">
             <Box className="!size-4" aria-hidden />
-            <span className="text-title font-semibold">Pods</span>
+            <span className="text-title font-semibold">{tt("Pods")}</span>
             <ChevronDown className="text-fg-muted" aria-hidden />
           </Button>
-          <Tooltip content={selectedClusters.map((c) => c.name).join(", ") || "No clusters selected"}>
+          <Tooltip content={selectedClusters.map((c) => c.name).join(", ") || tt("No clusters selected")}>
             <span className="flex h-[22px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-line bg-surface-elevated px-2 text-ui text-fg-secondary @[800px]:hidden">
-              {selectedClusters.length} {selectedClusters.length === 1 ? "cluster" : "clusters"}
+              {tt(selectedClusters.length === 1 ? "1 cluster" : "{n} clusters", { n: selectedClusters.length })}
             </span>
           </Tooltip>
           <ClusterPicker open={active && clusterPickerOpen} onOpenChange={setClusterPickerOpen}>
             <button
               type="button"
-              aria-label="Pick clusters"
+              aria-label={tt("Pick clusters")}
               className="focus-ring hidden min-w-0 items-center gap-1.5 overflow-hidden rounded-md border-0 bg-transparent p-0 @[800px]:flex"
             >
               {selectedClusters.map((c) => (
@@ -372,12 +373,12 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           </ClusterPicker>
           <div className="flex-1" />
           <Segmented<ClusterView>
-            aria-label="Cluster view"
+            aria-label={tt("Cluster view")}
             value={view}
             onValueChange={setView}
             options={[
-              { value: "aggregated", label: "Aggregated" },
-              { value: "by-cluster", label: "By cluster" },
+              { value: "aggregated", label: tt("Aggregated") },
+              { value: "by-cluster", label: tt("By cluster") },
             ]}
           />
           <ColumnsMenu
@@ -388,16 +389,16 @@ export function PodsWorkspace({ active }: { active: boolean }) {
               visible: c.getIsVisible(),
               blockedNote:
                 c.id === "node" && inspectorOpen && !grouped
-                  ? "hidden while inspector is open"
+                  ? tt("hidden while inspector is open")
                   : c.id === "cluster" && grouped
-                    ? "shown as groups"
+                    ? tt("shown as groups")
                     : undefined,
             }))}
             onToggle={(id, on) => setUserColumns((v) => ({ ...v, [id]: on }))}
           />
           <span className="flex items-center gap-1.5 whitespace-nowrap text-ui text-fg-secondary">
             <ConnectionDot state={allConnected ? "connected" : "reconnecting"} />
-            {allConnected ? "Live" : "Partial"}
+            {allConnected ? tt("Live") : tt("Partial")}
           </span>
         </div>
 
@@ -406,7 +407,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
           <label className="flex h-7 w-[150px] shrink-0 items-center @[760px]:w-[180px] @[960px]:w-[210px] gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-fg-muted focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
             <Search className="size-3.5 shrink-0" aria-hidden />
-            <span className="sr-only">Filter pods</span>
+            <span className="sr-only">{tt("Filter pods")}</span>
             <input
               ref={searchRef}
               value={query}
@@ -417,7 +418,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
                   else e.currentTarget.blur();
                 }
               }}
-              placeholder="Filter name, label, node…"
+              placeholder={tt("Filter name, label, node…")}
               spellCheck={false}
               className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
             />
@@ -429,7 +430,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
               <FilterToken k="namespace" value={nsLabel} active={namespaces !== null} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Namespaces</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Namespaces")}</DropdownMenuLabel>
               {allNamespaces.map(([ns, count]) => (
                 <DropdownMenuCheckboxItem
                   key={ns}
@@ -442,7 +443,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
                 </DropdownMenuCheckboxItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setNamespaces(null)}>Select all</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setNamespaces(null)}>{tt("Select all")}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -450,20 +451,20 @@ export function PodsWorkspace({ active }: { active: boolean }) {
             <DropdownMenuTrigger asChild>
               <FilterToken
                 k="owner"
-                value={owner}
+                value={owner === "any" ? tt("any") : owner === "none" ? tt("none") : owner}
                 active={owner !== "any"}
                 // An inactive owner filter makes room for label filters on narrow widths.
                 className={owner === "any" && labelFilters.length > 0 ? "hidden @[960px]:flex" : undefined}
               />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Owner kind</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Owner kind")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={owner} onValueChange={(v) => setOwner(v as OwnerFilter)}>
-                <DropdownMenuRadioItem value="any">any</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="ReplicaSet">ReplicaSet</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="StatefulSet">StatefulSet</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="Job">Job</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="none">none</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="any">{tt("any")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="ReplicaSet">{tt("ReplicaSet")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="StatefulSet">{tt("StatefulSet")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="Job">{tt("Job")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="none">{tt("none")}</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -483,12 +484,10 @@ export function PodsWorkspace({ active }: { active: boolean }) {
                 type="button"
                 className="focus-ring hidden h-[26px] items-center gap-1.5 whitespace-nowrap rounded-md border border-dashed border-line-strong bg-transparent px-2 text-ui text-fg-secondary @[760px]:flex"
               >
-                <Plus className="size-3.5" aria-hidden />
-                Filter
-              </button>
+                <Plus className="size-3.5" aria-hidden />{tt("Filter")}</button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-72">
-              <DropdownMenuLabel>Label</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Label")}</DropdownMenuLabel>
               {labelSuggestions.map(([l, count]) => (
                 <DropdownMenuCheckboxItem
                   key={l}
@@ -502,26 +501,23 @@ export function PodsWorkspace({ active }: { active: boolean }) {
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => searchRef.current?.focus()}>
                 <Search aria-hidden />
-                <span>
-                  Type <span className="font-mono text-ui">label:key=value</span> or <span className="font-mono text-ui">ns:</span>…
-                </span>
+                <span>{tn("Type {v0} or {v1}…", { v0: <span className="font-mono text-ui">label:key=value</span>, v1: <span className="font-mono text-ui">ns:</span> })}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           </div>
           <Segmented<HealthFilter>
-            aria-label="Health"
+            aria-label={tt("Health")}
             value={health}
             onValueChange={setHealth}
             options={[
-              { value: "all", label: <>All <span className="font-mono text-fg-muted">{baseRows.length}</span></> },
+              { value: "all", label: <>{tt("All")}{" "}<span className="font-mono text-fg-muted">{baseRows.length}</span></> },
               {
                 value: "attention",
                 label: (
                   <>
-                    <StatusGlyph health="failed" />
-                    Attention <span className="font-mono">{attentionCount}</span>
+                    <StatusGlyph health="failed" />{tt("Attention")}{" "}<span className="font-mono">{attentionCount}</span>
                   </>
                 ),
               },
@@ -534,7 +530,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
 
         <ResourceTable
           table={table}
-          aria-label="Pods"
+          aria-label={tt("Pods")}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
           onSelect={(id) => {
@@ -558,63 +554,56 @@ export function PodsWorkspace({ active }: { active: boolean }) {
                 ))}
               </div>
             ) : listing.length > 0 ? null : selectedClusters.length === 0 ? (
-              <EmptyState title="No clusters selected">Pick clusters in the sidebar or with {"⌘⇧C"}.</EmptyState>
+              <EmptyState title={tt("No clusters selected")}>{tt("Pick clusters in the sidebar or with {v0}.", { v0: "⌘⇧C" })}</EmptyState>
             ) : activeFilters.length > 0 ? (
-              <EmptyState icon={<SearchX />} title="No pods match these filters" action={<Button onClick={clearFilters}>Clear filters</Button>}>
-                {activeFilters.join(" · ")} · {selectedClusters.length} {selectedClusters.length === 1 ? "cluster" : "clusters"}
+              <EmptyState icon={<SearchX />} title={tt("No pods match these filters")} action={<Button onClick={clearFilters}>{tt("Clear filters")}</Button>}>
+                {activeFilters.join(" · ")} · {tt(selectedClusters.length === 1 ? "1 cluster" : "{n} clusters", { n: selectedClusters.length })}
               </EmptyState>
             ) : (
-              <EmptyState title="No pods">There are no pods in the selected clusters.</EmptyState>
+              <EmptyState title={tt("No pods")}>{tt("There are no pods in the selected clusters.")}</EmptyState>
             )
           }
         />
 
         {checked.size > 0 && (
           <div className="flex h-11 shrink-0 items-center gap-2 border-t border-line-selected bg-accent-soft pl-3.5 pr-3">
-            <b className="text-cell font-semibold">{checked.size} selected</b>
+            <b className="text-cell font-semibold">{checked.size}{" "}{tt("selected")}</b>
             <span className="text-meta text-fg-muted">
-              {new Set(checkedPods.map((p) => p.cluster)).size} clusters
-            </span>
+              {new Set(checkedPods.map((p) => p.cluster)).size}{" "}{tt("clusters")}</span>
             <div className="flex-1" />
-            <Button size="sm" disabled title="The Logs workspace opens for several pods once it is implemented.">
-              <ScrollText aria-hidden />
-              Logs
-            </Button>
+            <Button size="sm" disabled title={tt("The Logs workspace opens for several pods once it is implemented.")}>
+              <ScrollText aria-hidden />{tt("Logs")}</Button>
             <Button
               size="sm"
               variant={checkedPods.some((p) => clusterById(p.cluster)?.protected) ? "locked" : "default"}
               disabled={checkedPods.some((p) => clusterById(p.cluster)?.readOnly || p.staleSeconds !== undefined)}
               onClick={bulkDelete}
             >
-              {checkedPods.some((p) => clusterById(p.cluster)?.protected) ? <Lock aria-hidden /> : <Trash2 aria-hidden />}
-              Delete…
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setChecked(new Set())}>
-              Clear
-            </Button>
+              {checkedPods.some((p) => clusterById(p.cluster)?.protected) ? <Lock aria-hidden /> : <Trash2 aria-hidden />}{tt("Delete…")}</Button>
+            <Button size="sm" variant="ghost" onClick={() => setChecked(new Set())}>{tt("Clear")}</Button>
           </div>
         )}
 
         <div className={cn("flex h-7 shrink-0 items-center gap-3.5 border-t border-line px-3.5 text-meta text-fg-muted", BAR)}>
           <span>
-            <span className="text-fg">{rows.length}</span> {filtered ? "pods match" : "pods"}
+            <span className="text-fg">{rows.length}</span> {filtered ? tt("pods match") : "pods"}
           </span>
-          {attentionCount > 0 && <span className="text-status-critical">{attentionCount} need attention</span>}
-          <span className="truncate">{grouped ? "Grouped by cluster · Cluster column replaced by Node" : sortNote}</span>
-          {selectedHiddenByFilters && inspectorOpen && <span className="text-status-warning">Selected pod is hidden by filters</span>}
+          {attentionCount > 0 && <span className="text-status-critical">{tt("{attentionCount} need attention", { attentionCount })}</span>}
+          <span className="truncate">{grouped ? tt("Grouped by cluster · Cluster column replaced by Node") : sortNote}</span>
+          {selectedHiddenByFilters && inspectorOpen && <span className="text-status-warning">{tt("Selected pod is hidden by filters")}</span>}
           <div className="flex-1" />
           {autoHidden.length > 0 ? (
-            <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>
+            <span className="truncate">{tt("{v0} hidden at this width", { v0: autoHidden.join(", ") })}</span>
           ) : (
             !grouped &&
             inspectorOpen &&
-            userColumns.node !== false && <span>Node column hidden while inspector is open</span>
+            userColumns.node !== false && <span>{tt("Node column hidden while inspector is open")}</span>
           )}
         </div>
       </main>
 
       {inspectorOpen && detail && (
-        <InspectorPanel label="Pod inspector" storageKey="pods" active={active}>
+        <InspectorPanel label={tt("Pod inspector")} storageKey="pods" active={active}>
           <PodInspector
             detail={detail}
             cluster={clusterById(detail.pod.cluster)}
@@ -642,12 +631,12 @@ function ColumnsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <IconButton aria-label="Columns">
+        <IconButton aria-label={tt("Columns")}>
           <Columns3 />
         </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Columns</DropdownMenuLabel>
+        <DropdownMenuLabel>{tt("Columns")}</DropdownMenuLabel>
         {columns.map((c) => (
           <DropdownMenuCheckboxItem
             key={c.id}

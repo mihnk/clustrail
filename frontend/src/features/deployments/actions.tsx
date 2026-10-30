@@ -9,6 +9,7 @@ import {
   pauseDeploymentRequest,
   restartDeploymentRequest,
 } from "./requests";
+import { t } from "@/i18n";
 
 export interface DeploymentActionDeps {
   cluster: Cluster | undefined;
@@ -27,13 +28,13 @@ export interface DeploymentActionDeps {
 export function deploymentActions(d: DeploymentRow, deps: DeploymentActionDeps): ResourceAction[] {
   const paused = d.rollout === "Paused";
   return [
-    { id: "history", group: "observe", label: "Rollout history", icon: <History />, shortcut: "H", onSelect: deps.showHistory },
-    { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", onSelect: () => deps.openYaml(false) },
-    { id: "compare", group: "observe", label: "Compare with…", icon: <ArrowLeftRight />, shortcut: "C", onSelect: deps.compare },
+    { id: "history", group: "observe", label: t("Rollout history"), icon: <History />, shortcut: "H", onSelect: deps.showHistory },
+    { id: "yaml", group: "observe", label: t("View YAML"), icon: <Code />, shortcut: "Y", onSelect: () => deps.openYaml(false) },
+    { id: "compare", group: "observe", label: t("Compare with…"), icon: <ArrowLeftRight />, shortcut: "C", onSelect: deps.compare },
     {
       id: "forward",
       group: "observe",
-      label: "Port forward…",
+      label: t("Port forward…"),
       icon: <Cable />,
       disabled: !backend || d.readyReplicas === 0,
       onSelect: () => openPortForward({ cluster: d.cluster, namespace: d.namespace, kind: "Deployment", name: d.name }),
@@ -41,7 +42,7 @@ export function deploymentActions(d: DeploymentRow, deps: DeploymentActionDeps):
     {
       id: "scale",
       group: "modify",
-      label: d.hpa ? "Scale… · HPA" : "Scale…",
+      label: d.hpa ? t("Scale… · HPA") : t("Scale…"),
       icon: <Scaling />,
       shortcut: "⇧S",
       onSelect: deps.focusScale,
@@ -49,27 +50,27 @@ export function deploymentActions(d: DeploymentRow, deps: DeploymentActionDeps):
     {
       id: "restart",
       group: "modify",
-      label: "Restart rollout…",
+      label: t("Restart rollout…"),
       icon: <RotateCcw />,
       shortcut: "⇧R",
       disabled: d.rollout === "Progressing",
       onSelect: () => deps.confirm(restartDeploymentRequest(d, deps.cluster, () => deps.restartDeployment(d.id))),
     },
-    { id: "rollback", group: "modify", label: "Roll back to revision…", icon: <History />, onSelect: deps.showHistory },
+    { id: "rollback", group: "modify", label: t("Roll back to revision…"), icon: <History />, onSelect: deps.showHistory },
     {
       id: "pause",
       group: "modify",
-      label: paused ? "Resume rollout" : "Pause rollout",
+      label: paused ? t("Resume rollout") : t("Pause rollout"),
       icon: paused ? <Play /> : <Pause />,
       onSelect: () =>
         deps.confirm(pauseDeploymentRequest(d, deps.cluster, !paused, () => deps.setDeploymentPaused(d.id, !paused))),
     },
-    { id: "edit", group: "modify", label: "Edit YAML…", icon: <Code />, shortcut: "E", onSelect: () => deps.openYaml(true) },
+    { id: "edit", group: "modify", label: t("Edit YAML…"), icon: <Code />, shortcut: "E", onSelect: () => deps.openYaml(true) },
     {
       id: "delete",
       group: "modify",
       danger: true,
-      label: "Delete…",
+      label: t("Delete…"),
       icon: <Trash2 />,
       shortcut: "⌘⌫",
       onSelect: () => deps.confirm(deleteDeploymentRequest(d, deps.cluster, () => deps.deleteDeployment(d.id))),

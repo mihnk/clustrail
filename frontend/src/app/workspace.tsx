@@ -14,6 +14,7 @@ import { readPreference, useMediaQuery, usePersistentState, writePreference, typ
 import { backend, type ClusterList } from "@/backend/client";
 import { useDesktopWorkspace } from "./desktop";
 import { resourceTab } from "@/features/resources/kinds";
+import { t as tt } from "@/i18n";
 
 export type WorkspaceTabKind =
   | "clusters"
@@ -48,8 +49,8 @@ const SAVED_TABS = "workspace.desktop.tabs";
 /** Tabs that reopen on launch. Streams (Logs, Shell) and unsaved drafts (Create) start fresh. */
 const RESTORABLE: WorkspaceTabKind[] = ["clusters", "pods", "deployments", "nodes", "helm", "gitops", "connections", "settings", "list", "yaml", "investigation", "compare"];
 const DEFAULT_TABS: WorkspaceTab[] = [
-  { id: "clusters", kind: "clusters", title: "Clusters" },
-  { id: "pods", kind: "pods", title: "Pods" },
+  { id: "clusters", kind: "clusters", title: tt("Clusters") },
+  { id: "pods", kind: "pods", title: tt("Pods") },
 ];
 
 function launchTabs(): { tabs: WorkspaceTab[]; active: string } {
@@ -210,21 +211,21 @@ export const SYSTEM_NAMESPACES = ["kube-system", "kube-public", "kube-node-lease
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
 const initialTabs: WorkspaceTab[] = [
-  { id: "pods", kind: "pods", title: "Pods" },
+  { id: "pods", kind: "pods", title: tt("Pods") },
   resourceTab("prod-eu-west-1", "Deployment", "payments", "checkout-api"),
-  { id: "inv-checkout-api", kind: "investigation", title: "Investigation · checkout-api" },
-  { id: "shell", kind: "shell", title: "Shell · 9rkzd", cluster: "prod-eu-west-1" },
+  { id: "inv-checkout-api", kind: "investigation", title: tt("Investigation · checkout-api") },
+  { id: "shell", kind: "shell", title: tt("Shell · 9rkzd"), cluster: "prod-eu-west-1" },
   {
     id: "yaml-checkout-api",
     kind: "yaml",
-    title: "YAML · checkout-api",
+    title: tt("YAML · checkout-api"),
     cluster: "prod-eu-west-1",
     params: { kind: "Deployment", namespace: "payments", name: "checkout-api" },
   },
   {
     id: "deployments-prod-eu-west-1",
     kind: "deployments",
-    title: "Deployments",
+    title: tt("Deployments"),
     cluster: "prod-eu-west-1",
     params: { namespace: "payments" },
   },
@@ -308,17 +309,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (c.connection === "unreachable") {
           // The API server is still down: same error, newer attempt.
           patchCluster(id, { connection: "unreachable", error: c.error });
-          toast.show({ kind: "error", title: "Still unreachable", target: c.name, detail: c.error, copyText: c.error });
+          toast.show({ kind: "error", title: tt("Still unreachable"), target: c.name, detail: c.error, copyText: c.error });
           return;
         }
         patchCluster(id, {
           connection: "connected",
           latencyMs: 20 + Math.round(Math.random() * 30),
-          summary: c.summary ?? (c.env === "dev" ? "k3s 1.29 · dev.acme.internal" : "GKE 1.31 · europe-west4"),
+          summary: c.summary ?? (c.env === "dev" ? tt("k3s 1.29 · dev.acme.internal") : tt("GKE 1.31 · europe-west4")),
           authHint: undefined,
           lastConnected: "now",
         });
-        toast.show({ kind: "success", title: "Connected", target: c.name, env: c.env });
+        toast.show({ kind: "success", title: tt("Connected"), target: c.name, env: c.env });
       });
     },
     [clusters, later, patchCluster, toast],
@@ -344,8 +345,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     (c: Cluster) => {
       setClusters((cs) => [...cs, { ...c, connection: "connecting" }]);
       later(1500, () => {
-        patchCluster(c.id, { connection: "connected", latencyMs: 58, summary: "GKE 1.31 · europe-west4", version: "v1.31.2", identity: "edit", lastConnected: "now" });
-        toast.show({ kind: "success", title: "Connected", target: c.name, env: c.env });
+        patchCluster(c.id, { connection: "connected", latencyMs: 58, summary: tt("GKE 1.31 · europe-west4"), version: "v1.31.2", identity: "edit", lastConnected: "now" });
+        toast.show({ kind: "success", title: tt("Connected"), target: c.name, env: c.env });
       });
     },
     [later, patchCluster, toast],
@@ -388,9 +389,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       const pod = allPods.find((p) => p.id === id);
       setAllPods((ps) =>
-        ps.map((p) => (p.id === id ? { ...p, health: "terminating", status: "Terminating", reason: "Terminating (deleted)" } : p)),
+        ps.map((p) => (p.id === id ? { ...p, health: "terminating", status: "Terminating", reason: tt("Terminating (deleted)") } : p)),
       );
-      if (pod) toast.show({ kind: "success", title: "Pod deleted", target: `${pod.name} · ${pod.cluster}`, env: pod.env });
+      if (pod) toast.show({ kind: "success", title: tt("Pod deleted"), target: `${pod.name} · ${pod.cluster}`, env: pod.env });
       // After the grace period the pod is gone; a controller-owned pod gets a replacement.
       later(3000, () =>
         setAllPods((ps) => {
@@ -406,7 +407,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
               name,
               health: "progressing",
               status: "Creating",
-              reason: "ContainerCreating",
+              reason: tt("ContainerCreating"),
               readyContainers: 0,
               restarts: 0,
               cpuMilli: null,
@@ -427,25 +428,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setDeployments((ds) =>
         ds.map((d) =>
           d.id === id
-            ? { ...d, health: "progressing", status: "Progressing", rollout: "Progressing", reason: "Rolling out: pod template restartedAt changed", updatedReplicas: 0 }
+            ? { ...d, health: "progressing", status: "Progressing", rollout: "Progressing", reason: tt("Rolling out: pod template restartedAt changed"), updatedReplicas: 0 }
             : d,
         ),
       );
       const tid = toast.show({
         kind: "progress",
-        title: "Restarting rollout",
+        title: tt("Restarting rollout"),
         target: `${before.name} · ${before.cluster}`,
         env: before.env,
         progress: 0.1,
-        detail: `0 of ${before.replicas} pods replaced`,
+        detail: tt("0 of {replicas} pods replaced", { replicas: before.replicas }),
       });
       later(2000, () =>
-        toast.update(tid, { progress: 0.55, detail: `${Math.ceil(before.replicas / 2)} of ${before.replicas} pods replaced` }),
+        toast.update(tid, { progress: 0.55, detail: tt("{v0} of {replicas} pods replaced", { v0: Math.ceil(before.replicas / 2), replicas: before.replicas }) }),
       );
       // The rollout finishes; the Deployment returns to whatever state its pods produce.
       later(4000, () => {
         setDeployments((ds) => ds.map((d) => (d.id === id ? before : d)));
-        toast.update(tid, { kind: "success", title: "Rollout restarted", progress: undefined, detail: undefined });
+        toast.update(tid, { kind: "success", title: tt("Rollout restarted"), progress: undefined, detail: undefined });
       });
     },
     [deployments, later, toast],
@@ -460,7 +461,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     (id: string, replicas: number) => {
       const d = deployments.find((x) => x.id === id);
       if (!d) return;
-      patchDeployment(id, { replicas, rollout: "Progressing", health: "progressing", reason: `Scaling to ${replicas}` });
+      patchDeployment(id, { replicas, rollout: "Progressing", health: "progressing", reason: tt("Scaling to {replicas}", { replicas }) });
       later(2500, () => {
         const ready = Math.min(replicas, d.readyReplicas + Math.max(0, replicas - d.replicas));
         patchDeployment(id, {
@@ -470,14 +471,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           updatedReplicas: replicas,
           ...(ready < replicas
             ? { health: "failed" as const, status: "Degraded", rollout: "Degraded", reason: d.reason }
-            : { health: "healthy" as const, status: "Available", rollout: "Complete", reason: "Available, rollout complete" }),
+            : { health: "healthy" as const, status: "Available", rollout: "Complete", reason: tt("Available, rollout complete") }),
         });
         // With an HPA, the controller sets replicas back within its range.
         if (d.hpa && (replicas < d.hpa.min || replicas > d.hpa.max)) {
           later(3000, () => patchDeployment(id, { replicas: d.replicas }));
-          toast.show({ kind: "error", title: "Scale overridden by HPA", target: `${d.name} · ${d.cluster}`, detail: `HPA ${d.hpa.name} keeps replicas between ${d.hpa.min} and ${d.hpa.max}.` });
+          toast.show({ kind: "error", title: tt("Scale overridden by HPA"), target: `${d.name} · ${d.cluster}`, detail: tt("HPA {name} keeps replicas between {min} and {max}.", { name: d.hpa.name, min: d.hpa.min, max: d.hpa.max }) });
         } else {
-          toast.show({ kind: "success", title: `Scaled to ${replicas}`, target: `${d.name} · ${d.cluster}`, env: d.env });
+          toast.show({ kind: "success", title: tt("Scaled to {replicas}", { replicas }), target: `${d.name} · ${d.cluster}`, env: d.env });
         }
       });
     },
@@ -493,13 +494,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       patchDeployment(id, {
         health: "progressing",
         rollout: "Progressing",
-        reason: `Rolling back to revision ${rev}`,
+        reason: tt("Rolling back to revision {rev}", { rev }),
         image: target.image,
         updatedReplicas: 0,
         revisions: [{ ...target, rev: next, age: "now" }, ...d.revisions.filter((r) => r.rev !== rev)],
       });
       later(4000, () => patchDeployment(id, { updatedReplicas: d.replicas, rollout: d.readyReplicas < d.replicas ? "Degraded" : "Complete", health: d.health, reason: d.reason }));
-      toast.show({ kind: "success", title: `Rolled back to revision ${rev}`, target: `${d.name} · ${d.cluster}`, env: d.env });
+      toast.show({ kind: "success", title: tt("Rolled back to revision {rev}", { rev }), target: `${d.name} · ${d.cluster}`, env: d.env });
     },
     [deployments, later, patchDeployment, toast],
   );
@@ -517,12 +518,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         revision: next,
         updatedSeconds: 0,
         history: [
-          { ...target, rev: next, status: "pending-rollback", updatedSeconds: 0, description: `Rollback to ${rev}` },
+          { ...target, rev: next, status: "pending-rollback", updatedSeconds: 0, description: tt("Rollback to {rev}", { rev }) },
           ...r.history.map((h) => (h.status === "deployed" ? { ...h, status: "superseded" as const } : h)),
         ],
       });
       const jobId = `helm-${id}-${next}`;
-      setJobs((js) => [...js, { id: jobId, title: `Rolling back ${r.name}`, progress: 0.3, detail: `waiting for resources · ${r.cluster}` }]);
+      setJobs((js) => [...js, { id: jobId, title: tt("Rolling back {name}", { name: r.name }), progress: 0.3, detail: tt("waiting for resources · {cluster}", { cluster: r.cluster }) }]);
       later(3500, () => {
         setJobs((js) => js.filter((j) => j.id !== jobId));
         setHelmReleases((rs) =>
@@ -535,11 +536,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                   health: "healthy",
                   chartVersion: target.chartVersion,
                   appVersion: target.appVersion,
-                  history: x.history.map((h) => (h.rev === next ? { ...h, status: "deployed", description: `Rollback to ${rev}` } : h)),
+                  history: x.history.map((h) => (h.rev === next ? { ...h, status: "deployed", description: tt("Rollback to {rev}", { rev }) } : h)),
                 },
           ),
         );
-        toast.show({ kind: "success", title: `Rolled back to revision ${rev}`, target: `${r.name} · ${r.cluster}`, env: r.env, detail: `now revision ${next}` });
+        toast.show({ kind: "success", title: tt("Rolled back to revision {rev}", { rev }), target: `${r.name} · ${r.cluster}`, env: r.env, detail: tt("now revision {next}", { next }) });
       });
     },
     [helmReleases, later, toast],
@@ -562,7 +563,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const o = gitops.find((x) => x.id === id);
       if (!o) return;
       patchGitOps(id, { reconciledSeconds: 0 });
-      toast.show({ kind: "success", title: o.tool === "Argo CD" ? "Refresh requested" : "Reconcile requested", target: `${o.name} · ${o.cluster}`, env: o.env });
+      toast.show({ kind: "success", title: o.tool === "Argo CD" ? tt("Refresh requested") : tt("Reconcile requested"), target: `${o.name} · ${o.cluster}`, env: o.env });
     },
     [gitops, patchGitOps, toast],
   );
@@ -574,8 +575,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       patchGitOps(id, { appHealth: "Progressing", reconciledSeconds: 0 });
       later(2500, () => {
         if (o.error) {
-          patchGitOps(id, (cur) => ({ appHealth: o.appHealth, sync: "Failed", conditions: [{ type: "Ready=False", message: "ReconciliationFailed", at: new Date().toLocaleTimeString([], { hour12: false }) }, ...cur.conditions.slice(1)] }));
-          toast.show({ kind: "error", title: "Reconciliation failed", target: `${o.name} · ${o.cluster}`, env: o.env, detail: o.error, copyText: o.error });
+          patchGitOps(id, (cur) => ({ appHealth: o.appHealth, sync: "Failed", conditions: [{ type: "Ready=False", message: tt("ReconciliationFailed"), at: new Date().toLocaleTimeString([], { hour12: false }) }, ...cur.conditions.slice(1)] }));
+          toast.show({ kind: "error", title: tt("Reconciliation failed"), target: `${o.name} · ${o.cluster}`, env: o.env, detail: o.error, copyText: o.error });
           return;
         }
         patchGitOps(id, (cur) => ({
@@ -583,9 +584,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           appHealth: cur.appHealth === "Progressing" ? (o.appHealth === "Progressing" ? "Healthy" : o.appHealth) : cur.appHealth,
           drift: [],
           resources: cur.resources.map((r) => ({ ...r, status: "Synced" })),
-          history: [{ revision: cur.revision, at: "now", message: `Sync to ${cur.revision} (from Clustrail)` }, ...cur.history],
+          history: [{ revision: cur.revision, at: "now", message: tt("Sync to {revision} (from Clustrail)", { revision: cur.revision }) }, ...cur.history],
         }));
-        toast.show({ kind: "success", title: o.tool === "Argo CD" ? "Synced" : "Reconciled", target: `${o.name} · ${o.cluster}`, env: o.env, detail: `revision ${o.revision}` });
+        toast.show({ kind: "success", title: o.tool === "Argo CD" ? tt("Synced") : tt("Reconciled"), target: `${o.name} · ${o.cluster}`, env: o.env, detail: `revision ${o.revision}` });
       });
     },
     [gitops, later, patchGitOps, toast],
@@ -609,7 +610,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                   ...n,
                   health: n.health === "healthy" ? "cordoned" : n.health,
                   status: n.health === "healthy" ? "Cordoned" : n.status,
-                  reason: "Ready, SchedulingDisabled",
+                  reason: tt("Ready, SchedulingDisabled"),
                   cordonedBy: "you in Clustrail",
                   cordonedAgo: "now",
                   taints: [...n.taints.filter((t) => t.key !== "node.kubernetes.io/unschedulable"), { key: "node.kubernetes.io/unschedulable", effect: "NoSchedule" }],
@@ -618,7 +619,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                   ...n,
                   health: n.health === "cordoned" ? "healthy" : n.health,
                   status: n.health === "cordoned" ? "Ready" : n.status,
-                  reason: n.health === "cordoned" ? "Ready=True" : n.reason,
+                  reason: n.health === "cordoned" ? tt("Ready=True") : n.reason,
                   cordonedBy: undefined,
                   cordonedAgo: undefined,
                   taints: n.taints.filter((t) => t.key !== "node.kubernetes.io/unschedulable"),
@@ -626,7 +627,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         ),
       );
       const n = nodes.find((x) => x.id === id);
-      if (n) toast.show({ kind: "success", title: cordoned ? "Node cordoned" : "Node uncordoned", target: `${n.name.split(".")[0]} · ${n.cluster}`, env: n.env });
+      if (n) toast.show({ kind: "success", title: cordoned ? tt("Node cordoned") : tt("Node uncordoned"), target: `${n.name.split(".")[0]} · ${n.cluster}`, env: n.env });
     },
     [nodes, toast],
   );
@@ -650,7 +651,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         `${evicted} of ${total} evicted${blocked ? ` · ${blocked} waiting on PDB` : ""} · ${Math.max(0, opts.timeoutSec - elapsed)}s left`;
       const tid = toast.show({
         kind: "progress",
-        title: `Draining ${short}`,
+        title: tt("Draining {short}", { short }),
         env: n.env,
         progress: 0,
         detail: detail(),
@@ -658,13 +659,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           cancelled = true;
         },
       });
-      setJobs((js) => [...js, { id: jobId, title: `Draining ${short}`, progress: 0, detail: detail() }]);
+      setJobs((js) => [...js, { id: jobId, title: tt("Draining {short}", { short }), progress: 0, detail: detail() }]);
       const step = setInterval(() => {
         elapsed += 1;
         if (cancelled) {
           clearInterval(step);
           setJobs((js) => js.filter((j) => j.id !== jobId));
-          toast.update(tid, { kind: "error", title: `Drain cancelled · ${short}`, progress: undefined, onCancel: undefined, detail: `${evicted} pods evicted. The node stays cordoned.` });
+          toast.update(tid, { kind: "error", title: tt("Drain cancelled · {short}", { short }), progress: undefined, onCancel: undefined, detail: tt("{evicted} pods evicted. The node stays cordoned.", { evicted }) });
           return;
         }
         evicted = Math.min(evictable, evicted + 2);
@@ -679,8 +680,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           toast.update(
             tid,
             blocked
-              ? { kind: "error", title: `Drain incomplete · ${short}`, progress: undefined, onCancel: undefined, detail: `${blocked} pods still blocked by PodDisruptionBudget checkout-api after the timeout. The node stays cordoned.`, copyText: `kubectl --context ${n.cluster} get pdb -A` }
-              : { kind: "success", title: `Drained ${short}`, progress: undefined, onCancel: undefined, detail: `${evicted} pods evicted` },
+              ? { kind: "error", title: tt("Drain incomplete · {short}", { short }), progress: undefined, onCancel: undefined, detail: tt("{blocked} pods still blocked by PodDisruptionBudget checkout-api after the timeout. The node stays cordoned.", { blocked }), copyText: `kubectl --context ${n.cluster} get pdb -A` }
+              : { kind: "success", title: tt("Drained {short}", { short }), progress: undefined, onCancel: undefined, detail: tt("{evicted} pods evicted", { evicted }) },
           );
         }
       }, 1000);
@@ -705,7 +706,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setDeployments((ds) =>
           ds.map((d) =>
             d.name === "cart-web" && d.cluster === "prod-us-east-1"
-              ? { ...d, updatedReplicas: d.replicas, health: "healthy", status: "Available", rollout: "Complete", reason: "Available, rollout complete" }
+              ? { ...d, updatedReplicas: d.replicas, health: "healthy", status: "Available", rollout: "Complete", reason: tt("Available, rollout complete") }
               : d,
           ),
         ),
@@ -801,7 +802,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       pinToInvestigation: (pin) => {
         setPins([...pins, { ...pin, id: `${Date.now()}`, at: new Date().toISOString() }]);
         const info = investigations.find((i) => i.id === current) ?? investigations[0]!;
-        toast.show({ kind: "success", title: "Pinned to investigation", target: info.title, action: { label: "Open investigation", onClick: () => openInvestigation(info.id) } });
+        toast.show({ kind: "success", title: tt("Pinned to investigation"), target: info.title, action: { label: tt("Open investigation"), onClick: () => openInvestigation(info.id) } });
       },
       investigations,
       currentInvestigation: current,
@@ -841,13 +842,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         patchDeployment(
           id,
           paused
-            ? { health: "paused", rollout: "Paused", reason: "spec.paused=true" }
-            : { health: "healthy", rollout: "Complete", reason: "Available, rollout complete" },
+            ? { health: "paused", rollout: "Paused", reason: tt("spec.paused=true") }
+            : { health: "healthy", rollout: "Complete", reason: tt("Available, rollout complete") },
         ),
       deleteDeployment: (id) => {
         const d = deployments.find((x) => x.id === id);
         setDeployments((ds) => ds.filter((x) => x.id !== id));
-        if (d) toast.show({ kind: "success", title: "Deployment deleted", target: `${d.name} · ${d.cluster}`, env: d.env });
+        if (d) toast.show({ kind: "success", title: tt("Deployment deleted"), target: `${d.name} · ${d.cluster}`, env: d.env });
       },
       scenarios,
       setScenario: (key, on) => setScenarios((s) => ({ ...s, [key]: on })),

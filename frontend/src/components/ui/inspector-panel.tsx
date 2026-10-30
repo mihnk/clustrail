@@ -4,6 +4,7 @@ import { usePersistentState } from "@/app/preferences";
 import { isMac } from "@/lib/platform";
 import { ResizeHandle } from "./resize-handle";
 import { Tooltip } from "./tooltip";
+import { t } from "@/i18n";
 
 const MIN = 320;
 const MAX = 640;
@@ -48,11 +49,11 @@ export function InspectorPanel({
 
   if (collapsed) {
     return (
-      <aside aria-label={`${label} (collapsed)`} className="flex w-7 shrink-0 flex-col items-center border-l border-line bg-surface-panel pt-2">
+      <aside aria-label={t("{label} (collapsed)", { label })} className="flex w-7 shrink-0 flex-col items-center border-l border-line bg-surface-panel pt-2">
         <Tooltip content={`Show ${label.toLowerCase()} (${isMac ? "⌘" : "Ctrl+"}\\)`} side="left">
           <button
             type="button"
-            aria-label={`Show ${label.toLowerCase()}`}
+            aria-label={t("Show {v0}", { v0: label.toLowerCase() })}
             onClick={() => setCollapsed(false)}
             className="focus-ring flex size-6 items-center justify-center rounded-md border-0 bg-transparent text-fg-muted hover:bg-surface-hover hover:text-fg"
           >
@@ -70,7 +71,7 @@ export function InspectorPanel({
       className="relative flex shrink-0 flex-col overflow-hidden border-l border-line bg-surface-panel"
     >
       <ResizeHandle
-        label={`Resize ${label.toLowerCase()}`}
+        label={t("Resize {v0}", { v0: label.toLowerCase() })}
         value={width}
         min={COLLAPSE_BELOW - 40}
         max={MAX}

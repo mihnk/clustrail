@@ -35,6 +35,7 @@ import { FilterToken } from "@/components/ui/filter-token";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { cn } from "@/lib/cn";
+import { t as tt } from "@/i18n";
 
 const MAX_COLUMNS = 3;
 const ENV_ORDER: Record<Environment, number> = { dev: 0, stg: 1, prod: 2 };
@@ -179,43 +180,40 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       {/* Section navigation */}
-      <aside aria-label="Sections" className="flex w-[210px] shrink-0 flex-col gap-2.5 border-r border-line bg-surface-panel px-2 py-3 max-[1360px]:hidden">
+      <aside aria-label={tt("Sections")} className="flex w-[210px] shrink-0 flex-col gap-2.5 border-r border-line bg-surface-panel px-2 py-3 max-[1360px]:hidden">
         <div className="flex flex-col gap-1 px-2">
-          <span className="section-label">Comparing</span>
+          <span className="section-label">{tt("Comparing")}</span>
           <span className="flex items-center gap-1.5 text-cell">
             <Layers className="size-3.5 text-fg-muted" aria-hidden />
             <span className="font-mono font-semibold">{name}</span>
           </span>
           <span className="text-meta text-fg-muted">
-            {kind} · {namespace} · matched by kind, namespace and name
-          </span>
+            {tt("{kind} · {namespace} · matched by kind, namespace and name", { kind, namespace })}</span>
         </div>
-        <nav className="flex flex-col gap-px" aria-label="Difference sections">
-          <SectionLink active={activeSection === "sum"} onClick={() => jump("sum")} label="Summary" trailing={<Count>{total}</Count>} />
+        <nav className="flex flex-col gap-px" aria-label={tt("Difference sections")}>
+          <SectionLink active={activeSection === "sum"} onClick={() => jump("sum")} label={tt("Summary")} trailing={<Count>{total}</Count>} />
           {sections.map((s) => (
             <SectionLink
               key={s.id}
               active={activeSection === s.id}
               onClick={() => jump(s.id)}
               label={s.id.startsWith("res-") && sections.filter((x) => x.id.startsWith("res-")).length > 1 ? `${s.title} · ${s.scope?.replace("container ", "")}` : s.title}
-              trailing={s.status ? <Count>status</Count> : counted(s) ? <WarnPill>{counted(s)}</WarnPill> : <Count>0</Count>}
+              trailing={s.status ? <Count>{tt("status")}</Count> : counted(s) ? <WarnPill>{counted(s)}</WarnPill> : <Count>0</Count>}
             />
           ))}
           {comparable && (
-            <SectionLink active={activeSection === "yaml"} onClick={() => jump("yaml")} label="YAML diff" trailing={<Count>{yamlChanged} lines</Count>} />
+            <SectionLink active={activeSection === "yaml"} onClick={() => jump("yaml")} label={tt("YAML diff")} trailing={<Count>{yamlChanged}{" "}{tt("lines")}</Count>} />
           )}
         </nav>
         <div className="flex-1" />
-        <Banner tone="info" className="items-start text-ui">
-          Secret values are never read for comparison — only key names and references.
-        </Banner>
+        <Banner tone="info" className="items-start text-ui">{tt("Secret values are never read for comparison — only key names and references.")}</Banner>
       </aside>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-4">
-          <span className="text-title font-semibold">Differences</span>
+          <span className="text-title font-semibold">{tt("Differences")}</span>
           <span className="truncate text-meta text-fg-muted">
-            {comparable ? `${total} found · ${identical} identical fields ${diffOnly ? "hidden" : "shown"}` : "nothing to compare"}
+            {comparable ? tt("{total} found · {identical} identical fields {v2}", { total, identical, v2: diffOnly ? "hidden" : "shown" }) : tt("nothing to compare")}
           </span>
           <span className="flex-1" />
           <button
@@ -227,33 +225,27 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
               diffOnly && "border-line-selected bg-accent-soft",
             )}
           >
-            {diffOnly && <Check className="size-3.5" aria-hidden />}
-            Differences only
-          </button>
+            {diffOnly && <Check className="size-3.5" aria-hidden />}{tt("Differences only")}</button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <FilterToken k="include" value={include === "spec" ? "spec only" : "spec + status"} className="max-[1360px]:hidden" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuRadioGroup value={include} onValueChange={(v) => setInclude(v as typeof include)}>
-                <DropdownMenuRadioItem value="spec+status">Spec + status</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="spec">Spec only</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="spec+status">{tt("Spec + status")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="spec">{tt("Spec only")}</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button size="sm" variant="ghost" disabled={clusters.length < 2} onClick={() => setClusterIds([...clusterIds].reverse())}>
-            <ArrowLeftRight aria-hidden />
-            Swap
-          </Button>
+            <ArrowLeftRight aria-hidden />{tt("Swap")}</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" disabled={clusterIds.length >= MAX_COLUMNS || candidates.length === 0} title={clusterIds.length >= MAX_COLUMNS ? `At most ${MAX_COLUMNS} clusters side by side` : candidates.length === 0 ? `No other connected cluster has ${namespace}/${name}` : undefined}>
-                <Plus aria-hidden />
-                Add cluster
-              </Button>
+              <Button size="sm" disabled={clusterIds.length >= MAX_COLUMNS || candidates.length === 0} title={clusterIds.length >= MAX_COLUMNS ? tt("At most {MAX_COLUMNS} clusters side by side", { MAX_COLUMNS }) : candidates.length === 0 ? tt("No other connected cluster has {namespace}/{name}", { namespace, name }) : undefined}>
+                <Plus aria-hidden />{tt("Add cluster")}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Clusters with {name}</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Clusters with {name}", { name })}</DropdownMenuLabel>
               {candidates.map((c) => (
                 <DropdownMenuItem key={c.id} onSelect={() => setClusterIds([...clusterIds, c.id])}>
                   <EnvironmentBadge env={c.env} />
@@ -266,8 +258,8 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
 
         {/* Column headers */}
         <div className={cn(grid, "h-11 shrink-0 border-b border-line text-ui text-fg-muted")}>
-          <span>Difference</span>
-          <span>Field</span>
+          <span>{tt("Difference")}</span>
+          <span>{tt("Field")}</span>
           {clusters.map((c, i) => (
             <span key={c.id} className="flex min-w-0 items-center gap-2">
               <EnvironmentBadge env={c.env} />
@@ -278,10 +270,10 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
                   {objects[i]!.readyReplicas}/{objects[i]!.replicas}
                 </span>
               ) : (
-                <span className="text-fg-muted">not found</span>
+                <span className="text-fg-muted">{tt("not found")}</span>
               )}
               {clusters.length > 2 && (
-                <IconButton aria-label={`Remove ${c.name}`} className="ml-auto size-5" onClick={() => setClusterIds(clusterIds.filter((id) => id !== c.id))}>
+                <IconButton aria-label={tt("Remove {name}", { name: c.name })} className="ml-auto size-5" onClick={() => setClusterIds(clusterIds.filter((id) => id !== c.id))}>
                   <X aria-hidden />
                 </IconButton>
               )}
@@ -292,13 +284,13 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
           {backend && clusters.length >= 2 && (!remote || remote.key !== objectsKey) && !remote?.error ? (
-            <div className="p-6 text-cell text-fg-secondary">Reading {kind} {namespace}/{name} from {clusters.map((c) => c.name).join(", ")}…</div>
+            <div className="p-6 text-cell text-fg-secondary">{tt("Reading {kind} {object} from {clusters}…", { kind, object: `${namespace}/${name}`, clusters: clusters.map((c) => c.name).join(", ") })}</div>
           ) : remote?.error ? (
             <div className="p-6 text-cell text-status-critical">{remote.error}</div>
           ) : !comparable ? (
             <div className="p-6 text-cell text-fg-secondary">
               {clusters.length < 2
-                ? "Pick at least two clusters to compare."
+                ? tt("Pick at least two clusters to compare.")
                 : `${kind} ${namespace}/${name} was not found in ${clusters.filter((_, i) => !objects[i]).map((c) => c.name).join(", ")}. Objects are matched by kind, namespace and name.`}
             </div>
           ) : (
@@ -329,7 +321,7 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
                             action={
                               r.kind === "content" ? (
                                 <IconButton
-                                  aria-label="Compare ConfigMaps"
+                                  aria-label={tt("Compare ConfigMaps")}
                                   aria-expanded={openConfig === r.field}
                                   onClick={() => setOpenConfig(openConfig === r.field ? null : r.field)}
                                   className="size-6"
@@ -337,7 +329,7 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
                                   <ArrowLeftRight aria-hidden />
                                 </IconButton>
                               ) : r.path && r.kind !== "ref" ? (
-                                <IconButton aria-label="Show in YAML" title={`Open YAML in ${clusters[clusters.length - 1]!.name}`} onClick={() => openYaml(clusters[clusters.length - 1]!.id)} className="size-6">
+                                <IconButton aria-label={tt("Show in YAML")} title={tt("Open YAML in {v0}", { v0: clusters[clusters.length - 1]!.name })} onClick={() => openYaml(clusters[clusters.length - 1]!.id)} className="size-6">
                                   <Code aria-hidden />
                                 </IconButton>
                               ) : null
@@ -357,24 +349,24 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
                 );
               })}
 
-              <section data-section="yaml" aria-label="YAML diff">
+              <section data-section="yaml" aria-label={tt("YAML diff")}>
                 <SectionHeader
-                  title="YAML diff"
+                  title={tt("YAML diff")}
                   collapsed={collapsed.has("yaml")}
                   onToggle={() => toggle("yaml")}
-                  note={`spec only · ${yamlChanged} changed lines in ${yamlHunks.length} hunks · metadata.managedFields and status excluded`}
+                  note={tt("spec only · {yamlChanged} changed lines in {length} hunks · metadata.managedFields and status excluded", { yamlChanged, length: yamlHunks.length })}
                   noteLeft
                   trailing={
                     <Segmented
-                      aria-label="Diff layout"
+                      aria-label={tt("Diff layout")}
                       value={yamlLayout}
                       onValueChange={(v) => {
                         setYamlLayout(v);
                         if (collapsed.has("yaml")) toggle("yaml");
                       }}
                       options={[
-                        { value: "unified", label: "Unified" },
-                        { value: "side", label: "Side by side" },
+                        { value: "unified", label: tt("Unified") },
+                        { value: "side", label: tt("Side by side") },
                       ]}
                     />
                   }
@@ -388,13 +380,10 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
         </div>
 
         <div className="flex h-7 shrink-0 items-center gap-2 border-t border-line px-4 text-meta text-fg-muted">
-          <span>
-            Compared at {comparedAt.toLocaleTimeString([], { hour12: false })} · {clusters.length === 2 ? "both" : "all"} objects watched · differences update live
-          </span>
+          <span>{tt("Compared at")}{" "}{comparedAt.toLocaleTimeString([], { hour12: false })} · {clusters.length === 2 ? "both" : "all"}{" "}{tt("objects watched · differences update live")}</span>
           <span className="flex-1" />
           <span className="flex items-center gap-1 max-[1360px]:hidden">
-            <Kbd>J</Kbd> / <Kbd>K</Kbd> next / previous difference
-          </span>
+            <Kbd>J</Kbd> / <Kbd>K</Kbd>{" "}{tt("next / previous difference")}</span>
         </div>
       </main>
     </div>
@@ -490,20 +479,18 @@ function DiffRowView({
 }) {
   const marker =
     identical ? (
-      <Marker className="text-fg-muted shadow-[inset_0_0_0_1px_var(--line)]">= same</Marker>
+      <Marker className="text-fg-muted shadow-[inset_0_0_0_1px_var(--line)]">{tt("= same")}</Marker>
     ) : r.kind === "changed" ? (
-      <Marker className="bg-diff-chg-bg text-diff-chg-fg">≠ changed</Marker>
+      <Marker className="bg-diff-chg-bg text-diff-chg-fg">{tt("≠ changed")}</Marker>
     ) : r.kind === "content" ? (
-      <Marker className="bg-diff-chg-bg text-diff-chg-fg">≠ content</Marker>
+      <Marker className="bg-diff-chg-bg text-diff-chg-fg">{tt("≠ content")}</Marker>
     ) : r.kind === "only" ? (
       <Marker className={onlyEnv ? ONLY_TONE[onlyEnv] : "text-fg-secondary"}>{onlyEnv === "stg" ? "◧" : "◨"} {onlyLabel}</Marker>
     ) : r.kind === "ref" ? (
       <Marker className="text-fg-secondary shadow-[inset_0_0_0_1px_var(--line-strong)]">
-        <KeyRound className="size-3" aria-hidden />
-        ref only
-      </Marker>
+        <KeyRound className="size-3" aria-hidden />{tt("ref only")}</Marker>
     ) : (
-      <Marker className="text-fg-secondary shadow-[inset_0_0_0_1px_var(--line-strong)]">status</Marker>
+      <Marker className="text-fg-secondary shadow-[inset_0_0_0_1px_var(--line-strong)]">{tt("status")}</Marker>
     );
   return (
     <div
@@ -530,7 +517,7 @@ function DiffRowView({
                   : "bg-diff-chg-bg",
           )}
         >
-          {v ?? (r.path?.includes(".env[") ? "— not set" : "— none")}
+          {v ?? (r.path?.includes(".env[") ? tt("— not set") : tt("— none"))}
         </span>
       ))}
       <span>{action}</span>
@@ -571,8 +558,7 @@ function ConfigKeys({ grid, name, columns, data }: { grid: string; name: string;
       <div className={cn(grid, "text-meta text-fg-muted")}>
         <span />
         <span className="col-span-full col-start-2 pl-3">
-          {keys.length} keys differ · {total - keys.length} identical
-        </span>
+          {tt("{nKeys} keys differ · {v1} identical", { nKeys: keys.length, v1: total - keys.length })}</span>
       </div>
     </div>
   );

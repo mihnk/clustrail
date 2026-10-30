@@ -12,6 +12,7 @@ import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { t, tn } from "@/i18n";
 
 // Desktop: the Helm SDK linked into the backend. The mock shows the design's version.
 // A function: `backend` is set after modules load.
@@ -99,22 +100,20 @@ export function HelmInspector({
       <div className="flex flex-col gap-2 pl-3.5 pr-3 pt-2.5">
         <div className="flex items-center gap-1.5 text-ui text-fg-muted">
           <LifeBuoy className="size-3.5" aria-hidden />
-          <span>Helm release</span>
+          <span>{t("Helm release")}</span>
           <EnvironmentBadge env={r.env} className="ml-1" />
           {cluster?.protected && (
             <span className="flex items-center gap-1.5 text-env-prod-ink">
-              <Lock className="size-3.5" aria-hidden />
-              Protected
-            </span>
+              <Lock className="size-3.5" aria-hidden />{t("Protected")}</span>
           )}
           <div className="flex-1" />
-          <IconButton aria-label="Close inspector" onClick={onClose} className="[&_svg]:size-3.5">
+          <IconButton aria-label={t("Close inspector")} onClick={onClose} className="[&_svg]:size-3.5">
             <X />
           </IconButton>
         </div>
         <h1 className="selectable m-0 truncate font-mono text-mono-title font-semibold">{r.name}</h1>
         <span className="truncate text-meta text-fg-muted">
-          {r.namespace} · {r.cluster} · {r.repoKnown || backend ? r.chart : `acme/${r.chart}`} {r.chartVersion} · app {r.appVersion}
+          {r.namespace} · {r.cluster} · {r.repoKnown || backend ? r.chart : t("acme/{chart}", { chart: r.chart })} {r.chartVersion}{" "}{t("· app")}{" "}{r.appVersion}
         </span>
 
         {r.status === "failed" && (
@@ -122,10 +121,9 @@ export function HelmInspector({
             <StatusGlyph health="failed" className="mt-0.5" />
             <div className="flex min-w-0 flex-col gap-1">
               <span>
-                <b className="font-semibold text-status-critical">Upgrade to revision {r.revision} failed</b> · {formatAge(r.updatedSeconds)} ago
-              </span>
+                <b className="font-semibold text-status-critical">{t("Upgrade to revision {revision} failed", { revision: r.revision })}</b> · {t("{age} ago", { age: formatAge(r.updatedSeconds) })}</span>
               <span className="selectable font-mono text-fg-secondary">
-                {backend ? current.description : `context deadline exceeded: Deployment ${r.name} not ready within --timeout 5m`}
+                {backend ? current.description : t("context deadline exceeded: Deployment {name} not ready within --timeout 5m", { name: r.name })}
               </span>
             </div>
           </div>
@@ -134,43 +132,34 @@ export function HelmInspector({
           <div className="flex gap-[9px] rounded-lg bg-status-warning-soft px-2.5 py-[9px] text-ui">
             <StatusGlyph health="warning" className="mt-0.5" />
             <span>
-              <b className="font-semibold">pending-upgrade for {formatAge(r.updatedSeconds)}.</b>{" "}
-              <span className="text-fg-secondary">
-                Helm marks a release pending while an operation runs. If the process that started it stopped, the release stays pending and the next
-                upgrade fails with “another operation is in progress”. Rolling back to the last deployed revision clears it.
-              </span>
+              <b className="font-semibold">{t("pending-upgrade for {v0}.", { v0: formatAge(r.updatedSeconds) })}</b>{" "}
+              <span className="text-fg-secondary">{t("Helm marks a release pending while an operation runs. If the process that started it stopped, the release stays pending and the next upgrade fails with “another operation is in progress”. Rolling back to the last deployed revision clears it.")}</span>
             </span>
           </div>
         )}
 
         <div className="flex flex-col gap-1.5 text-ui">
           <span className="flex min-w-0 items-center gap-2">
-            <SourceBadge>Observed</SourceBadge>
-            <span className="truncate text-fg-secondary">
-              release Secret <span className="font-mono">sh.helm.release.v1.{r.name}.v{r.revision}</span>
+            <SourceBadge>{t("Observed")}</SourceBadge>
+            <span className="truncate text-fg-secondary">{tn("release Secret {v0}", { v0: <span className="font-mono">sh.helm.release.v1.{r.name}.v{r.revision}</span> })}
             </span>
           </span>
           <span className="flex min-w-0 items-center gap-2">
-            <SourceBadge op>Helm ops</SourceBadge>
-            <span className="truncate text-fg-secondary">
-              bundled Helm SDK {helmSdk()} · chart repo {r.repoKnown ? <span className="text-fg">configured</span> : <span className="text-status-warning">unknown</span>}
+            <SourceBadge op>{t("Helm ops")}</SourceBadge>
+            <span className="truncate text-fg-secondary">{t("bundled Helm SDK")}{" "}{helmSdk()}{" "}{t("· chart repo")}{" "}{r.repoKnown ? <span className="text-fg">{t("configured")}</span> : <span className="text-status-warning">{t("unknown")}</span>}
             </span>
           </span>
         </div>
 
         <div className="flex items-center gap-1.5">
           <Button onClick={() => setTab("manifest")}>
-            <Code aria-hidden />
-            Manifest
-          </Button>
+            <Code aria-hidden />{t("Manifest")}</Button>
           <div className="flex-1" />
           <Button
             disabled
-            title={r.repoKnown ? "Upgrades run from your CI pipeline in this build" : `Chart repository for ${backend ? "" : "acme/"}${r.chart} is not configured`}
+            title={r.repoKnown ? t("Upgrades run from your CI pipeline in this build") : t("Chart repository for {v0}{chart} is not configured", { v0: backend ? "" : "acme/", chart: r.chart })}
           >
-            <ArrowUpCircle aria-hidden />
-            Upgrade…
-          </Button>
+            <ArrowUpCircle aria-hidden />{t("Upgrade…")}</Button>
           <Button
             disabled={!lastGood || busy || cluster?.readOnly}
             className={cn(tab === "history" && "border-line-selected bg-accent-soft")}
@@ -179,36 +168,33 @@ export function HelmInspector({
               setTarget(lastGood?.rev ?? null);
             }}
           >
-            <History aria-hidden />
-            Roll back…
-          </Button>
+            <History aria-hidden />{t("Roll back…")}</Button>
         </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-        <TabsList aria-label="Release sections" className="mt-1 gap-3 px-3.5 pt-1.5">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="values">Values</TabsTrigger>
-          <TabsTrigger value="manifest">Manifest</TabsTrigger>
-          <TabsTrigger value="history">
-            History <TabCount>{r.history.length}</TabCount>
+        <TabsList aria-label={t("Release sections")} className="mt-1 gap-3 px-3.5 pt-1.5">
+          <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
+          <TabsTrigger value="values">{t("Values")}</TabsTrigger>
+          <TabsTrigger value="manifest">{t("Manifest")}</TabsTrigger>
+          <TabsTrigger value="history">{t("History")}{" "}<TabCount>{r.history.length}</TabCount>
           </TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="notes">{t("Notes")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">
           <dl className="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-cell">
-            <dt className="text-fg-muted">Status</dt>
+            <dt className="text-fg-muted">{t("Status")}</dt>
             <dd className="m-0">{r.status}</dd>
-            <dt className="text-fg-muted">Revision</dt>
+            <dt className="text-fg-muted">{t("Revision")}</dt>
             <dd className="m-0 font-mono">{r.revision}</dd>
-            <dt className="text-fg-muted">Updated</dt>
+            <dt className="text-fg-muted">{t("Updated")}</dt>
             <dd className="m-0">{r.updatedSeconds < 5 ? "now" : `${formatAge(r.updatedSeconds)} ago`}</dd>
-            <dt className="text-fg-muted">Description</dt>
+            <dt className="text-fg-muted">{t("Description")}</dt>
             <dd className="selectable m-0">{current.description}</dd>
           </dl>
           <div className="flex flex-col">
-            <span className="section-label pb-1">Resources · {r.resources.length}</span>
+            <span className="section-label pb-1">{t("Resources · {nResources}", { nResources: r.resources.length })}</span>
             {r.resources.map((o) => (
               <div key={`${o.kind}/${o.name}`} className="flex h-7 items-center gap-2 border-t border-line-row text-cell first:border-t-0">
                 <span className="w-[104px] shrink-0 text-fg-muted">{o.kind}</span>
@@ -221,33 +207,33 @@ export function HelmInspector({
         <TabsContent value="values" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">
           <div className="flex items-center gap-2">
             <Segmented
-              aria-label="Values"
+              aria-label={t("Values")}
               value={valuesMode}
               onValueChange={setValuesMode}
               options={[
-                { value: "user", label: "User-supplied" },
-                { value: "computed", label: "Computed" },
+                { value: "user", label: t("User-supplied") },
+                { value: "computed", label: t("Computed") },
               ]}
             />
           </div>
           <span className="text-meta text-fg-muted">
-            {valuesMode === "user" ? "helm get values" : "helm get values --all: chart defaults merged with user values"} · revision {r.revision}. Values that look like
-            credentials are redacted.
+            {valuesMode === "user" ? "helm get values" : t("helm get values --all: chart defaults merged with user values")}{" "}
+            {t("· revision {revision}. Values that look like credentials are redacted.", { revision: r.revision })}
           </span>
           <pre className="selectable m-0 overflow-x-auto rounded-md bg-term-bg px-2.5 py-2 font-mono text-[11.5px] leading-[17px] text-term-fg">
-            {values || (loadError ?? "Reading values…")}
+            {values || (loadError ?? t("Reading values…"))}
           </pre>
         </TabsContent>
 
         <TabsContent value="manifest" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">
-          <span className="text-meta text-fg-muted">Rendered manifest stored in the release Secret of revision {r.revision}.</span>
+          <span className="text-meta text-fg-muted">{t("Rendered manifest stored in the release Secret of revision {revision}.", { revision: r.revision })}</span>
           <pre className="selectable m-0 overflow-x-auto rounded-md bg-term-bg px-2.5 py-2 font-mono text-[11.5px] leading-[17px] text-term-fg">
-            {curManifest ?? loadError ?? "Reading manifest…"}
+            {curManifest ?? loadError ?? t("Reading manifest…")}
           </pre>
         </TabsContent>
 
         <TabsContent value="history" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">
-          <div role="listbox" aria-label="Revisions" className="flex flex-col">
+          <div role="listbox" aria-label={t("Revisions")} className="flex flex-col">
             {r.history.map((h) => {
               const isCurrent = h.rev === r.revision;
               const selected = h.rev === target;
@@ -276,9 +262,9 @@ export function HelmInspector({
                     <span className="text-fg-muted">· {h.updatedSeconds < 5 ? "now" : formatAge(h.updatedSeconds)}</span>
                   </span>
                   {selected ? (
-                    <span className="rounded-[4px] bg-accent-soft px-1.5 font-mono text-label text-accent">target</span>
+                    <span className="rounded-[4px] bg-accent-soft px-1.5 font-mono text-label text-accent">{t("target")}</span>
                   ) : isCurrent ? (
-                    <span className="font-mono text-label text-fg-muted">current</span>
+                    <span className="font-mono text-label text-fg-muted">{t("current")}</span>
                   ) : (
                     <span />
                   )}
@@ -288,36 +274,36 @@ export function HelmInspector({
           </div>
 
           {target !== null && !plan && (
-            <p className="m-0 text-meta text-fg-muted">{loadError ?? `Reading revisions ${r.revision} and ${target}…`}</p>
+            <p className="m-0 text-meta text-fg-muted">{loadError ?? t("Reading revisions {revision} and {target}…", { revision: r.revision, target })}</p>
           )}
           {plan && targetRev && (
-            <section aria-label={`Roll back to revision ${target}`} className="flex flex-col gap-2 rounded-lg border border-line p-2.5">
+            <section aria-label={t("Roll back to revision {target}", { target })} className="flex flex-col gap-2 rounded-lg border border-line p-2.5">
               <div className="flex items-center gap-2">
-                <b className="flex-1 text-cell font-semibold">Roll back to revision {target}</b>
+                <b className="flex-1 text-cell font-semibold">{t("Roll back to revision {target}", { target })}</b>
                 <EnvironmentBadge env={r.env} />
               </div>
               <dl className="m-0 grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 gap-y-1 text-ui">
-                <dt className="text-fg-muted">Changed</dt>
+                <dt className="text-fg-muted">{t("Changed")}</dt>
                 <dd className="m-0">{plan.changed}</dd>
                 {plan.removed && (
                   <>
-                    <dt className="text-fg-muted">Removed</dt>
+                    <dt className="text-fg-muted">{t("Removed")}</dt>
                     <dd className="m-0">{plan.removed}</dd>
                   </>
                 )}
                 {plan.added && (
                   <>
-                    <dt className="text-fg-muted">Added</dt>
+                    <dt className="text-fg-muted">{t("Added")}</dt>
                     <dd className="m-0">{plan.added}</dd>
                   </>
                 )}
                 {plan.hooks && (
                   <>
-                    <dt className="text-fg-muted">Hooks</dt>
+                    <dt className="text-fg-muted">{t("Hooks")}</dt>
                     <dd className="m-0">{plan.hooks}</dd>
                   </>
                 )}
-                <dt className="text-fg-muted">Options</dt>
+                <dt className="text-fg-muted">{t("Options")}</dt>
                 <dd className="m-0">{plan.options}</dd>
               </dl>
               {showDiff && (
@@ -341,13 +327,9 @@ export function HelmInspector({
               )}
               <div className="flex items-center gap-1.5">
                 <Button size="sm" aria-pressed={showDiff} onClick={() => setShowDiff(!showDiff)}>
-                  <Diff aria-hidden />
-                  Manifest diff
-                </Button>
+                  <Diff aria-hidden />{t("Manifest diff")}</Button>
                 <div className="flex-1" />
-                <Button size="sm" variant="primary" disabled={busy || cluster?.readOnly} onClick={() => onRollback(targetRev.rev, plan)}>
-                  Roll back…
-                </Button>
+                <Button size="sm" variant="primary" disabled={busy || cluster?.readOnly} onClick={() => onRollback(targetRev.rev, plan)}>{t("Roll back…")}</Button>
               </div>
             </section>
           )}
@@ -355,10 +337,9 @@ export function HelmInspector({
           {!r.repoKnown && (
             <div role="status" className="flex gap-2 rounded-lg bg-status-progressing-soft px-2.5 py-2 text-ui">
               <Info className="mt-px size-3.5 shrink-0 text-status-progressing" aria-hidden />
-              <span>
-                Upgrade needs the chart. Add the repo that hosts{" "}
-                <span className="font-mono">{backend ? r.chart : `acme/${r.chart}`}</span>{" "}
-                {backend ? "with helm repo add, or upgrade from your CI pipeline." : "in Settings › Helm, or upgrade from your CI pipeline."}
+              <span>{t("Upgrade needs the chart. Add the repo that hosts")}{" "}
+                <span className="font-mono">{backend ? r.chart : t("acme/{chart}", { chart: r.chart })}</span>{" "}
+                {backend ? t("with helm repo add, or upgrade from your CI pipeline.") : t("in Settings › Helm, or upgrade from your CI pipeline.")}
               </span>
             </div>
           )}

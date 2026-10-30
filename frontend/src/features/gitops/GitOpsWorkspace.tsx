@@ -29,32 +29,35 @@ import { cn } from "@/lib/cn";
 import { backend } from "@/backend/client";
 import { gitopsColumns } from "./columns";
 import { GitOpsInspector } from "./GitOpsInspector";
+import { t as tt, tn } from "@/i18n";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
 
 function syncRequest(o: GitOpsObject, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {
   const argo = o.tool === "Argo CD";
   return {
-    action: argo ? "Sync application" : "Reconcile with source",
+    action: argo ? tt("Sync application") : tt("Reconcile with source"),
     targetName: o.name,
     icon: <RotateCw />,
     env: o.env,
     cluster: o.cluster,
     namespace: o.namespace,
-    meta: `${o.kind} → ${o.destination} · revision ${o.revision}`,
+    meta: tt("{kind} → {destination} · revision {revision}", { kind: o.kind, destination: o.destination, revision: o.revision }),
     protected: cluster?.protected ?? false,
     destructive: false,
     whatHappens: (
       <>
-        {argo ? "Argo CD applies" : "Flux fetches the source and applies"} the desired state of <span className="font-mono">{o.revision}</span>.
-        {o.drift.length > 0 && <> Live changes are overwritten: {o.drift.map((d) => `${d.field} ${d.live} → ${d.desired}`).join(", ")}.</>}
-        {o.policy.prune && " Resources removed from git are pruned."}
+        {tn(argo ? "Argo CD applies the desired state of {revision}." : "Flux fetches the source and applies the desired state of {revision}.", {
+          revision: <span className="font-mono">{o.revision}</span>,
+        })}
+        {o.drift.length > 0 && <> {tt("Live changes are overwritten: {changes}.", { changes: o.drift.map((d) => `${d.field} ${d.live} → ${d.desired}`).join(", ") })}</>}
+        {o.policy.prune && ` ${tt("Resources removed from git are pruned.")}`}
       </>
     ),
     command: argo
       ? `argocd app sync ${o.name} --kube-context ${o.cluster}`
       : `flux reconcile ${o.kind.toLowerCase()} ${o.name} -n ${o.namespace} --with-source --context ${o.cluster}`,
-    confirmLabel: argo ? "Sync" : "Reconcile",
+    confirmLabel: argo ? tt("Sync") : tt("Reconcile"),
     phrase: o.name,
     onConfirm,
   };
@@ -63,7 +66,7 @@ function syncRequest(o: GitOpsObject, cluster: Cluster | undefined, onConfirm: (
 function refreshRequest(o: GitOpsObject, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {
   const argo = o.tool === "Argo CD";
   return {
-    action: argo ? "Refresh application" : "Request reconcile",
+    action: argo ? tt("Refresh application") : tt("Request reconcile"),
     targetName: o.name,
     icon: <RefreshCw />,
     env: o.env,
@@ -72,12 +75,12 @@ function refreshRequest(o: GitOpsObject, cluster: Cluster | undefined, onConfirm
     protected: cluster?.protected ?? false,
     destructive: false,
     whatHappens: argo
-      ? "Sets the argocd.argoproj.io/refresh annotation. Argo CD re-reads git and recomputes the diff; nothing is applied unless automated sync is on."
-      : "Sets reconcile.fluxcd.io/requestedAt. Flux runs its normal reconcile now instead of at the next interval.",
+      ? tt("Sets the argocd.argoproj.io/refresh annotation. Argo CD re-reads git and recomputes the diff; nothing is applied unless automated sync is on.")
+      : tt("Sets reconcile.fluxcd.io/requestedAt. Flux runs its normal reconcile now instead of at the next interval."),
     command: argo
       ? `kubectl --context ${o.cluster} -n ${o.namespace} annotate application ${o.name} argocd.argoproj.io/refresh=normal --overwrite`
       : `flux reconcile ${o.kind.toLowerCase()} ${o.name} -n ${o.namespace} --context ${o.cluster}`,
-    confirmLabel: argo ? "Refresh" : "Reconcile",
+    confirmLabel: argo ? tt("Refresh") : tt("Reconcile"),
     phrase: o.name,
     onConfirm,
   };
@@ -140,8 +143,8 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
 
   const actionsFor = useCallback(
     (o: GitOpsObject): ResourceAction[] => [
-      { id: "refresh", group: "modify", label: o.tool === "Argo CD" ? "Refresh" : "Reconcile", icon: <RefreshCw />, onSelect: () => requestRefresh(o) },
-      { id: "sync", group: "modify", label: o.tool === "Argo CD" ? "Sync…" : "Reconcile with source…", icon: <RotateCw />, disabled: o.suspended, onSelect: () => requestSync(o) },
+      { id: "refresh", group: "modify", label: o.tool === "Argo CD" ? tt("Refresh") : tt("Reconcile"), icon: <RefreshCw />, onSelect: () => requestRefresh(o) },
+      { id: "sync", group: "modify", label: o.tool === "Argo CD" ? tt("Sync…") : tt("Reconcile with source…"), icon: <RotateCw />, disabled: o.suspended, onSelect: () => requestSync(o) },
     ],
     [requestRefresh, requestSync],
   );
@@ -179,26 +182,26 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
       <main className="@container flex min-w-0 flex-1 flex-col bg-surface-app">
         <div className={cn("flex h-12 shrink-0 items-center gap-2.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <GitBranch className="size-4" aria-hidden />
-          <span className="text-title font-semibold">GitOps</span>
+          <span className="text-title font-semibold">{tt("GitOps")}</span>
           <div className="flex-1" />
           <Segmented
-            aria-label="Kind"
+            aria-label={tt("Kind")}
             value={tool}
             onValueChange={setTool}
             options={[
-              { value: "all", label: <>All <span className="font-mono text-fg-muted">{inClusters.length}</span></> },
-              { value: "argo", label: <>Argo CD apps <span className="font-mono text-fg-muted">{argoCount}</span></> },
-              { value: "flux", label: <>Flux <span className="font-mono text-fg-muted">{inClusters.length - argoCount}</span></> },
+              { value: "all", label: <>{tt("All")}{" "}<span className="font-mono text-fg-muted">{inClusters.length}</span></> },
+              { value: "argo", label: <>{tt("Argo CD apps")}{" "}<span className="font-mono text-fg-muted">{argoCount}</span></> },
+              { value: "flux", label: <>{tt("Flux")}{" "}<span className="font-mono text-fg-muted">{inClusters.length - argoCount}</span></> },
             ]}
           />
         </div>
 
         <div className={cn("flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-3.5 py-2 [scrollbar-width:none]", BAR)}>
-          <span className="section-label pr-1">Controllers</span>
+          <span className="section-label pr-1">{tt("Controllers")}</span>
           {shownControllers.map((c) => (
             <span
               key={c.cluster}
-              title={c.tool ? undefined : "Looked for applications.argoproj.io and kustomizations.kustomize.toolkit.fluxcd.io"}
+              title={c.tool ? undefined : tt("Looked for applications.argoproj.io and kustomizations.kustomize.toolkit.fluxcd.io")}
               className={cn(
                 "flex h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-line px-2 text-ui",
                 !c.tool && "text-fg-muted max-[1360px]:hidden",
@@ -212,7 +215,7 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
                   {c.tool} {c.version}
                 </>
               ) : (
-                "not detected"
+                tt("not detected")
               )}
             </span>
           ))}
@@ -221,13 +224,13 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
         <div className={cn("flex h-11 shrink-0 items-center gap-1.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <label className="flex h-7 w-[200px] shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-fg-muted focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
             <Search className="size-3.5 shrink-0" aria-hidden />
-            <span className="sr-only">Filter GitOps objects</span>
+            <span className="sr-only">{tt("Filter GitOps objects")}</span>
             <input
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && (query ? setQuery("") : e.currentTarget.blur())}
-              placeholder="Filter name, repo, path…"
+              placeholder={tt("Filter name, repo, path…")}
               spellCheck={false}
               className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
             />
@@ -238,7 +241,7 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
               <FilterToken k="sync" value={sync} active={sync !== "any"} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Sync</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Sync")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={sync} onValueChange={(v) => setSync(v as typeof sync)}>
                 {(["any", "Synced", "OutOfSync", "Applied", "Failed"] as const).map((s) => (
                   <DropdownMenuRadioItem key={s} value={s}>
@@ -253,7 +256,7 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
               <FilterToken k="health" value={appHealth} active={appHealth !== "any"} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Health</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Health")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={appHealth} onValueChange={(v) => setAppHealth(v as typeof appHealth)}>
                 {(["any", "Healthy", "Ready", "Progressing", "Degraded", "Not ready", "Suspended"] as const).map((s) => (
                   <DropdownMenuRadioItem key={s} value={s}>
@@ -265,17 +268,16 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
           </DropdownMenu>
           <div className="flex-1" />
           <Segmented
-            aria-label="Health"
+            aria-label={tt("Health")}
             value={health}
             onValueChange={setHealth}
             options={[
-              { value: "all", label: "All" },
+              { value: "all", label: tt("All") },
               {
                 value: "attention",
                 label: (
                   <>
-                    <StatusGlyph health="failed" />
-                    Attention <span className="font-mono">{attention}</span>
+                    <StatusGlyph health="failed" />{tt("Attention")}{" "}<span className="font-mono">{attention}</span>
                   </>
                 ),
               },
@@ -285,7 +287,7 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
 
         <ResourceTable
           table={table}
-          aria-label="GitOps objects"
+          aria-label={tt("GitOps objects")}
           onAutoHiddenChange={setAutoHidden}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
@@ -298,9 +300,7 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
           rowActions={rowActions}
           fillMin={150}
           empty={
-            <EmptyState icon={<SearchX />} title="No GitOps objects match">
-              Clear the filters or pick more clusters.
-            </EmptyState>
+            <EmptyState icon={<SearchX />} title={tt("No GitOps objects match")}>{tt("Clear the filters or pick more clusters.")}</EmptyState>
           }
         />
 
@@ -331,25 +331,24 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
               }
             >
               {copied ? <Check className="text-status-healthy" aria-hidden /> : <Copy aria-hidden />}
-              {copied ? "Copied" : "Copy"}
+              {copied ? tt("Copied") : tt("Copy")}
             </Button>
           </div>
         )}
 
         <div className={cn("flex h-7 shrink-0 items-center gap-3.5 border-t border-line px-3.5 text-meta text-fg-muted", BAR)}>
           <span>
-            <span className="text-fg">{rows.length}</span> objects
-          </span>
-          {outOfSync > 0 && <span className="text-status-warning">{outOfSync} OutOfSync</span>}
-          {failing > 0 && <span className="text-status-critical">{failing} failing</span>}
+            <span className="text-fg">{rows.length}</span>{" "}{tt("objects")}</span>
+          {outOfSync > 0 && <span className="text-status-warning">{tt("{outOfSync} OutOfSync", { outOfSync })}</span>}
+          {failing > 0 && <span className="text-status-critical">{failing}{" "}{tt("failing")}</span>}
           <div className="flex-1" />
-          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
-          <span className="truncate max-[1360px]:hidden">Clustrail reads controller status; it never pushes to git</span>
+          {autoHidden.length > 0 && <span className="truncate">{tt("{v0} hidden at this width", { v0: autoHidden.join(", ") })}</span>}
+          <span className="truncate max-[1360px]:hidden">{tt("Clustrail reads controller status; it never pushes to git")}</span>
         </div>
       </main>
 
       {inspectorOpen && selected && (
-        <InspectorPanel label="Application inspector" storageKey="gitops" defaultWidth={400} active={active}>
+        <InspectorPanel label={tt("Application inspector")} storageKey="gitops" defaultWidth={400} active={active}>
           <GitOpsInspector
             object={selected}
             cluster={clusterById(selected.cluster)}

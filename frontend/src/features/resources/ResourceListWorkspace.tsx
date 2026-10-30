@@ -37,6 +37,7 @@ import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { kindName, kubectlResource, listLabel, resourceTab } from "./kinds";
 import { SecretKeys } from "./SecretKeys";
+import { t as tt } from "@/i18n";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
 
@@ -188,7 +189,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
     };
     return [
       col.accessor("name", {
-        meta: { label: "Name", width: "fill", priority: 100, sortNote: "name" },
+        meta: { label: tt("Name"), width: "fill", priority: 100, sortNote: tt("name") },
         cell: ({ getValue }) => (
           <span className="block truncate font-mono text-ui text-fg" title={getValue()}>
             {getValue()}
@@ -199,7 +200,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         ? [
             col.accessor((r) => r.namespace ?? "", {
               id: "namespace",
-              meta: { label: "Namespace", width: 130, priority: 70, sortNote: "namespace" },
+              meta: { label: tt("Namespace"), width: 130, priority: 70, sortNote: tt("namespace") },
               cell: ({ getValue }) => <span className="block truncate">{getValue()}</span>,
             }),
           ]
@@ -207,7 +208,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
       ...(multi
         ? [
             col.accessor("cluster", {
-              meta: { label: "Cluster", width: 130, priority: 60, sortNote: "cluster" },
+              meta: { label: tt("Cluster"), width: 130, priority: 60, sortNote: tt("cluster") },
               cell: ({ row: { original: r } }) => (
                 <span className="flex min-w-0 items-center gap-1.5">
                   <EnvironmentBadge env={r.env} />
@@ -231,7 +232,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
       ),
       col.accessor("ageSec", {
         id: "age",
-        meta: { label: "Age", width: 52, align: "right", priority: 90, sortNote: "age" },
+        meta: { label: tt("Age"), width: 52, align: "right", priority: 90, sortNote: tt("age") },
         cell: ({ getValue }) => <span className="font-mono text-meta text-fg-muted">{getValue() < 0 ? "—" : formatAge(getValue())}</span>,
       }),
     ];
@@ -255,22 +256,22 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
       const c = clusterById(r.cluster);
       const params = { kind, namespace: r.namespace ?? "", name: r.name };
       return [
-        { id: "open", group: "observe", label: "Open in tab", icon: <PanelTop />, onSelect: () => ws.openView(resourceTab(r.cluster, kind, r.namespace ?? "", r.name)) },
-        { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params }) },
+        { id: "open", group: "observe", label: tt("Open in tab"), icon: <PanelTop />, onSelect: () => ws.openView(resourceTab(r.cluster, kind, r.namespace ?? "", r.name)) },
+        { id: "yaml", group: "observe", label: tt("View YAML"), icon: <Code />, shortcut: "Y", onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params }) },
         ...(kind === "Service"
-          ? [{ id: "forward", group: "observe" as const, label: "Port forward…", icon: <Cable />, onSelect: () => openPortForward({ cluster: r.cluster, namespace: r.namespace ?? "", kind: "Service", name: r.name }) }]
+          ? [{ id: "forward", group: "observe" as const, label: tt("Port forward…"), icon: <Cable />, onSelect: () => openPortForward({ cluster: r.cluster, namespace: r.namespace ?? "", kind: "Service", name: r.name }) }]
           : []),
-        { id: "edit", group: "modify", label: "Edit YAML…", icon: <Pencil />, onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params: { ...params, mode: "edit" } }) },
+        { id: "edit", group: "modify", label: tt("Edit YAML…"), icon: <Pencil />, onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params: { ...params, mode: "edit" } }) },
         {
           id: "delete",
           group: "modify",
           danger: true,
-          label: "Delete…",
+          label: tt("Delete…"),
           icon: <Trash2 />,
           disabled: kind === "Event",
           onSelect: () =>
             confirm({
-              action: `Delete ${kindName(kind)}`,
+              action: tt("Delete {v0}", { v0: kindName(kind) }),
               targetName: r.name,
               icon: <Trash2 />,
               env: r.env,
@@ -278,9 +279,9 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
               namespace: r.namespace,
               protected: c?.protected ?? false,
               destructive: true,
-              whatHappens: <>The {kindName(kind)} is deleted. Objects it owns are removed by the garbage collector in the background, like kubectl.</>,
+              whatHappens: <>{tt("The {v0} is deleted. Objects it owns are removed by the garbage collector in the background, like kubectl.", { v0: kindName(kind) })}</>,
               command: command(r, "delete"),
-              confirmLabel: "Delete",
+              confirmLabel: tt("Delete"),
               phrase: `${r.cluster}/${r.name}`,
               onConfirm: () => {
                 if (!backend) return;
@@ -291,7 +292,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
                     toast.show({ kind: "success", title: `${kindName(kind)} deleted`, target: `${r.name} · ${r.cluster}`, env: r.env });
                     refresh();
                   })
-                  .catch((e) => toast.show({ kind: "error", title: "Delete failed", target: `${r.name} · ${r.cluster}`, detail: errorText(e), copyText: errorText(e) }));
+                  .catch((e) => toast.show({ kind: "error", title: tt("Delete failed"), target: `${r.name} · ${r.cluster}`, detail: errorText(e), copyText: errorText(e) }));
               },
             }),
         },
@@ -333,9 +334,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
 
   if (!backend) {
     return (
-      <EmptyState className="flex-1" icon={<LayoutGrid />} title={label}>
-        Lists of any kind read the cluster’s API server, so they need the desktop app. The browser preview has sample data for Pods, Deployments, Nodes, Helm and GitOps only.
-      </EmptyState>
+      <EmptyState className="flex-1" icon={<LayoutGrid />} title={label}>{tt("Lists of any kind read the cluster’s API server, so they need the desktop app. The browser preview has sample data for Pods, Deployments, Nodes, Helm and GitOps only.")}</EmptyState>
     );
   }
 
@@ -347,11 +346,9 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
           <span className="text-title font-semibold">{label}</span>
           <span className="truncate font-mono text-meta text-fg-muted">{kind}</span>
           <div className="flex-1" />
-          <Button size="sm" onClick={() => ws.openView({ kind: "create", title: `New ${kindName(kind)}`, params: { kind, cluster: connected[0] ?? "" } })} disabled={!connected.length || kind === "Event"}>
-            <Plus aria-hidden />
-            Create…
-          </Button>
-          <IconButton aria-label="Reload" title="Lists again and restarts the watch" onClick={refresh}>
+          <Button size="sm" onClick={() => ws.openView({ kind: "create", title: tt("New {v0}", { v0: kindName(kind) }), params: { kind, cluster: connected[0] ?? "" } })} disabled={!connected.length || kind === "Event"}>
+            <Plus aria-hidden />{tt("Create…")}</Button>
+          <IconButton aria-label={tt("Reload")} title={tt("Lists again and restarts the watch")} onClick={refresh}>
             <RefreshCw />
           </IconButton>
         </div>
@@ -359,13 +356,13 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         <div className={cn("flex h-11 shrink-0 items-center gap-2 border-b border-line pl-3.5 pr-3", BAR)}>
           <label className="flex h-7 w-[240px] shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-fg-muted focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
             <Search className="size-3.5 shrink-0" aria-hidden />
-            <span className="sr-only">Filter {label}</span>
+            <span className="sr-only">{tt("Filter {label}", { label })}</span>
             <input
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && (query ? setQuery("") : e.currentTarget.blur())}
-              placeholder="Filter name, namespace, label…"
+              placeholder={tt("Filter name, namespace, label…")}
               spellCheck={false}
               className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
             />
@@ -374,10 +371,10 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
           {namespaced && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <FilterToken k="namespace" value={namespaces === null ? "any" : `${namespaces.size} selected`} active={namespaces !== null} />
+                <FilterToken k="namespace" value={namespaces === null ? tt("any") : tt("{n} selected", { n: namespaces.size })} active={namespaces !== null} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-h-[360px] overflow-y-auto">
-                <DropdownMenuLabel>Namespaces{hideSystem ? " · system hidden" : ""}</DropdownMenuLabel>
+                <DropdownMenuLabel>{tt("Namespaces")}{hideSystem ? tt(" · system hidden") : ""}</DropdownMenuLabel>
                 {allNamespaces.map((ns) => (
                   <DropdownMenuCheckboxItem
                     key={ns}
@@ -394,15 +391,14 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
                   </DropdownMenuCheckboxItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setNamespaces(null)}>Select all</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setNamespaces(null)}>{tt("Select all")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
           <div className="flex-1" />
           {hiddenWide > 0 && (
             <label className="flex items-center gap-2 text-meta text-fg-secondary">
-              <Switch checked={wide} onCheckedChange={setWide} aria-label="Wide columns" />
-              Wide <span className="text-fg-muted">(+{hiddenWide})</span>
+              <Switch checked={wide} onCheckedChange={setWide} aria-label={tt("Wide columns")} />{tt("Wide")}{" "}<span className="text-fg-muted">(+{hiddenWide})</span>
             </label>
           )}
         </div>
@@ -415,7 +411,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         ))}
         {limited.map((l) => (
           <Banner key={l.cluster} tone="warning" className="shrink-0 rounded-none border-t border-line">
-            <b className="font-semibold">Limited by RBAC:</b> can’t list {label.toLowerCase()} in all namespaces on {l.cluster} → showing only <span className="font-mono">{l.shown}</span>
+            <b className="font-semibold">{tt("Limited by RBAC:")}</b>{" "}{tt("can’t list")}{" "}{label.toLowerCase()}{" "}{tt("in all namespaces on")}{" "}{l.cluster}{" "}{tt("→ showing only")}{" "}<span className="font-mono">{l.shown}</span>
           </Banner>
         ))}
 
@@ -435,14 +431,12 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
           fillMin={160}
           empty={
             loading && connected.length ? (
-              <EmptyState title={`Reading ${label.toLowerCase()}…`} />
+              <EmptyState title={tt("Reading {v0}…", { v0: label.toLowerCase() })} />
             ) : !connected.length ? (
-              <EmptyState icon={<SearchX />} title="No connected cluster selected">
-                Pick a connected cluster to list {label.toLowerCase()}.
-              </EmptyState>
+              <EmptyState icon={<SearchX />} title={tt("No connected cluster selected")}>{tt("Pick a connected cluster to list {v0}.", { v0: label.toLowerCase() })}</EmptyState>
             ) : (
-              <EmptyState icon={<SearchX />} title={`No ${label.toLowerCase()}${query ? " match" : ""}`}>
-                {query ? "Clear the filter or pick more clusters." : "None exist in the selected clusters."}
+              <EmptyState icon={<SearchX />} title={tt("No {v0}{v1}", { v0: label.toLowerCase(), v1: query ? " match" : "" })}>
+                {query ? tt("Clear the filter or pick more clusters.") : tt("None exist in the selected clusters.")}
               </EmptyState>
             )
           }
@@ -453,13 +447,12 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
             <span className="text-fg">{rows.length}</span> {label.toLowerCase()}
           </span>
           {truncated.length > 0 && (
-            <span className="text-status-warning">First 20,000 per cluster on {truncated.map((l) => l.cluster).join(", ")}; listed every 30s</span>
+            <span className="text-status-warning">{tt("First 20,000 per cluster on")}{" "}{truncated.map((l) => l.cluster).join(", ")}{tt("; listed every 30s")}</span>
           )}
           <div className="flex-1" />
-          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
-          <span>
-            Columns: API server table view ·{" "}
-            {Object.values(modes).includes("poll") ? "listed every 30s (poll mode)" : "live (watch)"}
+          {autoHidden.length > 0 && <span className="truncate">{tt("{v0} hidden at this width", { v0: autoHidden.join(", ") })}</span>}
+          <span>{tt("Columns: API server table view ·")}{" "}
+            {Object.values(modes).includes("poll") ? tt("listed every 30s (poll mode)") : tt("live (watch)")}
           </span>
         </div>
       </main>
@@ -489,7 +482,7 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
             {row.name}
           </span>
           <IconButton
-            aria-label={copied ? "Copied" : "Copy name"}
+            aria-label={copied ? tt("Copied") : tt("Copy name")}
             className="size-[22px] [&_svg]:size-3.5"
             onClick={() =>
               void navigator.clipboard?.writeText(row.name).then(() => {
@@ -501,7 +494,7 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
             {copied ? <Check className="text-status-healthy" /> : <Copy />}
           </IconButton>
           <div className="flex-1" />
-          <IconButton aria-label="Close inspector" onClick={onClose}>
+          <IconButton aria-label={tt("Close inspector")} onClick={onClose}>
             <X />
           </IconButton>
         </div>
@@ -519,12 +512,11 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
         </div>
       </div>
       <Tabs defaultValue="details" className="flex min-h-0 flex-1 flex-col">
-        <TabsList aria-label="Sections" className="mt-1 gap-3 px-3.5 pt-1.5">
-          <TabsTrigger value="details">Details</TabsTrigger>
-          {kind === "Secret" && <TabsTrigger value="data">Data</TabsTrigger>}
+        <TabsList aria-label={tt("Sections")} className="mt-1 gap-3 px-3.5 pt-1.5">
+          <TabsTrigger value="details">{tt("Details")}</TabsTrigger>
+          {kind === "Secret" && <TabsTrigger value="data">{tt("Data")}</TabsTrigger>}
           {!isEvent && (
-            <TabsTrigger value="events">
-              Events {events !== null && <TabCount>{events.length}</TabCount>}
+            <TabsTrigger value="events">{tt("Events")}{" "}{events !== null && <TabCount>{events.length}</TabCount>}
             </TabsTrigger>
           )}
         </TabsList>
@@ -536,12 +528,12 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
                 <dd className="selectable m-0 break-words font-mono text-meta text-fg">{row.cells[i] || "—"}</dd>
               </div>
             ))}
-            <dt className="text-fg-muted">Created</dt>
-            <dd className="m-0 font-mono text-meta">{row.created ? `${row.created} (${formatAge(row.ageSec)} ago)` : "—"}</dd>
+            <dt className="text-fg-muted">{tt("Created")}</dt>
+            <dd className="m-0 font-mono text-meta">{row.created ? tt("{created} ({v1} ago)", { created: row.created, v1: formatAge(row.ageSec) }) : "—"}</dd>
           </dl>
           {labels.length > 0 && (
             <div className="mt-3 flex flex-col gap-1">
-              <span className="section-label">Labels</span>
+              <span className="section-label">{tt("Labels")}</span>
               <div className="flex flex-wrap gap-1">
                 {labels.map(([k, v]) => (
                   <span key={k} className="selectable rounded border border-line px-1.5 py-0.5 font-mono text-meta text-fg-secondary">
@@ -560,11 +552,11 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
         {!isEvent && (
           <TabsContent value="events" className="min-h-0 flex-1 overflow-y-auto">
             {events === null ? (
-              <EmptyState title="Reading events…" />
+              <EmptyState title={tt("Reading events…")} />
             ) : events.length ? (
               <EventsPanel events={events} />
             ) : (
-              <EmptyState title="No recent events">The API server keeps events for about 1 hour by default.</EmptyState>
+              <EmptyState title={tt("No recent events")}>{tt("The API server keeps events for about 1 hour by default.")}</EmptyState>
             )}
           </TabsContent>
         )}

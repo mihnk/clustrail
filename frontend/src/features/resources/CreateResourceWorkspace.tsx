@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { applyClustrailTheme, monaco } from "@/features/yaml/monaco";
 import { cn } from "@/lib/cn";
 import { kindName, templateFor } from "./kinds";
+import { t } from "@/i18n";
 
 interface ParsedDoc {
   kind: string;
@@ -34,7 +35,7 @@ function parseManifest(text: string): { docs: ParsedDoc[]; error?: string } {
     if (!obj.metadata?.name) return { docs, error: `${where}metadata.name is required.` };
     docs.push({ kind: obj.kind, apiVersion: obj.apiVersion, name: obj.metadata.name, namespace: obj.metadata.namespace });
   }
-  return docs.length ? { docs } : { docs, error: "Empty document." };
+  return docs.length ? { docs } : { docs, error: t("Empty document.") };
 }
 
 const STATUS_TONE: Record<CreateResult["status"], string> = {
@@ -89,9 +90,7 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
 
   if (!backend) {
     return (
-      <EmptyState className="flex-1" icon={<Plus />} title="Create from YAML">
-        Creating objects needs the desktop app connected to a cluster.
-      </EmptyState>
+      <EmptyState className="flex-1" icon={<Plus />} title={t("Create from YAML")}>{t("Creating objects needs the desktop app connected to a cluster.")}</EmptyState>
     );
   }
   const api = backend;
@@ -118,9 +117,9 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
     if (!cluster || !docs.length) return;
     const one = docs.length === 1 ? docs[0]! : null;
     confirm({
-      action: one ? `Create ${one.kind}` : `Create ${docs.length} objects`,
+      action: one ? t("Create {kind}", { kind: one.kind }) : t("Create {length} objects", { length: docs.length }),
       targetName: one ? one.name : "",
-      title: one ? undefined : <>Create {docs.length} objects?</>,
+      title: one ? undefined : <>{t("Create {nDocs} objects?", { nDocs: docs.length })}</>,
       targets: one
         ? undefined
         : [{ cluster: clusterId, env: cluster.env, protected: cluster.protected, items: docs.map((d) => ({ name: `${d.kind}/${d.name}`, health: "progressing" as const, note: d.namespace })) }],
@@ -130,16 +129,16 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
       namespace: one?.namespace,
       protected: cluster.protected,
       destructive: false,
-      whatHappens: <>Objects are created in order, like kubectl create. Existing objects are not changed; creation stops at the first failure.</>,
+      whatHappens: <>{t("Objects are created in order, like kubectl create. Existing objects are not changed; creation stops at the first failure.")}</>,
       command: `kubectl --context ${cluster.context} create -f manifest.yaml`,
-      confirmLabel: "Create",
+      confirmLabel: t("Create"),
       phrase: one ? undefined : `${clusterId}/${docs.length}`,
       onConfirm: () =>
         void run(false).then((items) => {
           if (!items) return;
           const created = items.filter((i) => i.status === "created");
           if (created.length === items.length) {
-            toast.show({ kind: "success", title: created.length === 1 ? `${created[0]!.kind} created` : `${created.length} objects created`, target: clusterId, env: cluster.env });
+            toast.show({ kind: "success", title: created.length === 1 ? `${created[0]!.kind} created` : t("{length} objects created", { length: created.length }), target: clusterId, env: cluster.env });
             if (created.length === 1) {
               const c = created[0]!;
               const d = docs[0]!;
@@ -147,7 +146,7 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
               ws.openView({ kind: "yaml", title: `YAML · ${c.name}`, cluster: clusterId, params: { kind: kindArg, namespace: c.namespace ?? "", name: c.name } });
             }
           } else {
-            toast.show({ kind: "error", title: `${created.length} of ${items.length} created`, target: clusterId, detail: items.find((i) => i.error)?.error });
+            toast.show({ kind: "error", title: t("{length} of {v1} created", { length: created.length, v1: items.length }), target: clusterId, detail: items.find((i) => i.error)?.error });
           }
         }),
     });
@@ -157,13 +156,13 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
     <main className="flex min-w-0 flex-1 flex-col bg-surface-app">
       <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line bg-surface-panel pl-3.5 pr-3 dark:bg-transparent">
         <Plus className="size-4 text-fg-secondary" aria-hidden />
-        <span className="text-title font-semibold">New {kindName(kindKey)}</span>
+        <span className="text-title font-semibold">{t("New {v0}", { v0: kindName(kindKey) })}</span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <FilterToken k="cluster" value={clusterId || "none"} active />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Create in</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("Create in")}</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={clusterId} onValueChange={(v) => (setClusterId(v), setResult(null))}>
               {connected.map((c) => (
                 <DropdownMenuRadioItem key={c.id} value={c.id}>
@@ -173,15 +172,11 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-        {cluster?.readOnly && <span className="text-meta text-status-warning">Read-only context</span>}
+        {cluster?.readOnly && <span className="text-meta text-status-warning">{t("Read-only context")}</span>}
         <div className="flex-1" />
         <Button onClick={() => void run(true)} disabled={!ready || busy}>
-          <FlaskConical aria-hidden />
-          Dry run
-        </Button>
-        <Button variant="primary" onClick={create} disabled={!ready || busy || cluster?.readOnly}>
-          Create…
-        </Button>
+          <FlaskConical aria-hidden />{t("Dry run")}</Button>
+        <Button variant="primary" onClick={create} disabled={!ready || busy || cluster?.readOnly}>{t("Create…")}</Button>
       </div>
       {parsed.error && (
         <Banner tone="warning" className="shrink-0 rounded-none">
@@ -195,8 +190,8 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
       )}
       {result && "items" in result && (
         <div className="max-h-[180px] shrink-0 overflow-y-auto border-b border-line bg-surface-panel px-3.5 py-2 text-ui">
-          <b className="font-semibold">{result.dryRun ? "Dry run" : "Create"}</b>
-          <span className="text-fg-muted"> · checked by the API server, in order</span>
+          <b className="font-semibold">{result.dryRun ? t("Dry run") : t("Create")}</b>
+          <span className="text-fg-muted">{" "}{t("· checked by the API server, in order")}</span>
           <ul className="m-0 mt-1 list-none p-0">
             {result.items.map((r, i) => (
               <li key={i} className="flex gap-2 py-0.5">
@@ -215,7 +210,7 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
       <div className="flex h-7 shrink-0 items-center gap-3.5 border-t border-line px-3.5 text-meta text-fg-muted">
         <span>{docs.length ? target : "—"}</span>
         <div className="flex-1" />
-        <span>Several objects: separate them with ---. Namespace defaults to the context’s namespace.</span>
+        <span>{t("Several objects: separate them with ---. Namespace defaults to the context’s namespace.")}</span>
       </div>
     </main>
   );

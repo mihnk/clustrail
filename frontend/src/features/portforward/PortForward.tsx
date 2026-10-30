@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigg
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
+import { t as tt } from "@/i18n";
 
 type Target = Pick<PortForwardRequest, "cluster" | "namespace" | "kind" | "name">;
 
@@ -86,10 +87,10 @@ function PortForwardDialog({ target }: { target: Target }) {
         closePortForward();
         toast.show({
           kind: "success",
-          title: `Forwarding localhost:${f.localPort}`,
+          title: tt("Forwarding localhost:{localPort}", { localPort: f.localPort }),
           target: `${target.name}:${remote} · ${target.cluster}`,
           env: cluster?.env,
-          action: { label: "Open", onClick: () => openExternal(urlOf(f)) },
+          action: { label: tt("Open"), onClick: () => openExternal(urlOf(f)) },
         });
       })
       .catch((e) => setError(errorText(e)))
@@ -106,10 +107,10 @@ function PortForwardDialog({ target }: { target: Target }) {
         >
           <div className="flex items-center gap-2">
             <ArrowLeftRight className="size-4 text-fg-secondary" aria-hidden />
-            <Dialog.Title className="m-0 text-title font-semibold">Port forward</Dialog.Title>
+            <Dialog.Title className="m-0 text-title font-semibold">{tt("Port forward")}</Dialog.Title>
             <div className="flex-1" />
             <Dialog.Close asChild>
-              <IconButton aria-label="Close">
+              <IconButton aria-label={tt("Close")}>
                 <X />
               </IconButton>
             </Dialog.Close>
@@ -142,32 +143,30 @@ function PortForwardDialog({ target }: { target: Target }) {
               ))}
             </div>
           )}
-          {ports && ports.length === 0 && <span className="text-meta text-fg-muted">No ports are declared; type the port the process listens on.</span>}
+          {ports && ports.length === 0 && <span className="text-meta text-fg-muted">{tt("No ports are declared; type the port the process listens on.")}</span>}
           <div className="grid grid-cols-2 gap-3">
-            <TextField label={target.kind === "Service" ? "Service port" : "Container port"} mono inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value.trim())} autoFocus />
+            <TextField label={target.kind === "Service" ? tt("Service port") : tt("Container port")} mono inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value.trim())} autoFocus />
             <TextField
-              label="Local port"
+              label={tt("Local port")}
               mono
               inputMode="numeric"
               value={local}
-              placeholder={suggestedLocal ? String(suggestedLocal) : "any free"}
+              placeholder={suggestedLocal ? String(suggestedLocal) : tt("any free")}
               onChange={(e) => setLocal(e.target.value.trim())}
               onKeyDown={(e) => e.key === "Enter" && start()}
             />
           </div>
-          <span className="text-meta text-fg-muted">
-            Listens on 127.0.0.1 only. {target.kind !== "Pod" && "Reaches one ready pod; when it goes away, the forward reconnects to another."}
+          <span className="text-meta text-fg-muted">{tt("Listens on 127.0.0.1 only.")}{" "}{target.kind !== "Pod" && tt("Reaches one ready pod; when it goes away, the forward reconnects to another.")}
           </span>
           {error && <span className="selectable rounded-md bg-status-critical-soft px-2.5 py-2 font-mono text-meta text-status-critical">{error}</span>}
-          <code className="selectable block truncate rounded-md bg-surface-panel px-2.5 py-1.5 font-mono text-meta text-fg-secondary">
-            kubectl --context {cluster?.context ?? target.cluster} -n {target.namespace} port-forward {target.kind.toLowerCase()}/{target.name} {localNum || ""}:{port || "PORT"}
+          <code className="selectable block truncate rounded-md bg-surface-panel px-2.5 py-1.5 font-mono text-meta text-fg-secondary">{tt("kubectl --context")}{" "}{cluster?.context ?? target.cluster} -n {target.namespace} port-forward {target.kind.toLowerCase()}/{target.name} {localNum || ""}:{port || "PORT"}
           </code>
           <div className="flex justify-end gap-2">
             <Dialog.Close asChild>
-              <Button>Cancel</Button>
+              <Button>{tt("Cancel")}</Button>
             </Dialog.Close>
             <Button variant="primary" disabled={!valid || busy} onClick={start}>
-              {busy ? "Starting…" : "Start forward"}
+              {busy ? tt("Starting…") : tt("Start forward")}
             </Button>
           </div>
         </Dialog.Content>
@@ -186,27 +185,26 @@ export function PortForwardIndicator() {
       <DropdownMenuTrigger asChild>
         <button type="button" className={cn("focus-ring flex items-center gap-1 whitespace-nowrap rounded px-1", troubled ? "text-status-warning" : "text-fg-secondary")}>
           <ArrowLeftRight className="size-3" aria-hidden />
-          {forwards.length} {forwards.length === 1 ? "forward" : "forwards"}
-          {troubled > 0 && ` · ${troubled} reconnecting`}
+          {tt(forwards.length === 1 ? "1 forward" : "{n} forwards", { n: forwards.length })}
+          {troubled > 0 && tt(" · {troubled} reconnecting", { troubled })}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[380px]">
-        <DropdownMenuLabel>Port forwards</DropdownMenuLabel>
+        <DropdownMenuLabel>{tt("Port forwards")}</DropdownMenuLabel>
         {forwards.map((f) => (
           <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 text-ui">
             <span className={cn("size-1.5 shrink-0 rounded-full", f.state === "active" ? "bg-status-healthy" : "bg-status-warning")} />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate font-mono">
-                localhost:{f.localPort} → {f.kind.toLowerCase()}/{f.name}:{f.port}
+              <span className="truncate font-mono">{tt("localhost:{localPort} → {v1}/{name}:{port}", { localPort: f.localPort, v1: f.kind.toLowerCase(), name: f.name, port: f.port })}
               </span>
               <span className="truncate text-meta text-fg-muted" title={f.error}>
                 {f.state === "active" ? `${f.pod}:${f.podPort} · ${f.cluster}` : `${f.state}${f.error ? ` · ${f.error}` : ""}`}
               </span>
             </div>
-            <IconButton aria-label="Open in browser" onClick={() => openExternal(urlOf(f))} disabled={f.state !== "active"}>
+            <IconButton aria-label={tt("Open in browser")} onClick={() => openExternal(urlOf(f))} disabled={f.state !== "active"}>
               <ExternalLink />
             </IconButton>
-            <IconButton aria-label="Stop forward" onClick={() => void backend?.stopPortForward(f.id)}>
+            <IconButton aria-label={tt("Stop forward")} onClick={() => void backend?.stopPortForward(f.id)}>
               <Square />
             </IconButton>
           </div>

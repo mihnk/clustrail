@@ -11,6 +11,7 @@ import type { GitOpsObject } from "@/data/gitops";
 import type { useToast } from "@/components/ui/toast";
 import { usePersistentState } from "./preferences";
 import type { BackgroundJob, WorkspaceState } from "./workspace";
+import { t } from "@/i18n";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 type Row = { id: string; cluster: string };
@@ -151,7 +152,7 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
         loaded.current = true;
         if (autoConnect) void api.autoConnect();
       })
-      .catch((e) => toast.show({ kind: "error", title: "Backend unavailable", detail: errorText(e) }));
+      .catch((e) => toast.show({ kind: "error", title: t("Backend unavailable"), detail: errorText(e) }));
     return () => {
       cancelled = true;
       offClusters();
@@ -171,7 +172,7 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
   }, [a.selectedClusterIds]);
 
   const fail = useCallback(
-    (title: string, target?: string) => (e: unknown) => toast.show({ kind: "error", title, target, detail: errorText(e), copyText: errorText(e) }),
+    (title: string, target?: string) => (e: unknown) => toast.show({ kind: "error", title: t(title), target, detail: errorText(e), copyText: errorText(e) }),
     [toast],
   );
 
@@ -180,7 +181,7 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
     const api = backend;
     const pod = (id: string) => a.allPods.find((p) => p.id === id);
     const dep = (id: string) => a.deployments.find((d) => d.id === id);
-    const done = (title: string, target: string, env?: Cluster["env"]) => () => toast.show({ kind: "success", title, target, env });
+    const done = (title: string, target: string, env?: Cluster["env"]) => () => toast.show({ kind: "success", title: t(title), target, env });
     return {
       connectCluster: (id) => {
         // Selecting a cluster to connect also adds it to the selection.

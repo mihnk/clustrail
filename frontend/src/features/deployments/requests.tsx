@@ -2,6 +2,7 @@ import { History, Pause, Play, RotateCcw, Scaling, Trash2 } from "lucide-react";
 import type { ConfirmationRequest } from "@/components/safety/ConfirmationDialog";
 import type { Cluster, DeploymentRow } from "@/data/types";
 import { getDeploymentState } from "@/data/mock";
+import { t, tn } from "@/i18n";
 
 const mono = "font-mono text-ui";
 
@@ -13,29 +14,20 @@ export function restartDeploymentRequest(
 ): ConfirmationRequest {
   const s = d.strategy;
   return {
-    action: "Restart deployment",
+    action: t("Restart deployment"),
     targetName: d.name,
     icon: <RotateCcw />,
     env: d.env,
     cluster: d.cluster,
     namespace: d.namespace,
-    meta: `${d.replicas} ${d.replicas === 1 ? "replica" : "replicas"}`,
+    meta: d.replicas === 1 ? t("1 replica") : t("{n} replicas", { n: d.replicas }),
     protected: cluster?.protected ?? false,
     destructive: true,
     whatHappens:
       s.type === "RollingUpdate" ? (
-        <>
-          All {d.replicas} pods are replaced using the Deployment’s RollingUpdate strategy (
-          <span className={mono}>maxSurge {s.maxSurge}</span>, <span className={mono}>maxUnavailable {s.maxUnavailable}</span>
-          ). Clustrail sets the <span className={mono}>restartedAt</span> annotation on the pod template; nothing else in the
-          spec changes.
-        </>
+        <>{tn("All {replicas} pods are replaced using the Deployment’s RollingUpdate strategy ({v1}, {v2}). Clustrail sets the {v3} annotation on the pod template; nothing else in the spec changes.", { replicas: d.replicas, v1: <span className={mono}>maxSurge {s.maxSurge}</span>, v2: <span className={mono}>maxUnavailable {s.maxUnavailable}</span>, v3: <span className={mono}>restartedAt</span> })}</>
       ) : (
-        <>
-          The Deployment uses the <span className={mono}>Recreate</span> strategy: all {d.replicas} pods are stopped before
-          new ones start, so the workload is unavailable during the restart. Clustrail sets the{" "}
-          <span className={mono}>restartedAt</span> annotation on the pod template; nothing else in the spec changes.
-        </>
+        <>{tn("The Deployment uses the {v0} strategy: all {replicas} pods are stopped before new ones start, so the workload is unavailable during the restart. Clustrail sets the {v2} annotation on the pod template; nothing else in the spec changes.", { v0: <span className={mono}>Recreate</span>, replicas: d.replicas, v2: <span className={mono}>restartedAt</span> })}</>
       ),
     currentState: getDeploymentState(d).map((f) => ({
       health: f.health,
@@ -48,7 +40,7 @@ export function restartDeploymentRequest(
       ),
     })),
     command: `kubectl --context ${d.cluster} -n ${d.namespace} rollout restart deployment/${d.name}`,
-    confirmLabel: "Restart deployment",
+    confirmLabel: t("Restart deployment"),
     onConfirm,
   };
 }
@@ -61,50 +53,48 @@ export function scaleDeploymentRequest(
 ): ConfirmationRequest {
   const hpaOverrides = d.hpa && (replicas < d.hpa.min || replicas > d.hpa.max);
   return {
-    action: `Scale to ${replicas}`,
+    action: t("Scale to {replicas}", { replicas }),
     targetName: d.name,
     icon: <Scaling />,
     env: d.env,
     cluster: d.cluster,
     namespace: d.namespace,
-    meta: `${d.replicas} → ${replicas} replicas`,
+    meta: t("{from} → {to} replicas", { from: d.replicas, to: replicas }),
     protected: cluster?.protected ?? false,
     destructive: replicas < d.replicas,
     whatHappens:
       replicas < d.replicas ? (
         <>
-          {d.replicas - replicas} {d.replicas - replicas === 1 ? "pod is" : "pods are"} terminated. Clustrail patches{" "}
-          <span className={mono}>spec.replicas</span> only.
+          {tn(d.replicas - replicas === 1 ? "{n} pod is terminated. Clustrail patches {field} only." : "{n} pods are terminated. Clustrail patches {field} only.", {
+            n: d.replicas - replicas,
+            field: <span className={mono}>spec.replicas</span>,
+          })}
         </>
       ) : (
         <>
-          {replicas - d.replicas} new {replicas - d.replicas === 1 ? "pod is" : "pods are"} scheduled. Clustrail patches{" "}
-          <span className={mono}>spec.replicas</span> only.
+          {tn(replicas - d.replicas === 1 ? "{n} new pod is scheduled. Clustrail patches {field} only." : "{n} new pods are scheduled. Clustrail patches {field} only.", {
+            n: replicas - d.replicas,
+            field: <span className={mono}>spec.replicas</span>,
+          })}
         </>
       ),
     currentState: [
-      { health: d.readyReplicas < d.replicas ? "warning" : "healthy", text: `${d.readyReplicas} of ${d.replicas} replicas ready.` },
+      { health: d.readyReplicas < d.replicas ? "warning" : "healthy", text: t("{readyReplicas} of {replicas} replicas ready.", { readyReplicas: d.readyReplicas, replicas: d.replicas }) },
       ...(d.hpa
         ? [
             {
               health: hpaOverrides ? ("warning" as const) : ("progressing" as const),
               text: hpaOverrides ? (
-                <>
-                  HPA <span className={mono}>{d.hpa.name}</span> keeps replicas between {d.hpa.min} and {d.hpa.max} and will
-                  override this change. Edit the HPA instead.
-                </>
+                <>{tn("HPA {name} keeps replicas between {min} and {max} and will override this change. Edit the HPA instead.", { name: <span className={mono}>{d.hpa.name}</span>, min: d.hpa.min, max: d.hpa.max })}</>
               ) : (
-                <>
-                  HPA <span className={mono}>{d.hpa.name}</span> manages replicas ({d.hpa.min}–{d.hpa.max}) and may change
-                  this value again.
-                </>
+                <>{tn("HPA {name} manages replicas ({min}–{max}) and may change this value again.", { name: <span className={mono}>{d.hpa.name}</span>, min: d.hpa.min, max: d.hpa.max })}</>
               ),
             },
           ]
         : []),
     ],
     command: `kubectl --context ${d.cluster} -n ${d.namespace} scale deployment/${d.name} --replicas=${replicas}`,
-    confirmLabel: `Scale to ${replicas}`,
+    confirmLabel: t("Scale to {replicas}", { replicas }),
     onConfirm,
   };
 }
@@ -117,23 +107,19 @@ export function rollbackDeploymentRequest(
 ): ConfirmationRequest {
   const target = d.revisions.find((r) => r.rev === rev);
   return {
-    action: `Roll back to revision ${rev}`,
+    action: t("Roll back to revision {rev}", { rev }),
     targetName: d.name,
     icon: <History />,
     env: d.env,
     cluster: d.cluster,
     namespace: d.namespace,
-    meta: `${d.replicas} replicas`,
+    meta: t("{n} replicas", { n: d.replicas }),
     protected: cluster?.protected ?? false,
     destructive: true,
     whatHappens: (
-      <>
-        The pod template of revision {rev} becomes current and pods roll out again: image{" "}
-        <span className={mono}>
+      <>{tn("The pod template of revision {rev} becomes current and pods roll out again: image {v1}. This creates a new revision; nothing else in the spec changes.", { rev, v1: <span className={mono}>
           {d.image} → {target?.image}
-        </span>
-        . This creates a new revision; nothing else in the spec changes.
-      </>
+        </span> })}</>
     ),
     currentState: [
       ...getDeploymentState(d).slice(0, 1).map((f) => ({ health: f.health, text: f.text })),
@@ -142,17 +128,14 @@ export function rollbackDeploymentRequest(
             {
               health: "warning" as const,
               text: (
-                <>
-                  Managed by Argo CD app <span className={mono}>{d.argoApp}</span>: with auto-sync on, the controller restores
-                  the revision in Git. Roll back in Git to keep it.
-                </>
+                <>{tn("Managed by Argo CD app {argoApp}: with auto-sync on, the controller restores the revision in Git. Roll back in Git to keep it.", { argoApp: <span className={mono}>{d.argoApp}</span> })}</>
               ),
             },
           ]
         : []),
     ],
     command: `kubectl --context ${d.cluster} -n ${d.namespace} rollout undo deployment/${d.name} --to-revision=${rev}`,
-    confirmLabel: "Roll back",
+    confirmLabel: t("Roll back"),
     onConfirm,
   };
 }
@@ -164,7 +147,7 @@ export function pauseDeploymentRequest(
   onConfirm: () => void,
 ): ConfirmationRequest {
   return {
-    action: pause ? "Pause rollout of" : "Resume rollout of",
+    action: pause ? t("Pause rollout of") : t("Resume rollout of"),
     targetName: d.name,
     icon: pause ? <Pause /> : <Play />,
     env: d.env,
@@ -173,33 +156,33 @@ export function pauseDeploymentRequest(
     protected: cluster?.protected ?? false,
     destructive: false,
     whatHappens: pause
-      ? "Changes to the pod template stop rolling out until the Deployment is resumed. Running pods are not touched."
-      : "Pending pod template changes start rolling out with the Deployment's strategy.",
+      ? t("Changes to the pod template stop rolling out until the Deployment is resumed. Running pods are not touched.")
+      : t("Pending pod template changes start rolling out with the Deployment's strategy."),
     command: `kubectl --context ${d.cluster} -n ${d.namespace} rollout ${pause ? "pause" : "resume"} deployment/${d.name}`,
-    confirmLabel: pause ? "Pause rollout" : "Resume rollout",
+    confirmLabel: pause ? t("Pause rollout") : t("Resume rollout"),
     onConfirm,
   };
 }
 
 export function deleteDeploymentRequest(d: DeploymentRow, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {
   return {
-    action: "Delete deployment",
+    action: t("Delete deployment"),
     targetName: d.name,
     icon: <Trash2 />,
     env: d.env,
     cluster: d.cluster,
     namespace: d.namespace,
-    meta: `${d.replicas} replicas`,
+    meta: t("{n} replicas", { n: d.replicas }),
     protected: cluster?.protected ?? false,
     destructive: true,
     whatHappens: (
       <>
-        The Deployment, its ReplicaSets and all {d.replicas} pods are deleted. Services and ConfigMaps it uses stay.
-        {d.argoApp ? " Argo CD recreates it on the next sync if it is still in Git." : ""}
+        {t("The Deployment, its ReplicaSets and all {n} pods are deleted. Services and ConfigMaps it uses stay.", { n: d.replicas })}
+        {d.argoApp ? ` ${t("Argo CD recreates it on the next sync if it is still in Git.")}` : ""}
       </>
     ),
     command: `kubectl --context ${d.cluster} -n ${d.namespace} delete deployment/${d.name}`,
-    confirmLabel: "Delete deployment",
+    confirmLabel: t("Delete deployment"),
     onConfirm,
   };
 }

@@ -39,6 +39,7 @@ import { cn } from "@/lib/cn";
 import { deploymentActions, type DeploymentActionDeps } from "./actions";
 import { deploymentColumns, deploymentExplorerColumns } from "./columns";
 import { DeploymentInspector, type DeploymentTab } from "./DeploymentInspector";
+import { t as tt, tn } from "@/i18n";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
 
@@ -59,7 +60,7 @@ export function useDeploymentDeps(nav: DeploymentNav) {
         nav.select?.(d.id);
         if (fn) fn();
         else {
-          ws.openView({ kind: "deployments", title: "Deployments" });
+          ws.openView({ kind: "deployments", title: tt("Deployments") });
           ws.revealResource("deployment", d.id);
         }
       };
@@ -81,7 +82,7 @@ export function useDeploymentDeps(nav: DeploymentNav) {
         compare: () =>
           ws.openView({
             kind: "compare",
-            title: `Compare · ${d.name}`,
+            title: tt("Compare · {name}", { name: d.name }),
             params: { kind: "Deployment", namespace: d.namespace, name: d.name, clusters: ws.selectedClusterIds.join(",") },
           }),
       };
@@ -137,9 +138,9 @@ function ScopedDeployments({ cluster: clusterId, namespace }: { cluster: string;
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-app">
       <div className={cn("flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-4", BAR)}>
         <Layers className="size-4" aria-hidden />
-        <span className="text-title font-semibold">Deployments</span>
+        <span className="text-title font-semibold">{tt("Deployments")}</span>
         <span className="text-cell text-fg-muted">
-          {namespace || "all namespaces"} · {rows.length} of {backend ? deployments.filter((d) => d.cluster === clusterId).length : deploymentTotal}
+          {namespace || tt("all namespaces")} · {rows.length}{" "}{tt("of")}{" "}{backend ? deployments.filter((d) => d.cluster === clusterId).length : deploymentTotal}
         </span>
         <div className="flex-1" />
         {cluster && selected && (
@@ -152,7 +153,7 @@ function ScopedDeployments({ cluster: clusterId, namespace }: { cluster: string;
       </div>
       <ResourceTable
         table={table}
-        aria-label={`Deployments in ${namespace} on ${clusterId}`}
+        aria-label={tt("Deployments in {namespace} on {clusterId}", { namespace, clusterId })}
         rowHeight={ROW_HEIGHT[density]}
         selectedId={selectedId}
         onSelect={setSelectedId}
@@ -287,7 +288,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
     for (const d of inClusters) m[d.cluster] = (m[d.cluster] ?? 0) + 1;
     return m;
   }, [inClusters]);
-  const nsLabel = namespaces === null ? (allNamespaces.length ? `${allNamespaces.length} selected` : "any") : `${namespaces.size} selected`;
+  const nsLabel = namespaces === null ? (allNamespaces.length ? tt("{n} selected", { n: allNamespaces.length }) : tt("any")) : tt("{n} selected", { n: namespaces.size });
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -295,13 +296,13 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
         <div className={cn("flex h-12 shrink-0 items-center gap-2.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <Button variant="ghost" className="gap-2 px-1.5 text-fg">
             <Layers className="!size-4" aria-hidden />
-            <span className="text-title font-semibold">Deployments</span>
+            <span className="text-title font-semibold">{tt("Deployments")}</span>
             <ChevronDown className="text-fg-muted" aria-hidden />
           </Button>
           <ClusterPicker open={active && clusterPickerOpen} onOpenChange={setClusterPickerOpen}>
             <button
               type="button"
-              aria-label="Pick clusters"
+              aria-label={tt("Pick clusters")}
               className="focus-ring hidden min-w-0 items-center gap-1.5 overflow-hidden rounded-md border-0 bg-transparent p-0 @[760px]:flex"
             >
               {selectedClusters.map((c) => (
@@ -317,20 +318,20 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
           </ClusterPicker>
           <div className="flex-1" />
           <Segmented
-            aria-label="Cluster view"
+            aria-label={tt("Cluster view")}
             value={view}
             onValueChange={setView}
             options={[
-              { value: "aggregated", label: "Aggregated" },
-              { value: "by-cluster", label: "By cluster" },
+              { value: "aggregated", label: tt("Aggregated") },
+              { value: "by-cluster", label: tt("By cluster") },
             ]}
           />
-          <IconButton aria-label="Columns" disabled title="Column choice is available in the Pods explorer">
+          <IconButton aria-label={tt("Columns")} disabled title={tt("Column choice is available in the Pods explorer")}>
             <Columns3 />
           </IconButton>
           <span className="flex items-center gap-1.5 whitespace-nowrap text-ui text-fg-secondary">
             <ConnectionDot state={allConnected ? "connected" : "reconnecting"} />
-            {allConnected ? "Live" : "Partial"}
+            {allConnected ? tt("Live") : tt("Partial")}
           </span>
         </div>
 
@@ -338,13 +339,13 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
             <label className="flex h-7 w-[200px] shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-fg-muted focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
               <Search className="size-3.5 shrink-0" aria-hidden />
-              <span className="sr-only">Filter deployments</span>
+              <span className="sr-only">{tt("Filter deployments")}</span>
               <input
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Escape" && (query ? setQuery("") : e.currentTarget.blur())}
-                placeholder="Filter name, image, label…"
+                placeholder={tt("Filter name, image, label…")}
                 spellCheck={false}
                 className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
               />
@@ -355,7 +356,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
                 <FilterToken k="namespace" value={nsLabel} active={namespaces !== null} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Namespaces</DropdownMenuLabel>
+                <DropdownMenuLabel>{tt("Namespaces")}</DropdownMenuLabel>
                 {allNamespaces.map((ns) => (
                   <DropdownMenuCheckboxItem
                     key={ns}
@@ -372,7 +373,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
                   </DropdownMenuCheckboxItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setNamespaces(null)}>Select all</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setNamespaces(null)}>{tt("Select all")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
@@ -385,37 +386,34 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
                 />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Rollout</DropdownMenuLabel>
+                <DropdownMenuLabel>{tt("Rollout")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={rolloutFilter} onValueChange={(v) => setRolloutFilter(v as RolloutFilter)}>
-                  <DropdownMenuRadioItem value="any">any</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="attention">needs attention</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="Progressing">Progressing</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="Paused">Paused</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="any">{tt("any")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="attention">{tt("needs attention")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="Progressing">{tt("Progressing")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="Paused">{tt("Paused")}</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
             <button
               type="button"
               onClick={() => searchRef.current?.focus()}
-              title="Type tokens in the filter: ns:payments cluster:prod"
+              title={tt("Type tokens in the filter: ns:payments cluster:prod")}
               className="focus-ring hidden h-[26px] items-center gap-1.5 whitespace-nowrap rounded-md border border-dashed border-line-strong bg-transparent px-2 text-ui text-fg-secondary @[860px]:flex"
             >
-              <Plus className="size-3.5" aria-hidden />
-              Filter
-            </button>
+              <Plus className="size-3.5" aria-hidden />{tt("Filter")}</button>
           </div>
           <Segmented<HealthFilter>
-            aria-label="Health"
+            aria-label={tt("Health")}
             value={health}
             onValueChange={setHealth}
             options={[
-              { value: "all", label: <>All <span className="font-mono text-fg-muted">{baseRows.length}</span></> },
+              { value: "all", label: <>{tt("All")}{" "}<span className="font-mono text-fg-muted">{baseRows.length}</span></> },
               {
                 value: "attention",
                 label: (
                   <>
-                    <StatusGlyph health="failed" />
-                    Attention <span className="font-mono">{attention}</span>
+                    <StatusGlyph health="failed" />{tt("Attention")}{" "}<span className="font-mono">{attention}</span>
                   </>
                 ),
               },
@@ -428,7 +426,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
 
         <ResourceTable
           table={table}
-          aria-label="Deployments"
+          aria-label={tt("Deployments")}
           onAutoHiddenChange={setAutoHidden}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
@@ -444,9 +442,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
           onHeldUpdatesChange={setHeld}
           fillMin={160}
           empty={
-            <EmptyState icon={<SearchX />} title="No deployments match">
-              Clear the filters or pick more clusters.
-            </EmptyState>
+            <EmptyState icon={<SearchX />} title={tt("No deployments match")}>{tt("Clear the filters or pick more clusters.")}</EmptyState>
           }
         />
 
@@ -456,22 +452,18 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
             className="shrink-0 rounded-none border-t border-line"
             action={
               <Button size="sm" variant="ghost" onClick={() => setShowForbidden(!showForbidden)}>
-                {showForbidden ? "Hide" : "Details"}
+                {showForbidden ? tt("Hide") : tt("Details")}
               </Button>
             }
           >
             <b className="font-semibold">
-              {forbidden.length} {forbidden.length === 1 ? "namespace" : "namespaces"} hidden:
-            </b>{" "}
+              {tt(forbidden.length === 1 ? "1 namespace hidden:" : "{n} namespaces hidden:", { n: forbidden.length })}</b>{" "}
             {forbidden.map((f) => (
               <span key={f.cluster + f.namespace}>
-                <span className="font-mono">{f.user}</span> can’t list {f.resource} in <span className="font-mono">{f.namespace}</span> on{" "}
-                {f.cluster} (403 Forbidden)
-              </span>
+                <span className="font-mono">{f.user}</span>{" "}{tn("can’t list {resource} in {namespace} on {cluster} (403 Forbidden)", { resource: f.resource, namespace: <span className="font-mono">{f.namespace}</span>, cluster: f.cluster })}</span>
             ))}
             {showForbidden && (
-              <span className="selectable mt-1 block font-mono text-meta text-fg-secondary">
-                kubectl --context {forbidden[0]!.cluster} auth can-i list deployments -n {forbidden[0]!.namespace}
+              <span className="selectable mt-1 block font-mono text-meta text-fg-secondary">{tt("kubectl --context {v0} auth can-i list deployments -n {v1}", { v0: forbidden[0]!.cluster, v1: forbidden[0]!.namespace })}
               </span>
             )}
           </Banner>
@@ -479,23 +471,21 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
 
         <div className={cn("flex h-7 shrink-0 items-center gap-3.5 border-t border-line px-3.5 text-meta text-fg-muted", BAR)}>
           <span>
-            <span className="text-fg">{rows.length}</span> deployments
-          </span>
-          {attention > 0 && <span className="text-status-critical">{attention} need attention</span>}
+            <span className="text-fg">{rows.length}</span>{" "}{tt("deployments")}</span>
+          {attention > 0 && <span className="text-status-critical">{tt("{attention} need attention", { attention })}</span>}
           {held > 0 && (
             <span className="flex items-center gap-1.5 text-status-progressing">
               <span className="size-1.5 rounded-full bg-status-progressing" />
-              {held} {held === 1 ? "update" : "updates"} held while hovering
-            </span>
+              {tt(held === 1 ? "1 update held while hovering" : "{n} updates held while hovering", { n: held })}</span>
           )}
-          {grouped && <span>Grouped by cluster</span>}
+          {grouped && <span>{tt("Grouped by cluster")}</span>}
           <div className="flex-1" />
-          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
+          {autoHidden.length > 0 && <span className="truncate">{tt("{v0} hidden at this width", { v0: autoHidden.join(", ") })}</span>}
         </div>
       </main>
 
       {inspectorOpen && selected && (
-        <InspectorPanel label="Deployment inspector" storageKey="deployments" active={active}>
+        <InspectorPanel label={tt("Deployment inspector")} storageKey="deployments" active={active}>
           <DeploymentInspector
             d={selected}
             cluster={clusterById(selected.cluster)}

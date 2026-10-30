@@ -7,6 +7,7 @@ import { IconButton } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { isMac, modKey } from "@/lib/platform";
 import { useWorkspace } from "./workspace";
+import { t as tt } from "@/i18n";
 
 interface Overlays {
   openPalette: () => void;
@@ -122,9 +123,9 @@ function KeyboardHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
           className="fixed left-1/2 top-[96px] z-50 w-[560px] max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-xl border border-line-strong bg-surface-elevated p-5 text-fg shadow-dialog"
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="m-0 text-title font-semibold">Keyboard shortcuts</Dialog.Title>
+            <Dialog.Title className="m-0 text-title font-semibold">{tt("Keyboard shortcuts")}</Dialog.Title>
             <Dialog.Close asChild>
-              <IconButton aria-label="Close">
+              <IconButton aria-label={tt("Close")}>
                 <X />
               </IconButton>
             </Dialog.Close>
@@ -139,7 +140,7 @@ function KeyboardHelp({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
                     </Kbd>
                   ))}
                 </dt>
-                <dd className="m-0 text-fg-secondary">{label}</dd>
+                <dd className="m-0 text-fg-secondary">{tt(label)}</dd>
               </div>
             ))}
           </dl>

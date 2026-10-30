@@ -6,6 +6,7 @@ import { StatusGlyph, healthTone } from "@/components/status/StatusGlyph";
 import { EnvMarker } from "@/components/status/EnvironmentBadge";
 import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { t } from "@/i18n";
 
 const col = createColumnHelper<GitOpsObject>();
 
@@ -57,17 +58,17 @@ export function AppHealthStatus({ health }: { health: AppHealth }) {
 export const gitopsColumns = [
   col.accessor((o) => healthRank[o.health], {
     id: "sync",
-    meta: { label: "Sync", width: 96, priority: 100, sortNote: "sync · attention first" },
+    meta: { label: t("Sync"), width: 96, priority: 100, sortNote: t("sync · attention first") },
     sortingFn: (a, b) => healthRank[a.original.health] - healthRank[b.original.health] || a.original.name.localeCompare(b.original.name),
     cell: ({ row: { original: o } }) => <SyncStatus sync={o.sync} />,
   }),
   col.accessor("appHealth", {
     id: "health",
-    meta: { label: "Health", width: 96, priority: 90, sortNote: "health" },
+    meta: { label: t("Health"), width: 96, priority: 90, sortNote: t("health") },
     cell: ({ getValue }) => <AppHealthStatus health={getValue()} />,
   }),
   col.accessor("name", {
-    meta: { label: "Name", width: "fill", priority: 100, sortNote: "name" },
+    meta: { label: t("Name"), width: "fill", priority: 100, sortNote: t("name") },
     cell: ({ row: { original: o } }) => (
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate font-medium text-fg">{o.name}</span>
@@ -76,7 +77,7 @@ export const gitopsColumns = [
     ),
   }),
   col.accessor("cluster", {
-    meta: { label: "Cluster", width: 108, priority: 80, sortNote: "cluster" },
+    meta: { label: t("Cluster"), width: 108, priority: 80, sortNote: t("cluster") },
     cell: ({ row: { original: o } }) => (
       <span className="flex min-w-0 items-center gap-1.5">
         <EnvMarker env={o.env} />
@@ -86,7 +87,7 @@ export const gitopsColumns = [
   }),
   col.accessor((o) => shortRepo(o), {
     id: "source",
-    meta: { label: "Source", width: 170, priority: 40, sortNote: "source" },
+    meta: { label: t("Source"), width: 170, priority: 40, sortNote: t("source") },
     cell: ({ getValue }) => (
       <span className="block truncate font-mono text-ui" title={getValue()}>
         {getValue()}
@@ -94,12 +95,12 @@ export const gitopsColumns = [
     ),
   }),
   col.accessor("revision", {
-    meta: { label: "Revision", width: 64, priority: 60, sortNote: "revision" },
+    meta: { label: t("Revision"), width: 64, priority: 60, sortNote: t("revision") },
     cell: ({ getValue }) => <span className="block truncate font-mono text-ui">{getValue()}</span>,
   }),
   col.accessor("reconciledSeconds", {
     id: "reconciled",
-    meta: { label: "Reconciled", width: 64, align: "right", priority: 50, sortNote: "last reconcile" },
+    meta: { label: t("Reconciled"), width: 64, align: "right", priority: 50, sortNote: t("last reconcile") },
     cell: ({ getValue }) => (getValue() < 3 ? "now" : formatAge(getValue())),
   }),
 ];

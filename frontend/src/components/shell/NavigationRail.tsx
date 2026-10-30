@@ -4,6 +4,7 @@ import { useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
+import { t } from "@/i18n";
 
 /**
  * Collapsed navigation for workspaces that need the width (investigations,
@@ -16,43 +17,43 @@ export function NavigationRail() {
   const kind = activeTab?.kind;
   return (
     <nav
-      aria-label="Navigation (collapsed)"
+      aria-label={t("Navigation (collapsed)")}
       className="flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface-side py-2.5"
     >
       <RailButton
-        label={`Clusters: ${selectedClusterIds.length} selected`}
+        label={t("Clusters: {length} selected", { length: selectedClusterIds.length })}
         active={kind === "clusters"}
         onClick={() => openView({ kind: "clusters", title: "Clusters" })}
       >
         <span className="font-mono text-label font-semibold text-fg-secondary">{selectedClusterIds.length}</span>
       </RailButton>
       <Divider />
-      <RailButton label="Pods" active={kind === "pods"} onClick={() => openTab("pods")}>
+      <RailButton label={t("Pods")} active={kind === "pods"} onClick={() => openTab("pods")}>
         <Box />
       </RailButton>
-      <RailButton label="Deployments" active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })}>
+      <RailButton label={t("Deployments")} active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })}>
         <Layers />
       </RailButton>
-      <RailButton label="Services" active={listKind === "Service"} onClick={() => openView({ kind: "list", title: "Services", params: { kind: "Service" } })}>
+      <RailButton label={t("Services")} active={listKind === "Service"} onClick={() => openView({ kind: "list", title: "Services", params: { kind: "Service" } })}>
         <Network />
       </RailButton>
-      <RailButton label="Events" active={listKind === "Event"} onClick={() => openView({ kind: "list", title: "Events", params: { kind: "Event" } })}>
+      <RailButton label={t("Events")} active={listKind === "Event"} onClick={() => openView({ kind: "list", title: "Events", params: { kind: "Event" } })}>
         <Activity />
       </RailButton>
-      <RailButton label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })}>
+      <RailButton label={t("Nodes")} active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })}>
         <Server />
       </RailButton>
-      <RailButton label="All resource kinds" onClick={openKinds}>
+      <RailButton label={t("All resource kinds")} onClick={openKinds}>
         <LayoutGrid />
       </RailButton>
       <Divider />
-      <RailButton label="Investigations" active={kind === "investigation"} onClick={() => openInvestigation(currentInvestigation)}>
+      <RailButton label={t("Investigations")} active={kind === "investigation"} onClick={() => openInvestigation(currentInvestigation)}>
         <Route />
       </RailButton>
-      <RailButton label="Helm releases" active={kind === "helm"} onClick={() => openView({ kind: "helm", title: "Helm releases" })}>
+      <RailButton label={t("Helm releases")} active={kind === "helm"} onClick={() => openView({ kind: "helm", title: t("Helm releases") })}>
         <LifeBuoy />
       </RailButton>
-      <RailButton label="GitOps" active={kind === "gitops"} onClick={() => openView({ kind: "gitops", title: "GitOps" })}>
+      <RailButton label={t("GitOps")} active={kind === "gitops"} onClick={() => openView({ kind: "gitops", title: "GitOps" })}>
         <GitBranch />
       </RailButton>
     </nav>

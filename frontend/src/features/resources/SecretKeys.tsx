@@ -3,6 +3,7 @@ import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
 import { backend, errorText } from "@/backend/client";
 import { Button, IconButton } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { t } from "@/i18n";
 
 export interface SecretKeyInfo {
   key: string;
@@ -68,25 +69,24 @@ export function SecretKeys({
       return next;
     });
 
-  if (keys === null) return <p className="m-0 text-ui text-fg-muted">Reading keys…</p>;
+  if (keys === null) return <p className="m-0 text-ui text-fg-muted">{t("Reading keys…")}</p>;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <span className="flex items-center gap-1.5 text-meta text-fg-muted">
         <KeyRound className="size-3.5" aria-hidden />
-        {keys.length} {keys.length === 1 ? "key" : "keys"}
-        {kind ? ` · ${kind}` : ""} · values hidden until you show one
-      </span>
+        {t(keys.length === 1 ? "1 key" : "{n} keys", { n: keys.length })}
+        {kind ? ` · ${kind}` : ""}{" "}{t("· values hidden until you show one")}</span>
       {keys.map((k) => {
         const v = shown[k.key];
         return (
           <div key={k.key} className="flex flex-col gap-1 rounded-md border border-line px-2.5 py-1.5">
             <div className="flex items-center gap-2 text-ui">
               <span className="truncate font-mono font-medium">{k.key}</span>
-              <span className="text-meta text-fg-muted">{k.bytes} bytes</span>
+              <span className="text-meta text-fg-muted">{k.bytes}{" "}{t("bytes")}</span>
               <div className="flex-1" />
               {v && "value" in v && (
                 <IconButton
-                  aria-label={copied === k.key ? "Copied" : `Copy ${k.key}`}
+                  aria-label={copied === k.key ? t("Copied") : t("Copy {key}", { key: k.key })}
                   className="size-[22px] [&_svg]:size-3.5"
                   onClick={() =>
                     void navigator.clipboard?.writeText(v.value).then(() => {
@@ -100,13 +100,13 @@ export function SecretKeys({
               )}
               <Button size="sm" variant="ghost" disabled={!backend} onClick={() => (v ? hide(k.key) : reveal(k.key))}>
                 {v ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
-                {v ? "Hide" : "Show"}
+                {v ? t("Hide") : t("Show")}
               </Button>
             </div>
             {v && "value" in v && (
               <pre className="selectable m-0 max-h-[160px] overflow-auto whitespace-pre-wrap break-all rounded bg-surface-app px-2 py-1 font-mono text-meta text-fg">
                 {v.value}
-                {v.binary && <span className="block text-fg-muted">(binary, shown as base64)</span>}
+                {v.binary && <span className="block text-fg-muted">{t("(binary, shown as base64)")}</span>}
               </pre>
             )}
             {v && "error" in v && <span className="selectable font-mono text-meta text-status-critical">{v.error}</span>}

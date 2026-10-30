@@ -23,6 +23,7 @@ import {
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { cn } from "@/lib/cn";
 import { formatShortcut } from "@/lib/shortcuts";
+import { t } from "@/i18n";
 
 export interface ResourceAction {
   id: string;
@@ -59,7 +60,7 @@ export function ResourceContextMenu({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-[248px]" aria-label="Resource actions">
+      <ContextMenuContent className="w-[248px]" aria-label={t("Resource actions")}>
         <ActionGroups actions={actions} target={target} kind="context" />
       </ContextMenuContent>
     </ContextMenu>
@@ -69,7 +70,7 @@ export function ResourceContextMenu({
 /** Menu body for a ContextMenu whose trigger is managed elsewhere (e.g. one menu for a whole table). */
 export function ResourceContextMenuContent({ actions, target }: { actions: ResourceAction[]; target: ActionTarget }) {
   return (
-    <ContextMenuContent className="w-[248px]" aria-label="Resource actions">
+    <ContextMenuContent className="w-[248px]" aria-label={t("Resource actions")}>
       <ActionGroups actions={actions} target={target} kind="context" />
     </ContextMenuContent>
   );
@@ -96,9 +97,7 @@ export function ModifyMenuButton({
   const modify = includeObserve ? actions : actions.filter((a) => a.group === "modify");
   const button = (
     <Button variant={target.protected || target.readOnly ? "locked" : "default"} size={size}>
-      {target.protected && <Lock aria-hidden />}
-      Modify
-      <ChevronDown aria-hidden />
+      {target.protected && <Lock aria-hidden />}{t("Modify")}<ChevronDown aria-hidden />
     </Button>
   );
   return (
@@ -154,18 +153,14 @@ function ActionGroups({ actions, target, kind }: { actions: ResourceAction[]; ta
       {observe.length > 0 && (
         <>
           <Label>
-            <Eye className="size-3" aria-hidden />
-            Observe
-          </Label>
+            <Eye className="size-3" aria-hidden />{t("Observe")}</Label>
           {items(observe, false)}
         </>
       )}
       {observe.length > 0 && modify.length + danger.length > 0 && <Separator />}
       {modify.length + danger.length > 0 && (
         <Label>
-          {target.protected && <Lock className="size-3 text-env-prod-ink" aria-label="Protected" />}
-          Modify
-          {target.readOnly && <span className="normal-case tracking-normal">· read-only context</span>}
+          {target.protected && <Lock className="size-3 text-env-prod-ink" aria-label={t("Protected")} />}{t("Modify")}{target.readOnly && <span className="normal-case tracking-normal">{t("· read-only context")}</span>}
           <EnvironmentBadge env={target.env} size="sm" className="ml-auto text-[9.5px] tracking-[.05em]" />
         </Label>
       )}

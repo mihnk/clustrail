@@ -9,6 +9,7 @@ import { TextField } from "@/components/ui/text-field";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { cn } from "@/lib/cn";
+import { t as tt, tn } from "@/i18n";
 
 export interface ConfirmationRequest {
   /** e.g. "Restart deployment". The target name is appended in mono. */
@@ -172,7 +173,7 @@ function ConfirmationDialog({
               </AlertDialog.Description>
             </div>
             <AlertDialog.Cancel asChild>
-              <IconButton aria-label="Close">
+              <IconButton aria-label={tt("Close")}>
                 <X />
               </IconButton>
             </AlertDialog.Cancel>
@@ -186,7 +187,7 @@ function ConfirmationDialog({
                     <div className="flex items-center gap-1.5 pb-0.5 pt-1">
                       <EnvironmentBadge env={g.env} />
                       <span className="font-mono text-ui">{g.cluster}</span>
-                      {g.protected && <Lock className="size-3 text-env-prod-ink" aria-label="Protected" />}
+                      {g.protected && <Lock className="size-3 text-env-prod-ink" aria-label={tt("Protected")} />}
                     </div>
                     {g.items.map((t) => (
                       <div key={t.name} className="grid h-6 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-x-2 text-ui">
@@ -201,13 +202,13 @@ function ConfirmationDialog({
             )}
             {level !== "light" && r.whatHappens && (
               <section className="flex flex-col gap-2">
-                <span className="section-label">What will happen</span>
+                <span className="section-label">{tt("What will happen")}</span>
                 <p className="m-0 text-body [text-wrap:pretty]">{r.whatHappens}</p>
               </section>
             )}
             {level !== "light" && r.currentState && r.currentState.length > 0 && (
               <section className="flex flex-col gap-2">
-                <span className="section-label">Current state</span>
+                <span className="section-label">{tt("Current state")}</span>
                 {r.currentState.map((s, i) => (
                   <div key={i} className="grid grid-cols-[14px_minmax(0,1fr)] items-start gap-x-2.5 text-body">
                     <StatusGlyph health={s.health} className="mt-[3px]" />
@@ -222,20 +223,14 @@ function ConfirmationDialog({
                 <div className="flex gap-2.5 rounded-lg bg-env-prod-soft px-3 py-2.5 text-cell">
                   <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-env-prod-ink" aria-hidden />
                   <span>
-                    <b className="font-semibold">{r.targets ? "A target is protected." : `${r.cluster} is protected.`}</b>{" "}
-                    Confirming unlocks this single action.
-                    Protected mode stays on and the action is recorded in the local activity log. Your Kubernetes
-                    permissions (RBAC) still decide whether the request succeeds.
-                  </span>
+                    <b className="font-semibold">{r.targets ? tt("A target is protected.") : tt("{cluster} is protected.", { cluster: r.cluster })}</b>{" "}{tt("Confirming unlocks this single action. Protected mode stays on and the action is recorded in the local activity log. Your Kubernetes permissions (RBAC) still decide whether the request succeeds.")}</span>
                 </div>
                 <TextField
                   size="lg"
                   mono
                   autoComplete="off"
                   label={
-                    <>
-                      Type <span className="font-mono font-semibold text-fg">{phrase}</span> to confirm
-                    </>
+                    <>{tn("Type {phrase} to confirm", { phrase: <span className="font-mono font-semibold text-fg">{phrase}</span> })}</>
                   }
                   placeholder={phrase}
                   value={typed}
@@ -243,7 +238,7 @@ function ConfirmationDialog({
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && matches) onAccept();
                   }}
-                  trailing={matches ? <Check className="size-3.5 text-status-healthy" aria-label="Matches" /> : undefined}
+                  trailing={matches ? <Check className="size-3.5 text-status-healthy" aria-label={tt("Matches")} /> : undefined}
                 />
               </>
             )}
@@ -251,12 +246,10 @@ function ConfirmationDialog({
 
           <div className="flex items-center gap-2 border-t border-line bg-surface-panel px-5 py-3">
             <span className="flex items-center gap-1.5 text-ui text-fg-muted">
-              <Kbd>Esc</Kbd>
-              cancel
-            </span>
+              <Kbd>{tt("Esc")}</Kbd>{tt("cancel")}</span>
             <div className="flex-1" />
             <AlertDialog.Cancel asChild>
-              <Button size="lg">Cancel</Button>
+              <Button size="lg">{tt("Cancel")}</Button>
             </AlertDialog.Cancel>
             <Button
               ref={confirmRef}
@@ -280,13 +273,13 @@ function EquivalentCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <section className="flex flex-col gap-1.5">
-      <span className="section-label">Equivalent command</span>
+      <span className="section-label">{tt("Equivalent command")}</span>
       <div className="flex items-center gap-2 rounded-md border border-line bg-surface-app py-2 pl-2.5 pr-1.5">
         <code className="selectable min-w-0 flex-1 truncate font-mono text-ui text-fg-secondary" title={command}>
           {command}
         </code>
         <IconButton
-          aria-label={copied ? "Copied" : "Copy command"}
+          aria-label={copied ? tt("Copied") : tt("Copy command")}
           className="size-6 [&_svg]:size-3.5"
           onClick={() =>
             void navigator.clipboard?.writeText(command).then(() => {

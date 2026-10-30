@@ -19,6 +19,7 @@ import { cn } from "@/lib/cn";
 import { isMac, modKey } from "@/lib/platform";
 import { backend } from "@/backend/client";
 import { XtermPane, type XtermHandle } from "./XtermPane";
+import { t as tt, tn } from "@/i18n";
 
 export interface ShellSession {
   id: string;
@@ -61,7 +62,7 @@ const PRESET: ShellSession[] = [
     container: "sync",
     shell: "/bin/sh",
     state: "reconnecting",
-    reconnect: { attempt: 2, inSec: 3, reason: "WebSocket closed (1006) after network change." },
+    reconnect: { attempt: 2, inSec: 3, reason: tt("WebSocket closed (1006) after network change.") },
     openedAt: "11:52",
   },
   {
@@ -195,9 +196,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
 
   if (!current) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-cell text-fg-secondary">
-        No shell sessions. Open one from a pod’s inspector or row menu.
-      </div>
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-cell text-fg-secondary">{tt("No shell sessions. Open one from a pod’s inspector or row menu.")}</div>
     );
   }
 
@@ -208,16 +207,13 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
           <span className="hatch-prod w-7 self-stretch" aria-hidden />
           <EnvironmentBadge env="prod" label="PRODUCTION" className="bg-env-prod text-[#1A0E04] shadow-none" />
           <span className="font-mono font-semibold">{current.cluster}</span>
-          <span className="min-w-0 flex-1 truncate text-fg-secondary">
-            Live shell in a production container. Clustrail does not filter or undo commands; your RBAC (
-            <span className="font-mono">pods/exec</span>) applies.
-          </span>
-          <span className="hidden whitespace-nowrap text-meta text-fg-muted min-[1360px]:inline">Opened after confirmation · {current.openedAt}</span>
+          <span className="min-w-0 flex-1 truncate text-fg-secondary">{tn("Live shell in a production container. Clustrail does not filter or undo commands; your RBAC ({v0}) applies.", { v0: <span className="font-mono">pods/exec</span> })}</span>
+          <span className="hidden whitespace-nowrap text-meta text-fg-muted min-[1360px]:inline">{tt("Opened after confirmation · {openedAt}", { openedAt: current.openedAt })}</span>
         </div>
       )}
 
       <div className="flex h-[38px] shrink-0 items-end gap-0.5 border-b border-line-strong bg-surface-side px-2.5">
-        <div role="tablist" aria-label="Shell sessions" className="flex min-w-0 items-end gap-0.5 overflow-x-auto [scrollbar-width:none]">
+        <div role="tablist" aria-label={tt("Shell sessions")} className="flex min-w-0 items-end gap-0.5 overflow-x-auto [scrollbar-width:none]">
           {sessions.map((s, i) => (
             <button
               key={s.id}
@@ -232,15 +228,15 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                 s.id === current.id && "border-line-strong bg-term-bg text-fg",
               )}
             >
-              {s.env === "prod" ? <span className="hatch-prod h-3 w-2 rounded-[2px]" aria-label="production" /> : <EnvMarker env={s.env} />}
+              {s.env === "prod" ? <span className="hatch-prod h-3 w-2 rounded-[2px]" aria-label={tt("production")} /> : <EnvMarker env={s.env} />}
               <span className={cn("font-mono", s.state === "ended" && "text-fg-muted")}>{short(s)}</span>
-              {s.state === "connected" && <span className="size-1.5 rounded-full bg-status-healthy" aria-label="connected" />}
+              {s.state === "connected" && <span className="size-1.5 rounded-full bg-status-healthy" aria-label={tt("connected")} />}
               {s.state === "reconnecting" && <StatusGlyph health="progressing" />}
-              {s.state === "ended" && <span className="text-meta text-fg-muted">ended</span>}
+              {s.state === "ended" && <span className="text-meta text-fg-muted">{tt("ended")}</span>}
               {s.id === current.id && (
                 <span
                   role="button"
-                  aria-label={`Close ${short(s)}`}
+                  aria-label={tt("Close {v0}", { v0: short(s) })}
                   onClick={(e) => {
                     e.stopPropagation();
                     closeSession(s.id);
@@ -254,7 +250,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
           ))}
         </div>
         <Tooltip content={`New session: pick a pod from the command palette (${modKey}T)`}>
-          <IconButton aria-label="New session" className="mb-px" onClick={openPalette}>
+          <IconButton aria-label={tt("New session")} className="mb-px" onClick={openPalette}>
             <Plus />
           </IconButton>
         </Tooltip>
@@ -264,19 +260,19 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                title="bash not found in image"
+                title={tt("bash not found in image")}
                 className="focus-ring flex h-[26px] items-center gap-1.5 rounded-md border border-line-strong bg-transparent px-2 text-ui text-fg"
               >
-                <span className="text-fg-muted">shell</span>
+                <span className="text-fg-muted">{tt("shell")}</span>
                 <span className="font-mono">{current.shell}</span>
                 <ChevronDown className="size-3.5 text-fg-muted" aria-hidden />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Shell (tried in order)</DropdownMenuLabel>
-              <DropdownMenuItem disabled>/bin/bash · not found in image</DropdownMenuItem>
+              <DropdownMenuLabel>{tt("Shell (tried in order)")}</DropdownMenuLabel>
+              <DropdownMenuItem disabled>/bin/bash · {tt("not found in image")}</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => update(current.id, { shell: "/bin/sh" })}>/bin/sh</DropdownMenuItem>
-              <DropdownMenuItem disabled>Custom command…</DropdownMenuItem>
+              <DropdownMenuItem disabled>{tt("Custom command…")}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           {size[current.id] && (
@@ -285,16 +281,16 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
               {size[current.id]}
             </span>
           )}
-          <IconButton aria-label={split ? "Close split" : "Split pane"} aria-pressed={split} onClick={() => setSplit(!split)}>
+          <IconButton aria-label={split ? tt("Close split") : tt("Split pane")} aria-pressed={split} onClick={() => setSplit(!split)}>
             <Columns2 />
           </IconButton>
-          <IconButton aria-label="Find in scrollback" aria-pressed={findOpen} onClick={() => setFindOpen(!findOpen)}>
+          <IconButton aria-label={tt("Find in scrollback")} aria-pressed={findOpen} onClick={() => setFindOpen(!findOpen)}>
             <Search />
           </IconButton>
-          <IconButton aria-label="Copy selection" onClick={() => panes.current[current.id]?.copySelection()}>
+          <IconButton aria-label={tt("Copy selection")} onClick={() => panes.current[current.id]?.copySelection()}>
             <Copy />
           </IconButton>
-          <IconButton aria-label="Clear" onClick={() => panes.current[current.id]?.clear()}>
+          <IconButton aria-label={tt("Clear")} onClick={() => panes.current[current.id]?.clear()}>
             <Eraser />
           </IconButton>
           <Button
@@ -307,9 +303,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
               })
             }
           >
-            <Pin aria-hidden />
-            Pin output
-          </Button>
+            <Pin aria-hidden />{tt("Pin output")}</Button>
         </div>
       </div>
 
@@ -318,7 +312,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
           <Search className="size-3.5 text-fg-muted" aria-hidden />
           <input
             autoFocus
-            aria-label="Find in scrollback"
+            aria-label={tt("Find in scrollback")}
             value={findText}
             onChange={(e) => {
               setFindText(e.target.value);
@@ -331,7 +325,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                 panes.current[current.id]?.focus();
               }
             }}
-            placeholder="Find in scrollback (Enter next, ⇧Enter previous)"
+            placeholder={tt("Find in scrollback (Enter next, ⇧Enter previous)")}
             className="min-w-0 flex-1 border-0 bg-transparent font-mono text-cell text-fg outline-none placeholder:font-sans placeholder:text-fg-muted"
           />
         </div>
@@ -342,7 +336,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
           <div key={s.id} className="contents">
             {i === 1 && <div className="w-1.5 shrink-0 cursor-col-resize border-x border-line bg-surface-side" aria-hidden />}
             <section
-              aria-label={`Session ${short(s)}`}
+              aria-label={tt("Session {v0}", { v0: short(s) })}
               className={cn("relative flex min-w-0 flex-col", i === 0 ? "flex-1" : "basis-[440px] shrink-0", i === 0 && "shadow-[inset_0_0_0_1px_var(--line-selected)]")}
             >
               <div className="flex h-7 shrink-0 items-center gap-2 border-b border-line bg-surface-panel px-2.5 text-meta text-fg-secondary">
@@ -352,7 +346,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                   <span className="text-fg-muted">›</span> <b className="font-semibold text-fg">{s.container}</b>
                 </span>
                 <div className="flex-1" />
-                <span className="font-mono text-fg-muted">uid 1000</span>
+                <span className="font-mono text-fg-muted">{tt("uid 1000")}</span>
               </div>
               <div
                 className={cn("min-h-0 flex-1 bg-term-bg px-3.5 py-2.5", s.state !== "connected" && "opacity-45")}
@@ -378,45 +372,37 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                 <Overlay>
                   <div className="flex items-center gap-2">
                     <StatusGlyph health="progressing" />
-                    <b className="font-semibold">Connection lost — reconnecting in {s.reconnect.inSec}s</b>
+                    <b className="font-semibold">{tt("Connection lost — reconnecting in {inSec}s", { inSec: s.reconnect.inSec })}</b>
                   </div>
                   <span className="text-fg-secondary">
-                    {s.reconnect.reason} Attempt {s.reconnect.attempt} of {MAX_ATTEMPTS}.{" "}
-                    {backend ? "Reconnecting starts a new shell process; scrollback is kept." : "The container is still Running; scrollback is kept."}
+                    {s.reconnect.reason} {tt("Attempt {n} of {max}.", { n: s.reconnect.attempt, max: MAX_ATTEMPTS })}{" "}
+                    {backend ? tt("Reconnecting starts a new shell process; scrollback is kept.") : tt("The container is still Running; scrollback is kept.")}
                   </span>
                   <div className="flex gap-1.5">
                     <Button size="sm" variant="primary" onClick={() => reconnect(s.id)}>
-                      <RefreshCw aria-hidden />
-                      Reconnect now
-                    </Button>
-                    <Button size="sm" onClick={() => closeSession(s.id)}>
-                      Close session
-                    </Button>
+                      <RefreshCw aria-hidden />{tt("Reconnect now")}</Button>
+                    <Button size="sm" onClick={() => closeSession(s.id)}>{tt("Close session")}</Button>
                   </div>
                 </Overlay>
               )}
               {s.state === "ended" && (
                 <Overlay>
-                  <b className="font-semibold">Session ended · {s.ended}</b>
-                  <span className="text-fg-secondary">The container keeps running. A new session starts a new shell process.</span>
+                  <b className="font-semibold">{tt("Session ended · {ended}", { ended: s.ended })}</b>
+                  <span className="text-fg-secondary">{tt("The container keeps running. A new session starts a new shell process.")}</span>
                   <div className="flex gap-1.5">
                     <Button size="sm" variant="primary" onClick={() => reconnect(s.id)}>
-                      <RefreshCw aria-hidden />
-                      Reconnect
-                    </Button>
+                      <RefreshCw aria-hidden />{tt("Reconnect")}</Button>
                     <Button
                       size="sm"
                       onClick={() =>
                         ws.openView({
                           kind: "logs",
-                          title: `Logs · ${s.pod.replace(/-[a-z0-9]{8,10}-[a-z0-9]{5}$/, "")}`,
+                          title: tt("Logs · {v0}", { v0: s.pod.replace(/-[a-z0-9]{8,10}-[a-z0-9]{5}$/, "") }),
                           cluster: s.cluster,
                           params: { namespace: s.namespace, workload: s.pod.replace(/-[a-z0-9]{8,10}-[a-z0-9]{5}$/, "") },
                         })
                       }
-                    >
-                      Open logs
-                    </Button>
+                    >{tt("Open logs")}</Button>
                   </div>
                 </Overlay>
               )}
@@ -436,12 +422,9 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
           );
         })}
         <span className="flex items-center gap-1.5">
-          <Kbd>Esc Esc</Kbd>leave terminal
-        </span>
+          {tn("{v0}leave terminal", { v0: <Kbd>Esc Esc</Kbd> })}</span>
         <div className="flex-1" />
-        <span className="hidden min-[1360px]:inline">
-          Scrollback 10,000 lines · {live} live · {prodSessions} production
-        </span>
+        <span className="hidden min-[1360px]:inline">{tt("Scrollback 10,000 lines · {live} live · {prodSessions} production", { live, prodSessions })}</span>
       </div>
     </main>
   );

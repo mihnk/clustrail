@@ -31,6 +31,7 @@ import { backend, errorText } from "@/backend/client";
 import { useToast } from "@/components/ui/toast";
 import { helmColumns } from "./columns";
 import { HelmInspector } from "./HelmInspector";
+import { t as tt } from "@/i18n";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
 /** Namespaces whose release Secrets this kubeconfig user cannot list (from a SelfSubjectAccessReview per namespace). */
@@ -39,25 +40,24 @@ const UNREADABLE_NAMESPACES = ["security", "vault"];
 function rollbackRequest(r: HelmRelease, rev: number, plan: RollbackPlan, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {
   const target = r.history.find((h) => h.rev === rev);
   return {
-    action: "Roll back release",
+    action: tt("Roll back release"),
     targetName: r.name,
     icon: <History />,
     env: r.env,
     cluster: r.cluster,
     namespace: r.namespace,
-    meta: `revision ${r.revision} → ${rev} (${target?.chartVersion} · app ${target?.appVersion})`,
+    meta: tt("revision {from} → {to} ({chart} · app {app})", { from: r.revision, to: rev, chart: target?.chartVersion, app: target?.appVersion }),
     protected: cluster?.protected ?? false,
     destructive: false,
     whatHappens: (
       <>
-        Creates revision {r.revision + 1} with the manifest of revision {rev}. Changed: {plan.changed}.
-        {plan.removed && <> Removed: {plan.removed}.</>}
-        {plan.added && <> Added: {plan.added}.</>}
-        {plan.hooks && <> Runs {plan.hooks}.</>} Waits up to 5m for resources to become ready.
-      </>
+        {tt("Creates revision {next} with the manifest of revision {rev}. Changed: {changed}.", { next: r.revision + 1, rev, changed: plan.changed })}
+        {plan.removed && <>{" "}{tt("Removed: {removed}.", { removed: plan.removed })}</>}
+        {plan.added && <>{" "}{tt("Added: {added}.", { added: plan.added })}</>}
+        {plan.hooks && <>{" "}{tt("Runs {hooks}.", { hooks: plan.hooks })}</>}{" "}{tt("Waits up to 5m for resources to become ready.")}</>
     ),
     command: `helm rollback ${r.name} ${rev} -n ${r.namespace} --kube-context ${r.cluster} --wait --timeout 5m`,
-    confirmLabel: `Roll back to ${rev}`,
+    confirmLabel: tt("Roll back to {rev}", { rev }),
     phrase: r.name,
     onConfirm,
   };
@@ -115,7 +115,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
           const [cur, tgt] = await Promise.all([backend.helmRevision(r.cluster, r.namespace, r.name, r.revision), backend.helmRevision(r.cluster, r.namespace, r.name, rev)]);
           plan = planFromManifests(cur.manifest, tgt.manifest, tgt.hooks);
         } catch (e) {
-          toast.show({ kind: "error", title: "Could not read the revisions", target: r.name, detail: errorText(e), copyText: errorText(e) });
+          toast.show({ kind: "error", title: tt("Could not read the revisions"), target: r.name, detail: errorText(e), copyText: errorText(e) });
           return;
         }
       }
@@ -131,7 +131,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
         {
           id: "rollback",
           group: "modify",
-          label: lastGood ? `Roll back to ${lastGood.rev}…` : "Roll back…",
+          label: lastGood ? tt("Roll back to {rev}…", { rev: lastGood.rev }) : tt("Roll back…"),
           icon: <History />,
           disabled: !lastGood,
           onSelect: () => lastGood && void requestRollback(r, lastGood.rev),
@@ -181,16 +181,16 @@ export function HelmWorkspace({ active }: { active: boolean }) {
       <main className="@container flex min-w-0 flex-1 flex-col bg-surface-app">
         <div className={cn("flex h-12 shrink-0 items-center gap-2.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <LifeBuoy className="size-4" aria-hidden />
-          <span className="text-title font-semibold">Helm releases</span>
-          <span className="truncate text-meta text-fg-muted max-[1360px]:hidden">read from release Secrets in each namespace</span>
+          <span className="text-title font-semibold">{tt("Helm releases")}</span>
+          <span className="truncate text-meta text-fg-muted max-[1360px]:hidden">{tt("read from release Secrets in each namespace")}</span>
           <div className="flex-1" />
           <Segmented
-            aria-label="Cluster view"
+            aria-label={tt("Cluster view")}
             value={view}
             onValueChange={setView}
             options={[
-              { value: "aggregated", label: "Aggregated" },
-              { value: "by-cluster", label: "By cluster" },
+              { value: "aggregated", label: tt("Aggregated") },
+              { value: "by-cluster", label: tt("By cluster") },
             ]}
           />
         </div>
@@ -198,13 +198,13 @@ export function HelmWorkspace({ active }: { active: boolean }) {
         <div className={cn("flex h-11 shrink-0 items-center gap-1.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <label className="flex h-7 w-[200px] shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-fg-muted focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
             <Search className="size-3.5 shrink-0" aria-hidden />
-            <span className="sr-only">Filter releases</span>
+            <span className="sr-only">{tt("Filter releases")}</span>
             <input
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && (query ? setQuery("") : e.currentTarget.blur())}
-              placeholder="Filter release, chart…"
+              placeholder={tt("Filter release, chart…")}
               spellCheck={false}
               className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
             />
@@ -215,9 +215,9 @@ export function HelmWorkspace({ active }: { active: boolean }) {
               <FilterToken k="namespace" value={namespace} active={namespace !== "all"} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-[320px] overflow-y-auto">
-              <DropdownMenuLabel>Namespace</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Namespace")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={namespace} onValueChange={setNamespace}>
-                <DropdownMenuRadioItem value="all">all</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="all">{tt("all")}</DropdownMenuRadioItem>
                 {namespaces.map((n) => (
                   <DropdownMenuRadioItem key={n} value={n}>
                     {n}
@@ -231,7 +231,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
               <FilterToken k="status" value={status} active={status !== "any"} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Status</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Status")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                 {(["any", "deployed", "failed", "pending-upgrade", "pending-rollback"] as const).map((s) => (
                   <DropdownMenuRadioItem key={s} value={s}>
@@ -243,17 +243,16 @@ export function HelmWorkspace({ active }: { active: boolean }) {
           </DropdownMenu>
           <div className="flex-1" />
           <Segmented
-            aria-label="Health"
+            aria-label={tt("Health")}
             value={health}
             onValueChange={setHealth}
             options={[
-              { value: "all", label: <>All <span className="font-mono text-fg-muted">{baseRows.length}</span></> },
+              { value: "all", label: <>{tt("All")}{" "}<span className="font-mono text-fg-muted">{baseRows.length}</span></> },
               {
                 value: "attention",
                 label: (
                   <>
-                    <StatusGlyph health="failed" />
-                    Attention <span className="font-mono">{attention}</span>
+                    <StatusGlyph health="failed" />{tt("Attention")}{" "}<span className="font-mono">{attention}</span>
                   </>
                 ),
               },
@@ -265,7 +264,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
 
         <ResourceTable
           table={table}
-          aria-label="Helm releases"
+          aria-label={tt("Helm releases")}
           onAutoHiddenChange={setAutoHidden}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
@@ -279,24 +278,19 @@ export function HelmWorkspace({ active }: { active: boolean }) {
           grouping={grouping}
           fillMin={150}
           empty={
-            <EmptyState icon={<SearchX />} title="No releases match">
-              Clear the filters or pick more clusters.
-            </EmptyState>
+            <EmptyState icon={<SearchX />} title={tt("No releases match")}>{tt("Clear the filters or pick more clusters.")}</EmptyState>
           }
         />
 
         <div className={cn("flex h-7 shrink-0 items-center gap-3.5 border-t border-line px-3.5 text-meta text-fg-muted", BAR)}>
           <span>
-            <span className="text-fg">{rows.length}</span> releases
-          </span>
-          {failed > 0 && <span className="text-status-critical">{failed} failed</span>}
+            <span className="text-fg">{rows.length}</span>{" "}{tt("releases")}</span>
+          {failed > 0 && <span className="text-status-critical">{failed}{" "}{tt("failed")}</span>}
           {stuck.map((r) => (
-            <span key={r.id} className="text-status-progressing">
-              1 pending-upgrade for {formatAge(r.updatedSeconds)} (lock held?)
-            </span>
+            <span key={r.id} className="text-status-progressing">{tt("1 pending-upgrade for {v0} (lock held?)", { v0: formatAge(r.updatedSeconds) })}</span>
           ))}
           <div className="flex-1" />
-          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
+          {autoHidden.length > 0 && <span className="truncate">{tt("{v0} hidden at this width", { v0: autoHidden.join(", ") })}</span>}
           {backend ? (
             unreadable.length > 0 && (
               <span className="truncate max-[1360px]:hidden">
@@ -306,15 +300,13 @@ export function HelmWorkspace({ active }: { active: boolean }) {
               </span>
             )
           ) : (
-            <span className="truncate max-[1360px]:hidden" title={UNREADABLE_NAMESPACES.join(", ")}>
-              Secrets in {UNREADABLE_NAMESPACES.length} namespaces not readable → those releases are not listed
-            </span>
+            <span className="truncate max-[1360px]:hidden" title={UNREADABLE_NAMESPACES.join(", ")}>{tt("Secrets in {nUNREADABLE_NAMESPACES} namespaces not readable → those releases are not listed", { nUNREADABLE_NAMESPACES: UNREADABLE_NAMESPACES.length })}</span>
           )}
         </div>
       </main>
 
       {inspectorOpen && selected && (
-        <InspectorPanel label="Release inspector" storageKey="helm" defaultWidth={400} active={active}>
+        <InspectorPanel label={tt("Release inspector")} storageKey="helm" defaultWidth={400} active={active}>
           <HelmInspector
             release={selected}
             cluster={clusterById(selected.cluster)}

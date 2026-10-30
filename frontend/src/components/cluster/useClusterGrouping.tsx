@@ -5,6 +5,7 @@ import type { Health } from "@/data/types";
 import { isAttention } from "@/data/health";
 import type { ResourceTableGrouping } from "@/components/resource-table/ResourceTable";
 import { EnvMarker, EnvironmentBadge } from "@/components/status/EnvironmentBadge";
+import { t } from "@/i18n";
 
 /**
  * "By cluster" view for any explorer: one section per selected cluster with
@@ -40,18 +41,15 @@ export function useClusterGrouping<T extends { cluster: string; health: Health }
                   {c && <EnvironmentBadge env={c.env} />}
                   {c?.protected && (
                     <span className="flex items-center gap-1.5 whitespace-nowrap text-meta text-env-prod-ink">
-                      <Lock className="size-3" aria-hidden />
-                      Protected
-                    </span>
+                      <Lock className="size-3" aria-hidden />{t("Protected")}</span>
                   )}
                   <span className="truncate text-meta text-fg-muted">
-                    {c?.connection === "connected" ? c.summary : "Not connected"}
+                    {c?.connection === "connected" ? c.summary : t("Not connected")}
                   </span>
                   <div className="flex-1" />
                   {attn > 0 && (
                     <span className="whitespace-nowrap text-meta text-status-critical">
-                      {attn} {attn === 1 ? "needs" : "need"} attention
-                    </span>
+                      {t(attn === 1 ? "{n} needs attention" : "{n} need attention", { n: attn })}</span>
                   )}
                   <span className="font-mono text-meta text-fg-muted">{rows.length}</span>
                 </>

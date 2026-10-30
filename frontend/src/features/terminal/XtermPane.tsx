@@ -6,6 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 import { usePersistentState } from "@/app/preferences";
 import { backend, errorText, EVENTS, onEvent, type ExecOutput } from "@/backend/client";
 import { MockShell, SCROLLBACK } from "./mockShell";
+import { t as tt } from "@/i18n";
 
 /** The container a desktop session executes in. */
 export interface ExecTarget {
@@ -227,5 +228,5 @@ export const XtermPane = forwardRef<
     },
   }));
 
-  return <div ref={hostRef} className="h-full w-full" role="application" aria-label="Terminal" />;
+  return <div ref={hostRef} className="h-full w-full" role="application" aria-label={tt("Terminal")} />;
 });

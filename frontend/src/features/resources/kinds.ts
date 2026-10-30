@@ -1,4 +1,5 @@
 import type { KindInfo } from "@/backend/client";
+import { t } from "@/i18n";
 
 /** The key the backend resolves: "Kind" for the core group, else "group/Kind". */
 export function kindKey(k: Pick<KindInfo, "group" | "kind">): string {
@@ -12,15 +13,15 @@ export function kindName(key: string): string {
 
 /** Lists the sidebar links to directly; everything else is one ⌘J away. */
 export const LISTED_KINDS: { key: string; label: string }[] = [
-  { key: "apps/StatefulSet", label: "StatefulSets" },
-  { key: "apps/DaemonSet", label: "DaemonSets" },
-  { key: "batch/Job", label: "Jobs" },
-  { key: "batch/CronJob", label: "CronJobs" },
-  { key: "Service", label: "Services" },
-  { key: "networking.k8s.io/Ingress", label: "Ingresses" },
-  { key: "ConfigMap", label: "ConfigMaps" },
-  { key: "Secret", label: "Secrets" },
-  { key: "Event", label: "Events" },
+  { key: "apps/StatefulSet", label: t("StatefulSets") },
+  { key: "apps/DaemonSet", label: t("DaemonSets") },
+  { key: "batch/Job", label: t("Jobs") },
+  { key: "batch/CronJob", label: t("CronJobs") },
+  { key: "Service", label: t("Services") },
+  { key: "networking.k8s.io/Ingress", label: t("Ingresses") },
+  { key: "ConfigMap", label: t("ConfigMaps") },
+  { key: "Secret", label: t("Secrets") },
+  { key: "Event", label: t("Events") },
 ];
 
 export function plural(kind: string): string {

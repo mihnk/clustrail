@@ -48,6 +48,7 @@ import {
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { cn } from "@/lib/cn";
 import { LogView, TagChip } from "./LogView";
+import { t as tt } from "@/i18n";
 
 const RANGES = ["5m", "15m", "1h", "6h", "all"] as const;
 const RANGE_SECONDS: Record<(typeof RANGES)[number], number> = { "5m": 300, "15m": 900, "1h": 3600, "6h": 21600, all: 0 };
@@ -284,13 +285,11 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside aria-label="Log sources" className="flex w-[264px] shrink-0 flex-col gap-2.5 overflow-y-auto border-r border-line bg-surface-panel px-2.5 py-3">
+      <aside aria-label={tt("Log sources")} className="flex w-[264px] shrink-0 flex-col gap-2.5 overflow-y-auto border-r border-line bg-surface-panel px-2.5 py-3">
         <div className="flex items-center px-1">
-          <span className="section-label flex-1">Sources</span>
-          <Button size="sm" variant="ghost" disabled title="Adding other workloads is not implemented in this build.">
-            <Plus aria-hidden />
-            Add
-          </Button>
+          <span className="section-label flex-1">{tt("Sources")}</span>
+          <Button size="sm" variant="ghost" disabled title={tt("Adding other workloads is not implemented in this build.")}>
+            <Plus aria-hidden />{tt("Add")}</Button>
         </div>
         <div className="flex flex-col gap-0.5 rounded-lg border border-line p-2">
           <div className="flex items-center gap-1.5 text-ui">
@@ -299,14 +298,13 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
             {cluster && <EnvironmentBadge env={cluster.env} className="ml-auto" />}
           </div>
           <span className="pb-1.5 pl-5 text-meta text-fg-muted">
-            {namespace} · {tab.cluster} · {sources.length} pods
-          </span>
+            {namespace} · {tab.cluster} · {sources.length}{" "}{tt("pods")}</span>
           {sources.map((s) => (
             <div key={s.tag}>
               <label className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 text-ui">
                 <Checkbox
                   checked={enabled.has(s.tag)}
-                  aria-label={`Include ${s.pod}`}
+                  aria-label={tt("Include {pod}", { pod: s.pod })}
                   onCheckedChange={(on) => {
                     const next = new Set(enabled);
                     if (on) next.add(s.tag);
@@ -348,35 +346,35 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           ))}
         </div>
         <div className="flex flex-col gap-1.5 px-1">
-          <span className="section-label">Container instance</span>
+          <span className="section-label">{tt("Container instance")}</span>
           <Segmented
-            aria-label="Instance"
+            aria-label={tt("Instance")}
             value={instance}
             onValueChange={setInstance}
             options={[
-              { value: "current", label: "Current" },
-              { value: "previous", label: <><History className="size-3.5" aria-hidden />Previous</> },
+              { value: "current", label: tt("Current") },
+              { value: "previous", label: <><History className="size-3.5" aria-hidden />{tt("Previous")}</> },
             ]}
           />
-          <span className="text-meta leading-[1.4] text-fg-muted">Previous shows the last terminated instance only — Kubernetes keeps one.</span>
+          <span className="text-meta leading-[1.4] text-fg-muted">{tt("Previous shows the last terminated instance only — Kubernetes keeps one.")}</span>
         </div>
         <div className="flex flex-col gap-1.5 px-1">
-          <span className="section-label">Range</span>
+          <span className="section-label">{tt("Range")}</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" className="focus-ring flex h-[26px] items-center justify-between rounded-md border border-line-strong bg-transparent px-2 text-ui text-fg">
                 <span>
-                  <span className="text-fg-muted">since</span> {range}
+                  <span className="text-fg-muted">{tt("since")}</span> {range}
                 </span>
                 <ChevronDown className="size-3.5 text-fg-muted" aria-hidden />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Since</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Since")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={range} onValueChange={(v) => setRange(v as typeof range)}>
                 {RANGES.map((r) => (
                   <DropdownMenuRadioItem key={r} value={r}>
-                    {r === "all" ? "everything the API keeps" : r}
+                    {r === "all" ? tt("everything the API keeps") : r}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
@@ -386,17 +384,16 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         <div className="flex-1" />
         <div className="flex flex-col gap-1 rounded-lg bg-surface-app p-2 text-meta">
           <div className="flex">
-            <span className="flex-1 text-fg-secondary">Buffer</span>
+            <span className="flex-1 text-fg-secondary">{tt("Buffer")}</span>
             <span className="font-mono">
-              {buffer.current.length.toLocaleString()} / {bufferLimit.toLocaleString()} lines
-            </span>
+              {buffer.current.length.toLocaleString()} / {bufferLimit.toLocaleString()}{" "}{tt("lines")}</span>
           </div>
-          <Meter value={buffer.current.length / bufferLimit} label="Buffer used" className="flex-none" />
+          <Meter value={buffer.current.length / bufferLimit} label={tt("Buffer used")} className="flex-none" />
           <div className="flex text-fg-muted">
             <span className="flex-1">
-              {bytes} MB · oldest {buffer.current[0]?.ts.slice(0, 8)}
+              {tt("{bytes} MB · oldest {v1}", { bytes, v1: buffer.current[0]?.ts.slice(0, 8) })}
             </span>
-            <span>{dropped.toLocaleString()} dropped</span>
+            <span>{dropped.toLocaleString()}{" "}{tt("dropped")}</span>
           </div>
         </div>
       </aside>
@@ -405,28 +402,24 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         <div className="flex h-[46px] shrink-0 items-center gap-1.5 border-b border-line bg-surface-panel pl-3.5 pr-3 dark:bg-transparent">
           {paused ? (
             <Button variant="primary" onClick={resume}>
-              <Play aria-hidden />
-              Resume
-            </Button>
+              <Play aria-hidden />{tt("Resume")}</Button>
           ) : (
             <Button onClick={pause}>
-              <Pause aria-hidden />
-              Pause
-            </Button>
+              <Pause aria-hidden />{tt("Pause")}</Button>
           )}
           <Segmented
-            aria-label="Layout"
+            aria-label={tt("Layout")}
             value={layout}
             onValueChange={setLayout}
             options={[
-              { value: "merged", label: "Merged" },
-              { value: "split", label: <><Columns2 className="size-3.5" aria-hidden />Split</> },
+              { value: "merged", label: tt("Merged") },
+              { value: "split", label: <><Columns2 className="size-3.5" aria-hidden />{tt("Split")}</> },
             ]}
           />
-          <ToggleIcon label="Timestamps" pressed={showTs} onClick={() => setShowTs(!showTs)}>
+          <ToggleIcon label={tt("Timestamps")} pressed={showTs} onClick={() => setShowTs(!showTs)}>
             <Clock />
           </ToggleIcon>
-          <ToggleIcon label="Wrap lines" pressed={wrap} onClick={() => setWrap(!wrap)}>
+          <ToggleIcon label={tt("Wrap lines")} pressed={wrap} onClick={() => setWrap(!wrap)}>
             <WrapText />
           </ToggleIcon>
           <span className="mx-0.5 h-7 w-px bg-line" aria-hidden />
@@ -437,7 +430,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
             )}
           >
             <Search className="size-3.5 shrink-0" aria-hidden />
-            <span className="sr-only">Search logs</span>
+            <span className="sr-only">{tt("Search logs")}</span>
             <input
               value={query}
               onChange={(e) => {
@@ -448,7 +441,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
                 if (e.key === "Enter") setMatchPos((p) => (matches.length ? (p + (e.shiftKey ? matches.length - 1 : 1)) % matches.length : 0));
                 if (e.key === "Escape") setQuery("");
               }}
-              placeholder="Search buffered lines"
+              placeholder={tt("Search buffered lines")}
               spellCheck={false}
               className="min-w-0 flex-1 border-0 bg-transparent font-mono text-cell text-fg outline-none placeholder:font-sans placeholder:text-fg-muted"
             />
@@ -457,10 +450,10 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
                 {regexError ? "invalid" : matches.length ? `${Math.min(matchPos, matches.length - 1) + 1} / ${matches.length}` : "0"}
               </span>
             )}
-            <IconButton aria-label="Previous match" className="size-5 [&_svg]:size-3.5" onClick={() => setMatchPos((p) => (matches.length ? (p - 1 + matches.length) % matches.length : 0))}>
+            <IconButton aria-label={tt("Previous match")} className="size-5 [&_svg]:size-3.5" onClick={() => setMatchPos((p) => (matches.length ? (p - 1 + matches.length) % matches.length : 0))}>
               <ChevronUp />
             </IconButton>
-            <IconButton aria-label="Next match" className="size-5 [&_svg]:size-3.5" onClick={() => setMatchPos((p) => (matches.length ? (p + 1) % matches.length : 0))}>
+            <IconButton aria-label={tt("Next match")} className="size-5 [&_svg]:size-3.5" onClick={() => setMatchPos((p) => (matches.length ? (p + 1) % matches.length : 0))}>
               <ChevronDown />
             </IconButton>
           </label>
@@ -468,7 +461,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
             type="button"
             aria-pressed={regex}
             onClick={() => setRegex(!regex)}
-            title="Regular expression"
+            title={tt("Regular expression")}
             className={cn("focus-ring h-[26px] rounded-md border px-2 font-mono text-ui", regex ? "border-line-selected bg-accent-soft text-fg" : "border-line-strong bg-transparent text-fg")}
           >
             .*
@@ -482,15 +475,13 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
               onlyMatching ? "border-line-selected bg-accent-soft text-fg" : "border-line-strong bg-transparent text-fg",
             )}
           >
-            <Filter className="size-3.5" aria-hidden />
-            Only matching
-          </button>
+            <Filter className="size-3.5" aria-hidden />{tt("Only matching")}</button>
           <div className="flex-1" />
           <Button
             size="sm"
             variant="ghost"
             disabled={selectedLine === null}
-            title={selectedLine === null ? "Click a line to select it" : undefined}
+            title={selectedLine === null ? tt("Click a line to select it") : undefined}
             onClick={() => {
               const l = buffer.current.find((x) => x.id === selectedLine);
               if (!l) return;
@@ -501,11 +492,9 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
               });
             }}
           >
-            <Pin aria-hidden />
-            Pin selection
-          </Button>
+            <Pin aria-hidden />{tt("Pin selection")}</Button>
           <IconButton
-            aria-label="Copy visible lines"
+            aria-label={tt("Copy visible lines")}
             onClick={() => void navigator.clipboard?.writeText(lines.slice(-200).map((l) => `${l.ts} ${l.tag} ${l.level} ${l.msg}`).join("\n"))}
           >
             <Copy />
@@ -513,14 +502,12 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm">
-                <Download aria-hidden />
-                Export
-                <ChevronDown aria-hidden />
+                <Download aria-hidden />{tt("Export")}<ChevronDown aria-hidden />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={exportBuffer}>Save buffer as .log…</DropdownMenuItem>
-              <DropdownMenuItem disabled>Fetch full log from the API</DropdownMenuItem>
+              <DropdownMenuItem onSelect={exportBuffer}>{tt("Save buffer as .log…")}</DropdownMenuItem>
+              <DropdownMenuItem disabled>{tt("Fetch full log from the API")}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -528,7 +515,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         <div className="relative flex min-h-0 flex-1">
           {layout === "merged" ? (
             <LogView
-              label="Merged log stream"
+              label={tt("Merged log stream")}
               lines={lines}
               showTimestamps={showTs}
               wrap={wrap}
@@ -549,7 +536,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
                     …{sourceOf(tag)?.pod.split("-").pop()}
                   </div>
                   <LogView
-                    label={`Logs of ${sourceOf(tag)?.pod}`}
+                    label={tt("Logs of {v0}", { v0: sourceOf(tag)?.pod })}
                     lines={lines.filter((l) => l.tag === tag)}
                     showTimestamps={showTs}
                     wrap={wrap}
@@ -570,16 +557,13 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
             <div className="absolute bottom-3.5 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-lg border border-line-strong bg-surface-elevated py-1.5 pl-3 pr-1.5 text-cell shadow-menu">
               <Pause className="size-3.5" aria-hidden />
               <span>
-                <b className="font-semibold">Paused</b>{" "}
-                <span className="text-fg-secondary">
-                  · {newSincePause.toLocaleString()} new lines since {pausedAt?.time}
+                <b className="font-semibold">{tt("Paused")}</b>{" "}
+                <span className="text-fg-secondary">{tt("· {v0} new lines since {time}", { v0: newSincePause.toLocaleString(), time: pausedAt?.time })}
                 </span>
               </span>
               <Button size="sm" variant="primary" onClick={resume}>
-                <ArrowDown aria-hidden />
-                Jump to live
-              </Button>
-              <Kbd>End</Kbd>
+                <ArrowDown aria-hidden />{tt("Jump to live")}</Button>
+              <Kbd>{tt("End")}</Kbd>
             </div>
           )}
         </div>
@@ -587,26 +571,21 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         <div className="flex h-7 shrink-0 items-center gap-3.5 overflow-hidden whitespace-nowrap border-t border-line bg-surface-panel px-3.5 text-meta text-fg-muted dark:bg-transparent">
           <span className="flex items-center gap-1.5">
             <span className="size-1.5 rounded-full bg-status-healthy" />
-            {live} live
-          </span>
+            {live}{" "}{tt("live")}</span>
           {reconnecting.map((s) => (
             <span key={s.tag} className="flex items-center gap-1.5 text-status-warning">
-              <span className="size-1.5 rounded-full shadow-[inset_0_0_0_1.5px_var(--status-warning)]" />
-              1 reconnecting ({s.tag}
+              <span className="size-1.5 rounded-full shadow-[inset_0_0_0_1.5px_var(--status-warning)]" />{tt("1 reconnecting (")}{s.tag}
               {s.note ? ` · ${s.note}` : ""})
             </span>
           ))}
           {ended.map((s) => (
             <span key={s.tag} className="flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full shadow-[inset_0_0_0_1.5px_var(--fg-muted)]" />
-              1 ended ({s.tag}
+              <span className="size-1.5 rounded-full shadow-[inset_0_0_0_1.5px_var(--fg-muted)]" />{tt("1 ended (")}{s.tag}
               {s.note ? ` · ${s.note}` : ""})
             </span>
           ))}
           <div className="flex-1" />
-          <span className="hidden min-[1360px]:inline">
-            Search scans the {buffer.current.length.toLocaleString()} buffered lines · ‘Fetch full log’ reads more from the API
-          </span>
+          <span className="hidden min-[1360px]:inline">{tt("Search scans the {v0} buffered lines · ‘Fetch full log’ reads more from the API", { v0: buffer.current.length.toLocaleString() })}</span>
         </div>
       </main>
     </div>
@@ -614,17 +593,15 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
 }
 
 function StreamState({ source, enabled }: { source: LogSource; enabled: boolean }) {
-  if (!enabled) return <span className="text-meta text-fg-muted">off</span>;
+  if (!enabled) return <span className="text-meta text-fg-muted">{tt("off")}</span>;
   const map: Record<LogSource["state"], ReactNode> = {
     live: (
       <span className="flex items-center gap-1.5 text-label text-status-healthy">
-        <span className="size-1.5 rounded-full bg-status-healthy" />
-        live
-      </span>
+        <span className="size-1.5 rounded-full bg-status-healthy" />{tt("live")}</span>
     ),
-    reconnecting: <span className="text-label text-status-warning">reconnecting</span>,
-    ended: <span className="text-label text-fg-muted">ended · back-off</span>,
-    off: <span className="text-meta text-fg-muted">off</span>,
+    reconnecting: <span className="text-label text-status-warning">{tt("reconnecting")}</span>,
+    ended: <span className="text-label text-fg-muted">{tt("ended · back-off")}</span>,
+    off: <span className="text-meta text-fg-muted">{tt("off")}</span>,
   };
   return <>{map[source.state]}</>;
 }

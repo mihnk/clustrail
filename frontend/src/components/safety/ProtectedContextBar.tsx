@@ -2,6 +2,7 @@ import { Lock } from "lucide-react";
 import type { Cluster } from "@/data/types";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { shortContext } from "@/lib/format";
+import { t } from "@/i18n";
 
 /**
  * Full-width band under the title bar for a workspace scoped to one protected
@@ -22,15 +23,10 @@ export function ProtectedContextBar({ cluster }: { cluster: Cluster }) {
       <span className="shrink-0 whitespace-nowrap font-mono text-body font-semibold text-fg">{cluster.name}</span>
       <span className="h-4 w-px bg-env-prod opacity-50" aria-hidden />
       <span className="flex items-center gap-1.5 whitespace-nowrap text-cell font-medium text-env-prod-ink">
-        <Lock className="size-3.5" aria-hidden />
-        Protected mode
-      </span>
-      <span className="min-w-0 truncate text-cell text-fg-secondary">
-        Changes are blocked in Clustrail until you confirm them. This is not RBAC: your kubeconfig permissions still apply.
-      </span>
+        <Lock className="size-3.5" aria-hidden />{t("Protected mode")}</span>
+      <span className="min-w-0 truncate text-cell text-fg-secondary">{t("Changes are blocked in Clustrail until you confirm them. This is not RBAC: your kubeconfig permissions still apply.")}</span>
       <div className="flex-1" />
-      <span className="hidden truncate font-mono text-meta text-fg-secondary min-[1360px]:inline" title={cluster.context}>
-        context {shortContext(cluster.context)}
+      <span className="hidden truncate font-mono text-meta text-fg-secondary min-[1360px]:inline" title={cluster.context}>{t("context")}{" "}{shortContext(cluster.context)}
       </span>
     </div>
   );

@@ -16,6 +16,13 @@ larger change, open an issue first so we can agree on the approach.
   with made-up values. Mock data belongs to the browser preview only.
 - **No telemetry, no accounts, no network calls** other than to the user's
   clusters and the optional update check.
+- **UI text goes through `t()`** (`frontend/src/i18n`). The English text is
+  the key: write `t("Delete pod")`, or `t("Scale to {replicas}", { replicas })`
+  with placeholders instead of string concatenation, and `tn()` when a
+  placeholder is an element (a `<code>` span). Write whole sentences, and
+  separate keys for singular and plural. Add the Turkish text to
+  `frontend/src/i18n/tr.ts`; a missing entry falls back to English. Kubernetes
+  kinds, statuses, field names and commands stay in English.
 
 ## Setup
 

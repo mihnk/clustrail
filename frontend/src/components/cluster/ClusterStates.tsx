@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { connectionLabel } from "@/components/status/EnvironmentBadge";
 import { cn } from "@/lib/cn";
+import { ago, locale, t, tn } from "@/i18n";
 
 const OFFLINE = new Set(["disconnected", "auth-expired", "unreachable"]);
 
@@ -41,11 +42,10 @@ export function ClusterStateBanners({
     <div className="flex shrink-0 flex-col gap-1.5 px-3 py-2">
       {paused.length > 0 && (
         <Banner tone="info">
-          <b className="font-semibold">Paused in the background:</b> {paused.map((c) => c.name).join(", ")} · reconnecting with a full re-list
-        </Banner>
+          <b className="font-semibold">{t("Paused in the background:")}</b> {paused.map((c) => c.name).join(", ")}{" "}{t("· reconnecting with a full re-list")}</Banner>
       )}
       {loading && (
-        <div className="flex flex-wrap items-center gap-1.5" role="status" aria-label="Loading per cluster">
+        <div className="flex flex-wrap items-center gap-1.5" role="status" aria-label={t("Loading per cluster")}>
           {clusters
             .filter((c) => !isOffline(c))
             .map((c) => (
@@ -55,7 +55,7 @@ export function ClusterStateBanners({
               >
                 <StatusGlyph health={c.connection === "connecting" ? "progressing" : "completed"} className={c.connection === "connecting" ? undefined : "text-status-healthy"} />
                 <span className="font-mono">{c.name}</span>
-                <span className="text-fg-muted">{c.connection === "connecting" ? "listing…" : counts[c.id] ?? 0}</span>
+                <span className="text-fg-muted">{c.connection === "connecting" ? t("listing…") : counts[c.id] ?? 0}</span>
               </span>
             ))}
         </div>
@@ -66,39 +66,37 @@ export function ClusterStateBanners({
           tone="warning"
           action={
             <Button size="sm" variant="ghost" onClick={() => ws.setScenario("watchLost", false)}>
-              <RefreshCw aria-hidden />
-              Now
-            </Button>
+              <RefreshCw aria-hidden />{t("Now")}</Button>
           }
         >
-          <span className="font-mono">{c.name}</span> watch lost · retry {c.stale?.attempt ?? 1} in {c.stale?.nextRetrySec ?? 0}s ·
-          showing data from {c.stale ? Math.round((Date.now() - c.stale.since) / 1000) : 0}s ago
+          {tn("{name} watch lost · retry {attempt} in {next}s · showing data from {age}s ago", {
+            name: <span className="font-mono">{c.name}</span>,
+            attempt: c.stale?.attempt ?? 1,
+            next: c.stale?.nextRetrySec ?? 0,
+            age: c.stale ? Math.round((Date.now() - c.stale.since) / 1000) : 0,
+          })}
         </Banner>
       ))}
       {offline.length > 0 && (
         <Banner tone="warning">
-          Results are incomplete: showing {noun} from {clusters.length - offline.length} of {clusters.length} selected
-          clusters.{" "}
+          {t("Results are incomplete: showing {noun} from {shown} of {total} selected clusters.", { noun: t(noun), shown: clusters.length - offline.length, total: clusters.length })}{" "}
           {offline.map((c, i) => (
             <span key={c.id}>
               {i > 0 && " · "}
-              <span className="font-mono">{c.name}</span> {connectionLabel[c.connection].toLowerCase()}{" "}
+              <span className="font-mono">{c.name}</span> {t(connectionLabel[c.connection]).toLocaleLowerCase(locale())}{" "}
               <button
                 type="button"
                 onClick={() => ws.connectCluster(c.id)}
                 className="focus-ring rounded-sm border-0 bg-transparent p-0 text-ui text-accent hover:text-fg"
               >
-                {c.connection === "auth-expired" ? "Retry after login" : c.connection === "unreachable" ? "Retry" : "Connect"}
+                {c.connection === "auth-expired" ? t("Retry after login") : c.connection === "unreachable" ? t("Retry") : t("Connect")}
               </button>
             </span>
           ))}
         </Banner>
       )}
       {noMetrics.length > 0 && (
-        <Banner tone="info">
-          No usage data on <span className="font-mono">{noMetrics.map((c) => c.name).join(", ")}</span>: the{" "}
-          <span className="font-mono">metrics.k8s.io</span> API isn’t available. Requests and limits are still shown.
-        </Banner>
+        <Banner tone="info">{tn("No usage data on {v0}: the {v1} API isn’t available. Requests and limits are still shown.", { v0: <span className="font-mono">{noMetrics.map((c) => c.name).join(", ")}</span>, v1: <span className="font-mono">metrics.k8s.io</span> })}</Banner>
       )}
     </div>
   );
@@ -116,34 +114,29 @@ export function DisconnectedCluster({ cluster, onRemove }: { cluster: Cluster; o
       <div className="flex items-center gap-2 text-cell">
         {icon[cluster.connection] ?? <Activity className="size-4 text-fg-muted" aria-hidden />}
         <b className="font-semibold">
-          <span className="font-mono">{cluster.name}</span>{" "}
-          {cluster.connection === "unreachable"
-            ? "is unreachable"
-            : cluster.connection === "auth-expired"
-              ? "needs new credentials"
-              : "is not connected"}
+          {tn(
+            cluster.connection === "unreachable"
+              ? "{name} is unreachable"
+              : cluster.connection === "auth-expired"
+                ? "{name} needs new credentials"
+                : "{name} is not connected",
+            { name: <span className="font-mono">{cluster.name}</span> },
+          )}
         </b>
       </div>
       {cluster.error && <span className="selectable font-mono text-meta text-fg-secondary">{cluster.error}</span>}
       {cluster.authHint && (
-        <span className="text-cell text-fg-secondary">
-          Run <span className="selectable font-mono text-ui text-fg">{cluster.authHint.command}</span> in your terminal, then
-          retry. Clustrail never stores credentials.
-        </span>
+        <span className="text-cell text-fg-secondary">{tn("Run {command} in your terminal, then retry. Clustrail never stores credentials.", { command: <span className="selectable font-mono text-ui text-fg">{cluster.authHint.command}</span> })}</span>
       )}
       <span className="text-cell text-fg-secondary">
-        {cluster.lastConnected ? `Last connected ${cluster.lastConnected}. ` : ""}Nothing is cached for it, so it has no rows
-        here; other selected clusters are unaffected.
-      </span>
+        {cluster.lastConnected ? t("Last connected {lastConnected}. ", { lastConnected: ago(cluster.lastConnected) }) : ""}{t("Nothing is cached for it, so it has no rows here; other selected clusters are unaffected.")}</span>
       <div className="flex gap-1.5">
         <Button size="sm" variant="primary" onClick={() => connectCluster(cluster.id)}>
           <RefreshCw aria-hidden />
-          {cluster.connection === "disconnected" ? "Connect" : "Retry"}
+          {cluster.connection === "disconnected" ? t("Connect") : t("Retry")}
         </Button>
         {onRemove && (
-          <Button size="sm" onClick={onRemove}>
-            Remove from selection
-          </Button>
+          <Button size="sm" onClick={onRemove}>{t("Remove from selection")}</Button>
         )}
       </div>
     </div>
@@ -188,29 +181,24 @@ export function RbacBanner({ clusters, resource }: { clusters: string[]; resourc
       className="shrink-0 rounded-none border-t border-line"
       action={
         <Button size="sm" variant="ghost" onClick={() => setOpen(!open)}>
-          {open ? "Hide" : "Details"}
+          {open ? t("Hide") : t("Details")}
         </Button>
       }
     >
-      <b className="font-semibold">Limited by RBAC:</b>{" "}
+      <b className="font-semibold">{t("Limited by RBAC:")}</b>{" "}
       {rows.map((f, i) => (
         <span key={f.cluster}>
           {i > 0 && " · "}
-          <span className="font-mono">{f.user || "this identity"}</span> can’t list {f.resource} in {f.namespace === "cluster" ? "this cluster" : "all namespaces"} on{" "}
-          {f.cluster}
-          {f.shown ? (
-            <>
-              {" "}→ showing only <span className="font-mono">{f.shown}</span>
-            </>
-          ) : (
-            " → none listed"
-          )}
+          {tn(f.namespace === "cluster" ? "{user} can’t list {resource} in this cluster on {cluster}" : "{user} can’t list {resource} in all namespaces on {cluster}", {
+            user: <span className="font-mono">{f.user || t("this identity")}</span>,
+            resource: f.resource,
+            cluster: f.cluster,
+          })}
+          {f.shown ? <> {tn("→ showing only {namespace}", { namespace: <span className="font-mono">{f.shown}</span> })}</> : ` ${t("→ none listed")}`}
         </span>
       ))}
       {open && (
-        <span className="selectable mt-1 block font-mono text-meta text-fg-secondary">
-          kubectl --context {first.cluster} auth can-i list {resource}
-          {scope}
+        <span className="selectable mt-1 block font-mono text-meta text-fg-secondary">{t("kubectl --context {cluster} auth can-i list {resource}{scope}", { cluster: first.cluster, resource, scope })}
         </span>
       )}
     </Banner>

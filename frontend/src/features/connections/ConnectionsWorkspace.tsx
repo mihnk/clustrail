@@ -19,6 +19,7 @@ import { EnvironmentBadge, EnvMarker } from "@/components/status/EnvironmentBadg
 import { StatusGlyph, healthTone } from "@/components/status/StatusGlyph";
 import type { Health } from "@/data/types";
 import { cn } from "@/lib/cn";
+import { ago, t as tt } from "@/i18n";
 
 type Protection = "standard" | "protected" | "readonly";
 
@@ -26,12 +27,12 @@ const GROUP: Record<Environment, string> = { prod: "Production", stg: "Staging",
 const protectionOf = (c: Cluster): Protection => (c.readOnly ? "readonly" : c.protected ? "protected" : "standard");
 
 const STATUS: Record<ConnectionState, { health: Health; label: string }> = {
-  connected: { health: "healthy", label: "Connected" },
-  connecting: { health: "progressing", label: "Connecting…" },
-  reconnecting: { health: "warning", label: "Reconnecting" },
-  disconnected: { health: "unknown", label: "Not connected" },
-  "auth-expired": { health: "warning", label: "Credentials expired" },
-  unreachable: { health: "failed", label: "Unreachable" },
+  connected: { health: "healthy", label: tt("Connected") },
+  connecting: { health: "progressing", label: tt("Connecting…") },
+  reconnecting: { health: "warning", label: tt("Reconnecting") },
+  disconnected: { health: "unknown", label: tt("Not connected") },
+  "auth-expired": { health: "warning", label: tt("Credentials expired") },
+  unreachable: { health: "failed", label: tt("Unreachable") },
 };
 
 function statusDetail(c: Cluster): string {
@@ -39,12 +40,12 @@ function statusDetail(c: Cluster): string {
     case "connected":
       return [c.version, c.identity && `RBAC: ${c.identity}`].filter(Boolean).join(" · ");
     case "auth-expired":
-      return `auth step failed${c.lastConnected ? ` · last connected ${c.lastConnected}` : ""}`;
+      return c.lastConnected ? tt("auth step failed · last connected {when}", { when: ago(c.lastConnected) }) : tt("auth step failed");
     case "unreachable":
-      return c.error?.split(": ").pop() ?? "dial failed";
+      return c.error?.split(": ").pop() ?? tt("dial failed");
     case "disconnected":
       // The mock shows the design's certificate note; real contexts say when they were last connected.
-      return !backend && c.auth === "client cert" ? "cert expires in 41d" : c.lastConnected ? `last connected ${c.lastConnected}` : "never connected";
+      return !backend && c.auth === "client cert" ? tt("cert expires in 41d") : c.lastConnected ? tt("last connected {when}", { when: ago(c.lastConnected) }) : tt("never connected");
     default:
       return "";
   }
@@ -97,15 +98,15 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
     if (protectionOf(c) === "protected" && p === "standard") {
       // Lowering protection is itself guarded: typing the name makes it deliberate.
       confirm({
-        action: "Remove protection from",
+        action: tt("Remove protection from"),
         targetName: c.name,
         icon: <Shield />,
         env: c.env,
         cluster: c.name,
         protected: true,
         destructive: false,
-        whatHappens: "Changes and shells on this cluster will ask for a single confirmation instead of a typed one. RBAC is unchanged.",
-        confirmLabel: "Remove protection",
+        whatHappens: tt("Changes and shells on this cluster will ask for a single confirmation instead of a typed one. RBAC is unchanged."),
+        confirmLabel: tt("Remove protection"),
         phrase: c.name,
         onConfirm: apply,
       });
@@ -119,10 +120,10 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       {/* Kubeconfig sources */}
-      <aside aria-label="Kubeconfig sources" className="flex w-[250px] shrink-0 flex-col gap-2 border-r border-line bg-surface-panel px-2.5 py-3 max-[1360px]:hidden">
+      <aside aria-label={tt("Kubeconfig sources")} className="flex w-[250px] shrink-0 flex-col gap-2 border-r border-line bg-surface-panel px-2.5 py-3 max-[1360px]:hidden">
         <div className="flex items-center">
-          <span className="section-label flex-1">Kubeconfig sources</span>
-          <IconButton aria-label="Detect again" title="Re-read kubeconfig files" onClick={() => toast.show({ kind: "success", title: "Kubeconfig files re-read", detail: `${discovered.length} new context${discovered.length === 1 ? "" : "s"}` })}>
+          <span className="section-label flex-1">{tt("Kubeconfig sources")}</span>
+          <IconButton aria-label={tt("Detect again")} title={tt("Re-read kubeconfig files")} onClick={() => toast.show({ kind: "success", title: tt("Kubeconfig files re-read"), detail: tt("{length} new context{v1}", { length: discovered.length, v1: discovered.length === 1 ? "" : "s" }) })}>
             <RefreshCw />
           </IconButton>
         </div>
@@ -134,59 +135,52 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
             </span>
             <span className={cn("truncate text-meta text-fg-muted", s.resolved && "font-mono")}>
               {s.resolved ? `${s.resolved} · ` : ""}
-              {s.contexts} context{s.contexts === 1 ? "" : "s"}
-              {!s.resolved && s.watched && " · watched"}
-              {s.changed && ` · changed ${s.changed}`}
+              {s.contexts}{" "}{tt("context")}{s.contexts === 1 ? "" : "s"}
+              {!s.resolved && s.watched && tt(" · watched")}
+              {s.changed && tt(" · changed {changed}", { changed: s.changed })}
             </span>
             {s.error && <span className="selectable text-meta text-status-critical">{s.error}</span>}
           </div>
         ))}
         <Button
           disabled={!backend}
-          title={backend ? undefined : "Opens a file picker in the desktop app"}
+          title={backend ? undefined : tt("Opens a file picker in the desktop app")}
           onClick={() =>
             void backend
               ?.addKubeconfig()
-              .then((path) => path && toast.show({ kind: "success", title: "Kubeconfig added", detail: path }))
-              .catch((e) => toast.show({ kind: "error", title: "Could not add the file", detail: errorText(e), copyText: errorText(e) }))
+              .then((path) => path && toast.show({ kind: "success", title: tt("Kubeconfig added"), detail: path }))
+              .catch((e) => toast.show({ kind: "error", title: tt("Could not add the file"), detail: errorText(e), copyText: errorText(e) }))
           }
         >
-          <Plus aria-hidden />
-          Add kubeconfig file…
-        </Button>
+          <Plus aria-hidden />{tt("Add kubeconfig file…")}</Button>
         <div className="flex-1" />
-        <Banner tone="info" className="items-start text-ui">
-          Clustrail reads these files in place and runs their auth plugins on your machine. No account, no cloud, nothing copied or uploaded.
-        </Banner>
+        <Banner tone="info" className="items-start text-ui">{tt("Clustrail reads these files in place and runs their auth plugins on your machine. No account, no cloud, nothing copied or uploaded.")}</Banner>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line pl-4 pr-3">
           <KeyRound className="size-4" aria-hidden />
-          <span className="text-title font-semibold">Contexts</span>
+          <span className="text-title font-semibold">{tt("Contexts")}</span>
           <span className="text-meta text-fg-muted">
-            {clusters.length + discovered.length} found · {connected} connected
-          </span>
+            {tt("{v0} found · {connected} connected", { v0: clusters.length + discovered.length, connected })}</span>
           <div className="flex-1" />
           <Button onClick={() => clusters.forEach(runTest)}>
-            <Play aria-hidden />
-            Test all
-          </Button>
+            <Play aria-hidden />{tt("Test all")}</Button>
         </div>
         <div className={cn(grid, "h-9 shrink-0 border-b border-line text-ui text-fg-muted")}>
-          <span>Context · server</span>
-          <span className="max-[1360px]:hidden">Auth</span>
-          <span>Group</span>
-          <span>Protection</span>
-          <span>Status</span>
+          <span>{tt("Context · server")}</span>
+          <span className="max-[1360px]:hidden">{tt("Auth")}</span>
+          <span>{tt("Group")}</span>
+          <span>{tt("Protection")}</span>
+          <span>{tt("Status")}</span>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label="Contexts">
+        <div className="min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label={tt("Contexts")}>
           {discovered.map((c) => (
             <div key={c.id} className={cn(grid, "h-[46px] border-b border-line-row")}>
               <TwoLine
                 first={
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="rounded-[4px] bg-status-progressing-soft px-1.5 font-mono text-label font-semibold text-status-progressing">New</span>
+                    <span className="rounded-[4px] bg-status-progressing-soft px-1.5 font-mono text-label font-semibold text-status-progressing">{tt("New")}</span>
                     <span className="truncate font-medium">{c.context}</span>
                   </span>
                 }
@@ -199,15 +193,13 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
                 size="sm"
                 className="justify-self-start"
                 disabled={!newGroup}
-                title={newGroup ? undefined : "Pick a group first: it decides the environment color and default protection"}
+                title={newGroup ? undefined : tt("Pick a group first: it decides the environment color and default protection")}
                 onClick={() => {
                   addCluster({ ...c, env: newGroup!, protected: newProtection === "protected", readOnly: newProtection === "readonly" });
                   if (!backend) setDiscovered(mockDiscovered.filter((d) => d.id !== c.id));
                   setSelectedId(c.id);
                 }}
-              >
-                Add &amp; connect
-              </Button>
+              >{tt("Add &amp; connect")}</Button>
             </div>
           ))}
           {clusters.map((c) => {
@@ -248,7 +240,7 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
                       <StatusGlyph health={st.health} />
                       <span className="truncate">
                         {st.label}
-                        {c.connection === "connected" && c.latencyMs !== null && ` · ${c.latencyMs}ms`}
+                        {c.connection === "connected" && c.latencyMs !== null && tt(" · {latencyMs}ms", { latencyMs: c.latencyMs })}
                       </span>
                     </span>
                   }
@@ -258,20 +250,18 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
             );
           })}
         </div>
-        <div className="flex h-7 shrink-0 items-center border-t border-line px-4 text-meta text-fg-muted">
-          Removing a context here hides it in Clustrail; your kubeconfig file is never modified
-        </div>
+        <div className="flex h-7 shrink-0 items-center border-t border-line px-4 text-meta text-fg-muted">{tt("Removing a context here hides it in Clustrail; your kubeconfig file is never modified")}</div>
       </main>
 
       {selected && (
-        <aside aria-label="Context details" className="flex w-[340px] shrink-0 flex-col border-l border-line bg-surface-panel max-[1360px]:w-[320px]">
+        <aside aria-label={tt("Context details")} className="flex w-[340px] shrink-0 flex-col border-l border-line bg-surface-panel max-[1360px]:w-[320px]">
           <div className="flex flex-col gap-1.5 px-3.5 pb-2.5 pt-2.5">
             <div className="flex items-center gap-1.5 text-ui text-fg-muted">
               <KeyRound className="size-3.5" aria-hidden />
-              <span>Context</span>
+              <span>{tt("Context")}</span>
               <EnvironmentBadge env={selected.env} className="ml-1" />
               <div className="flex-1" />
-              <IconButton aria-label="Close" onClick={() => setSelectedId(null)} className="[&_svg]:size-3.5">
+              <IconButton aria-label={tt("Close")} onClick={() => setSelectedId(null)} className="[&_svg]:size-3.5">
                 <X />
               </IconButton>
             </div>
@@ -287,24 +277,22 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
             )}
             {selected.connection === "unreachable" && (
               <div className="flex flex-col gap-1.5 text-cell">
-                <b className="font-semibold">API server unreachable</b>
+                <b className="font-semibold">{tt("API server unreachable")}</b>
                 <code className="selectable block rounded-md bg-term-bg px-2 py-1.5 font-mono text-ui text-term-fg">{selected.error}</code>
-                <span className="text-fg-secondary">Start the cluster (for kind: docker start kind-local-control-plane), then retry.</span>
+                <span className="text-fg-secondary">{tt("Start the cluster (for kind: docker start kind-local-control-plane), then retry.")}</span>
                 <Button size="sm" variant="primary" className="self-start" onClick={() => connectCluster(selected.id)}>
-                  <RefreshCw aria-hidden />
-                  Retry connection
-                </Button>
+                  <RefreshCw aria-hidden />{tt("Retry connection")}</Button>
               </div>
             )}
-            <section className="flex flex-col gap-1.5" aria-label="Protection">
-              <span className="section-label">Protection</span>
-              <div role="radiogroup" aria-label="Protection" className="flex flex-col gap-1.5">
+            <section className="flex flex-col gap-1.5" aria-label={tt("Protection")}>
+              <span className="section-label">{tt("Protection")}</span>
+              <div role="radiogroup" aria-label={tt("Protection")} className="flex flex-col gap-1.5">
                 <ProtectionOption
                   value="standard"
                   current={protectionOf(selected)}
                   onSelect={(p) => setProtection(selected, p)}
-                  title="Standard"
-                  detail="Destructive actions ask for confirmation."
+                  title={tt("Standard")}
+                  detail={tt("Destructive actions ask for confirmation.")}
                 />
                 <ProtectionOption
                   value="protected"
@@ -312,11 +300,9 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
                   onSelect={(p) => setProtection(selected, p)}
                   title={
                     <>
-                      <Lock className="size-3.5" aria-hidden />
-                      Protected
-                    </>
+                      <Lock className="size-3.5" aria-hidden />{tt("Protected")}</>
                   }
-                  detail="Every change and every shell needs a typed confirmation."
+                  detail={tt("Every change and every shell needs a typed confirmation.")}
                 />
                 <ProtectionOption
                   value="readonly"
@@ -324,25 +310,19 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
                   onSelect={(p) => setProtection(selected, p)}
                   title={
                     <>
-                      <Eye className="size-3.5" aria-hidden />
-                      Read-only
-                    </>
+                      <Eye className="size-3.5" aria-hidden />{tt("Read-only")}</>
                   }
-                  detail="Changes and shell are blocked in Clustrail. Not a substitute for RBAC."
+                  detail={tt("Changes and shell are blocked in Clustrail. Not a substitute for RBAC.")}
                 />
               </div>
             </section>
             <div className="flex items-center gap-1.5">
               {selected.connection === "connected" || selected.connection === "reconnecting" ? (
                 <Button onClick={() => disconnectCluster(selected.id)}>
-                  <Unplug aria-hidden />
-                  Disconnect
-                </Button>
+                  <Unplug aria-hidden />{tt("Disconnect")}</Button>
               ) : (
                 <Button onClick={() => connectCluster(selected.id)} disabled={selected.connection === "connecting"}>
-                  <Play aria-hidden />
-                  Connect
-                </Button>
+                  <Play aria-hidden />{tt("Connect")}</Button>
               )}
               <div className="flex-1" />
               <Button
@@ -351,9 +331,7 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
                   hideCluster(selected.id);
                   setSelectedId(null);
                 }}
-              >
-                Hide context
-              </Button>
+              >{tt("Hide context")}</Button>
             </div>
           </div>
         </aside>
@@ -378,14 +356,14 @@ function GroupSelect({ value, onChange }: { value: Environment | null; onChange:
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={selectClass} aria-label="Group">
+        <button type="button" className={selectClass} aria-label={tt("Group")}>
           {value ? (
             <span className="flex min-w-0 items-center gap-1.5">
               <EnvironmentBadge env={value} />
               <span className="truncate">{GROUP[value]}</span>
             </span>
           ) : (
-            <span className="text-fg-muted">Unassigned</span>
+            <span className="text-fg-muted">{tt("Unassigned")}</span>
           )}
           <ChevronDown className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
         </button>
@@ -407,21 +385,15 @@ function GroupSelect({ value, onChange }: { value: Environment | null; onChange:
 const PROTECTION_LABEL: Record<Protection, ReactNode> = {
   standard: (
     <span className="flex items-center gap-1.5 text-fg-secondary">
-      <Shield className="size-3" aria-hidden />
-      Standard
-    </span>
+      <Shield className="size-3" aria-hidden />{tt("Standard")}</span>
   ),
   protected: (
     <span className="flex items-center gap-1.5 text-env-prod-ink">
-      <Lock className="size-3" aria-hidden />
-      Protected
-    </span>
+      <Lock className="size-3" aria-hidden />{tt("Protected")}</span>
   ),
   readonly: (
     <span className="flex items-center gap-1.5 text-fg">
-      <Eye className="size-3" aria-hidden />
-      Read-only
-    </span>
+      <Eye className="size-3" aria-hidden />{tt("Read-only")}</span>
   ),
 };
 
@@ -429,7 +401,7 @@ function ProtectionSelect({ value, onChange }: { value: Protection; onChange: (p
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={selectClass} aria-label="Protection">
+        <button type="button" className={selectClass} aria-label={tt("Protection")}>
           {PROTECTION_LABEL[value]}
           <ChevronDown className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
         </button>
@@ -485,14 +457,12 @@ function ProtectionOption({
 
 function ConnectionTest({ test, onRun }: { test?: { steps: TestStep[]; at: string; shown: number }; onRun: () => void }) {
   return (
-    <section className="flex flex-col" aria-label="Connection test">
+    <section className="flex flex-col" aria-label={tt("Connection test")}>
       <div className="flex items-center gap-2 pb-1">
-        <span className="section-label flex-1">Connection test</span>
+        <span className="section-label flex-1">{tt("Connection test")}</span>
         {test && <span className="font-mono text-meta text-fg-muted">{test.at}</span>}
         <Button size="sm" variant="ghost" onClick={onRun}>
-          <Play aria-hidden />
-          Test
-        </Button>
+          <Play aria-hidden />{tt("Test")}</Button>
       </div>
       {test?.steps.map((s, i) => {
         const pending = i >= test.shown;
@@ -529,15 +499,14 @@ function AuthHelp({ cluster: c, onRetry }: { cluster: Cluster; onRetry: () => vo
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex flex-col gap-1.5 text-cell">
-      <b className="font-semibold">Credentials expired</b>
+      <b className="font-semibold">{tt("Credentials expired")}</b>
       <code className="selectable block rounded-md bg-term-bg px-2 py-1.5 font-mono text-ui text-term-fg">
-        {c.authHint!.plugin}: Reauthentication failed. cannot prompt during non-interactive execution.
-      </code>
-      <span className="text-fg-secondary">Run this in your own terminal, then retry:</span>
+        {tt("{plugin}: Reauthentication failed. cannot prompt during non-interactive execution.", { plugin: c.authHint!.plugin })}</code>
+      <span className="text-fg-secondary">{tt("Run this in your own terminal, then retry:")}</span>
       <div className="flex items-center gap-1.5">
         <code className="selectable flex-1 rounded-md border border-line-strong bg-surface-app px-2 py-1 font-mono text-ui">{c.authHint!.command}</code>
         <IconButton
-          aria-label={copied ? "Copied" : "Copy command"}
+          aria-label={copied ? tt("Copied") : tt("Copy command")}
           onClick={() =>
             void navigator.clipboard?.writeText(c.authHint!.command).then(() => {
               setCopied(true);
@@ -550,10 +519,8 @@ function AuthHelp({ cluster: c, onRetry }: { cluster: Cluster; onRetry: () => vo
       </div>
       <div className="flex items-center gap-2">
         <Button size="sm" variant="primary" onClick={onRetry}>
-          <RefreshCw aria-hidden />
-          Retry connection
-        </Button>
-        <span className="text-meta text-fg-muted">Clustrail never handles your password</span>
+          <RefreshCw aria-hidden />{tt("Retry connection")}</Button>
+        <span className="text-meta text-fg-muted">{tt("Clustrail never handles your password")}</span>
       </div>
     </div>
   );

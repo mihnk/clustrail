@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { t } from "@/i18n";
 
 /**
  * A filter rendered as "key value". Tokens read as a sentence; each one is
@@ -24,7 +25,8 @@ export function FilterToken({
       )}
     >
       <span className="text-fg-muted">{k}</span>
-      {value}
+      {/* "any", "all", "none": the unset filter, in the UI language. */}
+      {value === "any" || value === "all" || value === "none" ? t(value) : value}
       <ChevronDown className="size-3.5 text-fg-muted" aria-hidden />
     </button>
   );
@@ -38,7 +40,7 @@ export function RemovableFilterToken({ k, value, onRemove }: { k: string; value:
       {value}
       <button
         type="button"
-        aria-label={`Remove ${k} filter`}
+        aria-label={t("Remove {k} filter", { k })}
         onClick={onRemove}
         className="focus-ring inline-flex size-[18px] items-center justify-center rounded border-0 bg-transparent p-0 text-fg-muted hover:bg-surface-hover hover:text-fg"
       >

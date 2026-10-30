@@ -30,25 +30,26 @@ import type { Cluster } from "@/data/types";
 import { nodeColumns } from "./columns";
 import { NodeInspector } from "./NodeInspector";
 import { DrainDialog } from "./DrainDialog";
+import { t as tt } from "@/i18n";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
 
 function cordonRequest(n: NodeRow, cluster: Cluster | undefined, cordon: boolean, onConfirm: () => void): ConfirmationRequest {
   const short = n.name.split(".")[0]!;
   return {
-    action: cordon ? "Cordon node" : "Uncordon node",
+    action: cordon ? tt("Cordon node") : tt("Uncordon node"),
     targetName: short,
     icon: <Ban />,
     env: n.env,
     cluster: n.cluster,
-    meta: `${n.pods} pods`,
+    meta: tt("{n} pods", { n: n.pods }),
     protected: cluster?.protected ?? false,
     destructive: false,
     whatHappens: cordon
-      ? "New pods won’t be scheduled on the node. Running pods keep running. Reversible with Uncordon."
-      : "The node accepts new pods again.",
+      ? tt("New pods won’t be scheduled on the node. Running pods keep running. Reversible with Uncordon.")
+      : tt("The node accepts new pods again."),
     command: `kubectl --context ${n.cluster} ${cordon ? "cordon" : "uncordon"} ${n.name}`,
-    confirmLabel: cordon ? "Cordon" : "Uncordon",
+    confirmLabel: cordon ? tt("Cordon") : tt("Uncordon"),
     phrase: short,
     onConfirm,
   };
@@ -106,18 +107,18 @@ export function NodesWorkspace({ active }: { active: boolean }) {
         {
           id: "pods",
           group: "observe",
-          label: "Pods on node",
+          label: tt("Pods on node"),
           icon: <Box />,
           shortcut: "P",
           onSelect: () => {
-            ws.openView({ kind: "pods", title: "Pods" });
+            ws.openView({ kind: "pods", title: tt("Pods") });
             ws.revealResource("filter", `pods:node:${n.name.split(".")[0]} cluster:${n.cluster}`);
           },
         },
         {
           id: "yaml",
           group: "observe",
-          label: "View YAML",
+          label: tt("View YAML"),
           icon: <Code />,
           shortcut: "Y",
           onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${n.name.split(".")[0]}`, cluster: n.cluster, params: { kind: "Node", name: n.name } }),
@@ -125,13 +126,13 @@ export function NodesWorkspace({ active }: { active: boolean }) {
         {
           id: "cordon",
           group: "modify",
-          label: cordoned ? "Uncordon…" : "Cordon…",
+          label: cordoned ? tt("Uncordon…") : tt("Cordon…"),
           icon: <Ban />,
           shortcut: "⇧C",
           onSelect: () => confirm(cordonRequest(n, c, !cordoned, () => setNodeCordoned(n.id, !cordoned))),
         },
-        { id: "drain", group: "modify", label: "Drain…", icon: <Filter />, shortcut: "⇧D", disabled: n.health === "failed", onSelect: () => setDrainId(n.id) },
-        { id: "delete", group: "modify", danger: true, label: "Delete node…", icon: <Trash2 />, disabled: true },
+        { id: "drain", group: "modify", label: tt("Drain…"), icon: <Filter />, shortcut: "⇧D", disabled: n.health === "failed", onSelect: () => setDrainId(n.id) },
+        { id: "delete", group: "modify", danger: true, label: tt("Delete node…"), icon: <Trash2 />, disabled: true },
       ];
     },
     [clusterById, confirm, setNodeCordoned, ws],
@@ -184,20 +185,19 @@ export function NodesWorkspace({ active }: { active: boolean }) {
         <div className={cn("flex h-12 shrink-0 items-center gap-2.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <Button variant="ghost" className="gap-2 px-1.5 text-fg">
             <Server className="!size-4" aria-hidden />
-            <span className="text-title font-semibold">Nodes</span>
+            <span className="text-title font-semibold">{tt("Nodes")}</span>
             <ChevronDown className="text-fg-muted" aria-hidden />
           </Button>
           <span className="truncate text-meta text-fg-muted">
-            {inClusters.length} nodes · {notReady} NotReady · {cordoned} cordoned · {pressure} under memory pressure
-          </span>
+            {tt("{nInClusters} nodes · {notReady} NotReady · {cordoned} cordoned · {pressure} under memory pressure", { nInClusters: inClusters.length, notReady, cordoned, pressure })}</span>
           <div className="flex-1" />
           <Segmented
-            aria-label="Cluster view"
+            aria-label={tt("Cluster view")}
             value={view}
             onValueChange={setView}
             options={[
-              { value: "aggregated", label: "Aggregated" },
-              { value: "by-cluster", label: "By cluster" },
+              { value: "aggregated", label: tt("Aggregated") },
+              { value: "by-cluster", label: tt("By cluster") },
             ]}
           />
         </div>
@@ -205,13 +205,13 @@ export function NodesWorkspace({ active }: { active: boolean }) {
         <div className={cn("flex h-11 shrink-0 items-center gap-1.5 border-b border-line pl-3.5 pr-3", BAR)}>
           <label className="flex h-7 w-[200px] shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-fg-muted focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
             <Search className="size-3.5 shrink-0" aria-hidden />
-            <span className="sr-only">Filter nodes</span>
+            <span className="sr-only">{tt("Filter nodes")}</span>
             <input
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && (query ? setQuery("") : e.currentTarget.blur())}
-              placeholder="Filter name, label, zone…"
+              placeholder={tt("Filter name, label, zone…")}
               spellCheck={false}
               className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
             />
@@ -222,7 +222,7 @@ export function NodesWorkspace({ active }: { active: boolean }) {
               <FilterToken k="role" value={role} active={role !== "any"} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Role</DropdownMenuLabel>
+              <DropdownMenuLabel>{tt("Role")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={role} onValueChange={(v) => setRole(v as typeof role)}>
                 {(["any", "worker", "system", "gpu"] as const).map((r) => (
                   <DropdownMenuRadioItem key={r} value={r}>
@@ -235,25 +235,22 @@ export function NodesWorkspace({ active }: { active: boolean }) {
           <button
             type="button"
             onClick={() => searchRef.current?.focus()}
-            title="Labels, zones and instance types are searchable in the filter field"
+            title={tt("Labels, zones and instance types are searchable in the filter field")}
             className="focus-ring hidden h-[26px] items-center gap-1.5 whitespace-nowrap rounded-md border border-dashed border-line-strong bg-transparent px-2 text-ui text-fg-secondary @[760px]:flex"
           >
-            <Plus className="size-3.5" aria-hidden />
-            Filter
-          </button>
+            <Plus className="size-3.5" aria-hidden />{tt("Filter")}</button>
           <div className="flex-1" />
           <Segmented
-            aria-label="Health"
+            aria-label={tt("Health")}
             value={health}
             onValueChange={setHealth}
             options={[
-              { value: "all", label: <>All <span className="font-mono text-fg-muted">{baseRows.length}</span></> },
+              { value: "all", label: <>{tt("All")}{" "}<span className="font-mono text-fg-muted">{baseRows.length}</span></> },
               {
                 value: "attention",
                 label: (
                   <>
-                    <StatusGlyph health="failed" />
-                    Attention <span className="font-mono">{attention}</span>
+                    <StatusGlyph health="failed" />{tt("Attention")}{" "}<span className="font-mono">{attention}</span>
                   </>
                 ),
               },
@@ -266,7 +263,7 @@ export function NodesWorkspace({ active }: { active: boolean }) {
 
         <ResourceTable
           table={table}
-          aria-label="Nodes"
+          aria-label={tt("Nodes")}
           onAutoHiddenChange={setAutoHidden}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
@@ -280,25 +277,22 @@ export function NodesWorkspace({ active }: { active: boolean }) {
           grouping={grouping}
           fillMin={170}
           empty={
-            <EmptyState icon={<SearchX />} title="No nodes match">
-              Clear the filters or pick more clusters.
-            </EmptyState>
+            <EmptyState icon={<SearchX />} title={tt("No nodes match")}>{tt("Clear the filters or pick more clusters.")}</EmptyState>
           }
         />
 
         <div className={cn("flex h-7 shrink-0 items-center gap-3.5 border-t border-line px-3.5 text-meta text-fg-muted", BAR)}>
           <span>
-            <span className="text-fg">{rows.length}</span> nodes
-          </span>
-          {attention > 0 && <span className="text-status-critical">{attention} need attention</span>}
+            <span className="text-fg">{rows.length}</span>{" "}{tt("nodes")}</span>
+          {attention > 0 && <span className="text-status-critical">{tt("{attention} need attention", { attention })}</span>}
           <div className="flex-1" />
-          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
-          <span>Usage: metrics-server · Allocatable: node status</span>
+          {autoHidden.length > 0 && <span className="truncate">{tt("{v0} hidden at this width", { v0: autoHidden.join(", ") })}</span>}
+          <span>{tt("Usage: metrics-server · Allocatable: node status")}</span>
         </div>
       </main>
 
       {inspectorOpen && selected && (
-        <InspectorPanel label="Node inspector" storageKey="nodes" active={active}>
+        <InspectorPanel label={tt("Node inspector")} storageKey="nodes" active={active}>
           <NodeInspector
             node={selected}
             cluster={clusterById(selected.cluster)}

@@ -28,6 +28,7 @@ import type { Environment } from "@/data/types";
 import { cn } from "@/lib/cn";
 import { modKey } from "@/lib/platform";
 import { LISTED_KINDS } from "@/features/resources/kinds";
+import { locale, t, tn } from "@/i18n";
 
 type Section = "Resources" | "Actions" | "Navigate";
 const SCOPES: (Section | "All")[] = ["All", "Resources", "Actions", "Navigate"];
@@ -68,11 +69,11 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
         section: "Resources",
         icon: <Layers />,
         label: <span className="font-mono">{d.name}</span>,
-        detail: `Deployment · ${d.cluster}`,
+        detail: t("Deployment · {cluster}", { cluster: d.cluster }),
         env: d.env,
         haystack: `${d.name} deployment ${d.namespace} ${d.cluster}`,
         run: () => {
-          ws.openView({ kind: "deployments", title: "Deployments" });
+          ws.openView({ kind: "deployments", title: t("Deployments") });
           ws.revealResource("deployment", d.id);
         },
       });
@@ -81,8 +82,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
         section: "Actions",
         icon: <RotateCcw />,
         label: (
-          <>
-            Restart rollout… <span className="font-mono">{d.name}</span>
+          <>{t("Restart rollout…")}{" "}<span className="font-mono">{d.name}</span>
           </>
         ),
         detail: d.cluster,
@@ -98,11 +98,11 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
         section: "Resources",
         icon: <Box />,
         label: <span className="font-mono">{p.name}</span>,
-        detail: `Pod · ${p.namespace} · ${p.cluster}`,
+        detail: t("Pod · {namespace} · {cluster}", { namespace: p.namespace, cluster: p.cluster }),
         env: p.env,
         haystack: `${p.name} pod ${p.namespace} ${p.cluster}`,
         run: () => {
-          ws.openView({ kind: "pods", title: "Pods" });
+          ws.openView({ kind: "pods", title: t("Pods") });
           ws.revealResource("pod", p.id);
         },
       });
@@ -113,50 +113,50 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
         section: "Resources",
         icon: <Network />,
         label: <span className="font-mono">{c.name}</span>,
-        detail: `Cluster · ${c.summary ?? c.connection}`,
+        detail: t("Cluster · {v0}", { v0: c.summary ?? c.connection }),
         env: c.env,
         haystack: `${c.name} cluster ${c.context}`,
         run: () => {
-          ws.openView({ kind: "clusters", title: "Clusters" });
+          ws.openView({ kind: "clusters", title: t("Clusters") });
           ws.revealResource("cluster", c.id);
         },
       });
     }
     const nav: [string, ReactNode, () => void][] = [
-      ["Clusters", <Network key="c" />, () => ws.openView({ kind: "clusters", title: "Clusters" })],
-      ["Pods", <Box key="p" />, () => ws.openView({ kind: "pods", title: "Pods" })],
-      ["Deployments", <Layers key="d" />, () => ws.openView({ kind: "deployments", title: "Deployments" })],
-      ["Nodes", <Server key="n" />, () => ws.openView({ kind: "nodes", title: "Nodes" })],
+      ["Clusters", <Network key="c" />, () => ws.openView({ kind: "clusters", title: t("Clusters") })],
+      ["Pods", <Box key="p" />, () => ws.openView({ kind: "pods", title: t("Pods") })],
+      ["Deployments", <Layers key="d" />, () => ws.openView({ kind: "deployments", title: t("Deployments") })],
+      ["Nodes", <Server key="n" />, () => ws.openView({ kind: "nodes", title: t("Nodes") })],
       [
         IS_MOCK ? "Investigation · checkout-api" : "Investigation · pinned evidence",
         <Route key="i" />,
         () => ws.openInvestigation(ws.currentInvestigation),
       ],
-      ["Helm releases", <LifeBuoy key="h" />, () => ws.openView({ kind: "helm", title: "Helm releases" })],
-      ["GitOps", <GitBranch key="g" />, () => ws.openView({ kind: "gitops", title: "GitOps" })],
-      ["Connections", <KeyRound key="k" />, () => ws.openView({ kind: "connections", title: "Connections" })],
-      ["Settings", <Settings key="s" />, () => ws.openView({ kind: "settings", title: "Settings" })],
+      ["Helm releases", <LifeBuoy key="h" />, () => ws.openView({ kind: "helm", title: t("Helm releases") })],
+      ["GitOps", <GitBranch key="g" />, () => ws.openView({ kind: "gitops", title: t("GitOps") })],
+      ["Connections", <KeyRound key="k" />, () => ws.openView({ kind: "connections", title: t("Connections") })],
+      ["Settings", <Settings key="s" />, () => ws.openView({ kind: "settings", title: t("Settings") })],
     ];
     for (const k of LISTED_KINDS) {
       nav.push([k.label, <LayoutGrid key={k.key} />, () => ws.openView({ kind: "list", title: k.label, params: { kind: k.key } })]);
     }
     for (const [label, icon, run] of nav) {
-      items.push({ id: `nav:${label}`, section: "Navigate", icon, label: `Go to ${label}`, haystack: `go to ${label}`, run });
+      items.push({ id: `nav:${label}`, section: "Navigate", icon, label: t("Go to {label}", { label: t(label) }), haystack: `go to ${label}`, run });
     }
-    items.push({ id: "kinds", section: "Navigate", icon: <LayoutGrid />, label: "All resource kinds…", detail: `${modKey}J`, haystack: "all resource kinds crd custom", run: onOpenKinds });
+    items.push({ id: "kinds", section: "Navigate", icon: <LayoutGrid />, label: t("All resource kinds…"), detail: `${modKey}J`, haystack: "all resource kinds crd custom", run: onOpenKinds });
     items.push({
       id: "create",
       section: "Navigate",
       icon: <Plus />,
-      label: "Create resource from YAML…",
+      label: t("Create resource from YAML…"),
       haystack: "create new resource yaml apply",
-      run: () => ws.openView({ kind: "create", title: "New resource", params: { kind: "apps/Deployment" } }),
+      run: () => ws.openView({ kind: "create", title: t("New resource"), params: { kind: "apps/Deployment" } }),
     });
     items.push({
       id: "theme",
       section: "Navigate",
       icon: ws.theme === "dark" ? <Sun /> : <Moon />,
-      label: `Switch to ${ws.theme === "dark" ? "light" : "dark"} theme`,
+      label: ws.theme === "dark" ? t("Switch to light theme") : t("Switch to dark theme"),
       haystack: "theme light dark appearance",
       run: () => ws.setTheme(ws.theme === "dark" ? "light" : "dark"),
     });
@@ -164,10 +164,10 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
   }, [ws, confirm, open]);
 
   const results = useMemo(() => {
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const matches = all.filter(
-      (it) => (scope === "All" || it.section === scope) && words.every((w) => it.haystack.toLowerCase().includes(w)),
-    );
+    const words = query.toLocaleLowerCase(locale()).split(/\s+/).filter(Boolean);
+    // English keywords plus the label as shown, so a search works in the UI language too.
+    const text = (it: Item) => `${it.haystack} ${typeof it.label === "string" ? it.label : ""}`.toLocaleLowerCase(locale());
+    const matches = all.filter((it) => (scope === "All" || it.section === scope) && words.every((w) => text(it).includes(w)));
     // Without a query, show navigation first; with one, resources first.
     const order: Section[] = words.length ? ["Resources", "Actions", "Navigate"] : ["Navigate", "Resources", "Actions"];
     return order.flatMap((section) =>
@@ -196,10 +196,10 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
           aria-describedby={undefined}
           className="fixed left-1/2 top-[72px] z-50 flex max-h-[min(560px,calc(100vh-120px))] w-[600px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-lg border border-line-strong bg-surface-elevated p-1.5 text-fg shadow-dialog"
         >
-          <Dialog.Title className="sr-only">Command palette</Dialog.Title>
+          <Dialog.Title className="sr-only">{t("Command palette")}</Dialog.Title>
           <label className="flex h-9 shrink-0 items-center gap-2 rounded-md border border-accent bg-surface-panel px-2.5 text-fg-muted">
             <Search className="size-4" aria-hidden />
-            <span className="sr-only">Search resources and commands</span>
+            <span className="sr-only">{t("Search resources and commands")}</span>
             <input
               autoFocus
               value={query}
@@ -217,7 +217,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
                 } else return;
                 e.preventDefault();
               }}
-              placeholder="Go to resource or run command…"
+              placeholder={t("Go to resource or run command…")}
               spellCheck={false}
               role="combobox"
               aria-expanded
@@ -226,16 +226,16 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
               className="min-w-0 flex-1 border-0 bg-transparent text-body text-fg outline-none placeholder:text-fg-muted"
             />
             {scope !== "All" && (
-              <span className="rounded bg-accent-soft px-1.5 py-0.5 text-label font-medium text-fg">{scope}</span>
+              <span className="rounded bg-accent-soft px-1.5 py-0.5 text-label font-medium text-fg">{t(scope)}</span>
             )}
           </label>
 
-          <div ref={listRef} id="palette-list" role="listbox" aria-label="Results" className="mt-1 min-h-0 overflow-y-auto">
-            {results.length === 0 && <p className="m-0 px-2.5 py-6 text-center text-cell text-fg-muted">Nothing matches “{query}”.</p>}
+          <div ref={listRef} id="palette-list" role="listbox" aria-label={t("Results")} className="mt-1 min-h-0 overflow-y-auto">
+            {results.length === 0 && <p className="m-0 px-2.5 py-6 text-center text-cell text-fg-muted">{t("Nothing matches “{query}”.", { query })}</p>}
             {results.map((it, i) => (
               <div key={it.id}>
                 {(i === 0 || results[i - 1]!.section !== it.section) && (
-                  <div className="section-label px-2.5 pb-1 pt-2 text-2xs">{it.section}</div>
+                  <div className="section-label px-2.5 pb-1 pt-2 text-2xs">{t(it.section)}</div>
                 )}
                 <div
                   id={`palette-${i}`}
@@ -255,9 +255,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
                   {!it.detail && <span className="flex-1" />}
                   {it.confirm && (
                     <span className="flex items-center gap-1 text-meta text-fg-muted">
-                      <Lock className="size-3 text-env-prod-ink" aria-hidden />
-                      confirm
-                    </span>
+                      <Lock className="size-3 text-env-prod-ink" aria-hidden />{t("confirm")}</span>
                   )}
                   {it.env && <EnvironmentBadge env={it.env} size="sm" className="text-[9.5px]" />}
                 </div>
@@ -267,17 +265,16 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
 
           <div className="mt-1 flex shrink-0 items-center gap-2.5 border-t border-line px-2 pb-0.5 pt-1.5 text-meta text-fg-muted">
             <span className="flex items-center gap-1">
-              <Kbd>↵</Kbd> open
+              <Kbd>↵</Kbd> {t("open")}
             </span>
             <span className="flex items-center gap-1">
-              <Kbd>↑↓</Kbd> move
+              <Kbd>↑↓</Kbd> {t("move")}
             </span>
             <span className="flex items-center gap-1">
-              <Kbd>Tab</Kbd> scope by kind
-            </span>
+              {tn("{v0} scope by kind", { v0: <Kbd>Tab</Kbd> })}</span>
             <div className="flex-1" />
             <span className="flex items-center gap-1">
-              <Kbd>{modKey}K</Kbd> toggle
+              <Kbd>{modKey}K</Kbd> {t("toggle")}
             </span>
           </div>
         </Dialog.Content>

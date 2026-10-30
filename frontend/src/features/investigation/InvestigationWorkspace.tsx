@@ -52,6 +52,7 @@ import { restartDeploymentRequest } from "@/features/deployments/requests";
 import { cn } from "@/lib/cn";
 import { backend } from "@/backend/client";
 import { resourceTab } from "@/features/resources/kinds";
+import { t as tt } from "@/i18n";
 
 type View = "evidence" | "timeline";
 type InvStatus = "Open" | "Monitoring" | "Resolved";
@@ -88,7 +89,7 @@ function PinnedInvestigation({ id }: { id: string }) {
   const isTarget = ws.currentInvestigation === id;
   const evidence: Evidence[] = pins.map((p, i) => ({
     id: `E${i + 1}`,
-    source: p.source.split(" · ")[0] === "Shell" ? "Shell output" : "Log excerpt",
+    source: p.source.split(" · ")[0] === "Shell" ? tt("Shell output") : tt("Log excerpt"),
     title: p.source,
     at: new Date(p.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
     plain: p.text,
@@ -113,7 +114,7 @@ function PinnedInvestigation({ id }: { id: string }) {
         <div className="flex min-w-0 flex-col gap-[5px]">
           <h1 className="m-0 min-w-0 text-heading font-semibold tracking-[-.01em]">
             <input
-              aria-label="Investigation title"
+              aria-label={tt("Investigation title")}
               defaultValue={title}
               key={title}
               onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== title && ws.renameInvestigation(id, e.target.value.trim())}
@@ -121,9 +122,7 @@ function PinnedInvestigation({ id }: { id: string }) {
               className="w-[min(480px,60vw)] rounded-sm border-0 bg-transparent p-0 text-inherit outline-none focus:shadow-[0_0_0_2px_var(--accent-soft)]"
             />
           </h1>
-          <span className="text-cell text-fg-secondary">
-            Evidence you pin from Logs and shells, with your hypotheses and notes · saved locally
-            {isTarget ? " · new pins land here" : ""}
+          <span className="text-cell text-fg-secondary">{tt("Evidence you pin from Logs and shells, with your hypotheses and notes · saved locally")}{isTarget ? tt(" · new pins land here") : ""}
           </span>
         </div>
         <div className="flex-1" />
@@ -136,36 +135,30 @@ function PinnedInvestigation({ id }: { id: string }) {
           }
         >
           {copied ? <Check className="text-status-healthy" aria-hidden /> : <Copy aria-hidden />}
-          {copied ? "Copied" : "Copy summary"}
+          {copied ? tt("Copied") : tt("Copy summary")}
         </Button>
         <Button variant="ghost" disabled={!pins.length && !hypotheses.length && !notes} onClick={() => (clearPins(), setHypotheses([]), setNotes(""))}>
-          <X aria-hidden />
-          Clear
-        </Button>
+          <X aria-hidden />{tt("Clear")}</Button>
         {id !== DEFAULT_INVESTIGATION && (
           <Button variant="ghost" onClick={() => ws.deleteInvestigation(id)}>
-            <Trash2 aria-hidden />
-            Delete
-          </Button>
+            <Trash2 aria-hidden />{tt("Delete")}</Button>
         )}
       </div>
       <div className="flex min-h-0 flex-1">
-        <section aria-label="Observed facts" className="flex min-w-0 flex-1 flex-col">
-          <ColumnHeader title="Observed facts" note="captured from the cluster" trailing={<span className="font-mono text-label text-fg-muted">{evidence.length}</span>} />
+        <section aria-label={tt("Observed facts")} className="flex min-w-0 flex-1 flex-col">
+          <ColumnHeader title={tt("Observed facts")} note={tt("captured from the cluster")} trailing={<span className="font-mono text-label text-fg-muted">{evidence.length}</span>} />
           <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 py-3">
             {evidence.map((e) => (
               <EvidenceCard key={e.id} evidence={e} />
             ))}
             {!evidence.length && (
               <p className="m-0 flex items-center gap-1.5 text-cell text-fg-muted">
-                <PinIcon className="size-3.5" aria-hidden />
-                Select lines in Logs or a shell and pin them; they appear here as evidence with their source and capture time.
-              </p>
+                <PinIcon className="size-3.5" aria-hidden />{tt("Select lines in Logs or a shell and pin them; they appear here as evidence with their source and capture time.")}</p>
             )}
           </div>
         </section>
-        <section aria-label="Hypotheses and notes" className="flex w-[372px] shrink-0 flex-col border-l border-line bg-surface-panel max-[1360px]:w-[340px]">
-          <ColumnHeader title="Hypotheses & notes" trailing={<span className="text-meta text-fg-muted">written by people</span>} />
+        <section aria-label={tt("Hypotheses and notes")} className="flex w-[372px] shrink-0 flex-col border-l border-line bg-surface-panel max-[1360px]:w-[340px]">
+          <ColumnHeader title={tt("Hypotheses & notes")} trailing={<span className="text-meta text-fg-muted">{tt("written by people")}</span>} />
           <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 py-3">
             {hypotheses.map((h) => (
               <HypothesisCard
@@ -226,45 +219,44 @@ function SampleInvestigation() {
     const builtIn: Evidence[] = [
       {
         id: "E1",
-        source: "Pod status",
-        title: "Last termination of container api",
+        source: tt("Pod status"),
+        title: tt("Last termination of container api"),
         at: "12:00:19",
         plain: "x2kqp: 14 restarts, OOMKilled, exit 137, finished 11:59:02; m8vtn: 11 restarts, OOMKilled, exit 137, finished 12:00:19",
         body: <PodStatusTable />,
-        open: { label: "Open pod", run: () => showPod("x2kqp") },
+        open: { label: tt("Open pod"), run: () => showPod("x2kqp") },
       },
       {
         id: "E2",
-        source: "Events + restartCount",
-        title: "Restart history · last 60m",
-        at: "Event TTL on this cluster: 1h",
+        source: tt("Events + restartCount"),
+        title: tt("Restart history · last 60m"),
+        at: tt("Event TTL on this cluster: 1h"),
         plain: "x2kqp restarted 14 times in the last 52 minutes; m8vtn 11 times in the last 48 minutes",
         body: <RestartLanes lanes={inv.lanes} />,
       },
       {
         id: "E3",
         source: "metrics-server",
-        title: "Memory working set vs limit · container api",
+        title: tt("Memory working set vs limit · container api"),
         at: "15s samples · since Clustrail opened",
         plain: "Failing pods climb to the 256Mi limit and reset; healthy pods stay near 230Mi (9rkzd 231Mi, h2pqs 226Mi)",
         body: <MemoryChart />,
       },
       {
         id: "E4",
-        source: "Log excerpt",
-        title: "x2kqp · api · previous instance",
+        source: tt("Log excerpt"),
+        title: tt("x2kqp · api · previous instance"),
         at: "11:58:43 → 11:58:47",
         plain: "java.lang.OutOfMemoryError: Java heap space at PriceCache.rebuild after G1 Full GC (heap 379/384 MB)",
         body: (
           <Excerpt>
-            <span className="text-status-warning">WARN </span> GcMonitor - GC pause 1.8s (G1 Evacuation Pause), heap 361/384 MB{"\n"}
-            <span className="text-status-warning">WARN </span> GcMonitor - GC pause 3.2s (G1 Full GC), heap 379/384 MB{"\n"}
-            <span className="text-status-critical">ERROR</span> java.lang.OutOfMemoryError: Java heap space{"\n"}
-            <span className="text-status-critical">ERROR</span>{"     "}at c.a.checkout.pricing.PriceCache.rebuild(PriceCache.java:214)
-          </Excerpt>
+            <span className="text-status-warning">WARN </span>{" "}{tt("GcMonitor - GC pause 1.8s (G1 Evacuation Pause), heap 361/384 MB")}{"\n"}
+            <span className="text-status-warning">WARN </span>{" "}{tt("GcMonitor - GC pause 3.2s (G1 Full GC), heap 379/384 MB")}{"\n"}
+            <span className="text-status-critical">ERROR</span>{" "}{tt("java.lang.OutOfMemoryError: Java heap space")}{"\n"}
+            <span className="text-status-critical">ERROR</span>{"     "}{tt("at c.a.checkout.pricing.PriceCache.rebuild(PriceCache.java:214)")}</Excerpt>
         ),
         open: {
-          label: "Open in Logs",
+          label: tt("Open in Logs"),
           run: () =>
             openView({
               kind: "logs",
@@ -276,17 +268,17 @@ function SampleInvestigation() {
       },
       {
         id: "E5",
-        source: "Shell output",
-        title: "9rkzd · api · read by you",
+        source: tt("Shell output"),
+        title: tt("9rkzd · api · read by you"),
         at: "12:05",
         plain: "memory.max = 268435456 (256Mi), JAVA_TOOL_OPTIONS = -Xmx384m -XX:+UseG1GC",
-        body: <Excerpt>memory.max = 268435456 (256Mi)   JAVA_TOOL_OPTIONS = -Xmx384m -XX:+UseG1GC</Excerpt>,
+        body: <Excerpt>{tt("memory.max = 268435456 (256Mi)   JAVA_TOOL_OPTIONS = -Xmx384m -XX:+UseG1GC")}</Excerpt>,
       },
     ];
     // Lines pinned from Logs or Shell become evidence of their own.
     const pinned = pins.map<Evidence>((p, i) => ({
       id: `E${builtIn.length + 1 + i}`,
-      source: p.source.split(" · ")[0] === "Shell" ? "Shell output" : "Log excerpt",
+      source: p.source.split(" · ")[0] === "Shell" ? tt("Shell output") : tt("Log excerpt"),
       title: p.source,
       at: new Date(p.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
       plain: p.text,
@@ -326,9 +318,7 @@ function SampleInvestigation() {
             onClick={backToPods}
             className="focus-ring flex w-fit items-center gap-1.5 rounded-sm border-0 bg-transparent p-0 text-ui text-fg-muted hover:text-fg"
           >
-            <ArrowLeft className="size-3.5" aria-hidden />
-            Back to Pods · {inv.target.cluster} · {inv.target.namespace} · CrashLoop filter
-          </button>
+            <ArrowLeft className="size-3.5" aria-hidden />{tt("Back to Pods · {cluster} · {namespace} · CrashLoop filter", { cluster: inv.target.cluster, namespace: inv.target.namespace })}</button>
           <h1 className="m-0 truncate text-heading font-semibold tracking-[-.01em]">{inv.title}</h1>
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-cell text-fg-secondary">
             <Layers className="size-3.5" aria-hidden />
@@ -346,11 +336,9 @@ function SampleInvestigation() {
             {cluster && <EnvironmentBadge env={cluster.env} />}
             {cluster?.protected && (
               <span className="flex items-center gap-1.5 text-ui text-env-prod-ink">
-                <Lock className="size-3" aria-hidden />
-                Protected
-              </span>
+                <Lock className="size-3" aria-hidden />{tt("Protected")}</span>
             )}
-            <span className="max-[1360px]:hidden">· opened 40m ago by you · saved locally</span>
+            <span className="max-[1360px]:hidden">{tt("· opened 40m ago by you · saved locally")}</span>
           </div>
         </div>
         <div className="flex-1" />
@@ -361,7 +349,7 @@ function SampleInvestigation() {
                 type="button"
                 className="focus-ring flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface-panel px-2 text-ui dark:bg-transparent"
               >
-                <span className="text-fg-muted">status</span>
+                <span className="text-fg-muted">{tt("status")}</span>
                 <span className={status === "Resolved" ? "text-status-healthy" : status === "Open" ? "text-status-warning" : "text-status-progressing"}>
                   {status}
                 </span>
@@ -380,12 +368,10 @@ function SampleInvestigation() {
           </DropdownMenu>
           <Button onClick={copySummary}>
             {copied ? <Check className="text-status-healthy" aria-hidden /> : <Copy aria-hidden />}
-            {copied ? "Copied" : "Copy summary"}
+            {copied ? tt("Copied") : tt("Copy summary")}
           </Button>
           <Button onClick={exportMarkdown} className="max-[1360px]:hidden">
-            <Download aria-hidden />
-            Export .md
-          </Button>
+            <Download aria-hidden />{tt("Export .md")}</Button>
           {cluster && deployment && (
             <ModifyMenuButton
               cluster={cluster.name}
@@ -394,7 +380,7 @@ function SampleInvestigation() {
                 {
                   id: "restart",
                   group: "modify",
-                  label: "Restart deployment…",
+                  label: tt("Restart deployment…"),
                   icon: <RotateCcw />,
                   shortcut: "⇧R",
                   onSelect: () => confirm(restartDeploymentRequest(deployment, cluster, () => restartDeployment(deployment.id))),
@@ -408,10 +394,10 @@ function SampleInvestigation() {
       <div className="flex min-h-0 flex-1">
         {/* Symptoms and related objects */}
         <section
-          aria-label="Symptoms and objects"
+          aria-label={tt("Symptoms and objects")}
           className={cn("flex w-[288px] shrink-0 flex-col overflow-y-auto border-r border-line", !symptomsOpen && "max-[1360px]:hidden", symptomsOpen && "max-[1360px]:w-[260px]")}
         >
-          <ColumnHeader title="Observed symptoms" trailing={<span className="text-meta text-fg-muted">live</span>} />
+          <ColumnHeader title={tt("Observed symptoms")} trailing={<span className="text-meta text-fg-muted">{tt("live")}</span>} />
           <div className="px-3.5 pb-2.5 pt-1">
             {symptoms.map((s, i) => (
               <div
@@ -424,7 +410,7 @@ function SampleInvestigation() {
               </div>
             ))}
           </div>
-          <ColumnHeader title="Related objects" border trailing={<span className="font-mono text-label text-fg-muted">{inv.objects.length}</span>} />
+          <ColumnHeader title={tt("Related objects")} border trailing={<span className="font-mono text-label text-fg-muted">{inv.objects.length}</span>} />
           <div className="flex flex-col px-2 pb-2.5 pt-1">
             {inv.objects.map((o) => (
               <RelatedObject key={o.id} object={o} onOpen={o.depth === 2 ? () => (openTab("pods"), revealResource("pod", POD_PREFIX + o.id)) : undefined} />
@@ -433,29 +419,29 @@ function SampleInvestigation() {
         </section>
 
         {/* Observed facts */}
-        <section aria-label="Observed facts" className="flex min-w-0 flex-1 flex-col">
+        <section aria-label={tt("Observed facts")} className="flex min-w-0 flex-1 flex-col">
           <ColumnHeader
             lead={
               <IconButton
-                aria-label={symptomsOpen ? "Hide symptoms and objects" : "Show symptoms and objects"}
+                aria-label={symptomsOpen ? tt("Hide symptoms and objects") : tt("Show symptoms and objects")}
                 aria-pressed={symptomsOpen}
-                title="Symptoms and related objects"
+                title={tt("Symptoms and related objects")}
                 onClick={() => setSymptomsOpen(!symptomsOpen)}
                 className="-ml-1 hidden max-[1360px]:inline-flex"
               >
                 <PanelLeft aria-hidden />
               </IconButton>
             }
-            title="Observed facts"
-            note="captured from the cluster · each links to its source"
+            title={tt("Observed facts")}
+            note={tt("captured from the cluster · each links to its source")}
             trailing={
               <Segmented<View>
-                aria-label="View"
+                aria-label={tt("View")}
                 value={view}
                 onValueChange={setView}
                 options={[
-                  { value: "evidence", label: `Evidence ${evidence.length}` },
-                  { value: "timeline", label: "Timeline" },
+                  { value: "evidence", label: tt("Evidence {length}", { length: evidence.length }) },
+                  { value: "timeline", label: tt("Timeline") },
                 ]}
               />
             }
@@ -468,9 +454,7 @@ function SampleInvestigation() {
                 ))}
                 {pins.length === 0 && (
                   <p className="m-0 flex items-center gap-1.5 text-meta text-fg-muted">
-                    <PinIcon className="size-3" aria-hidden />
-                    Lines you pin from Logs or a shell are added here as evidence.
-                  </p>
+                    <PinIcon className="size-3" aria-hidden />{tt("Lines you pin from Logs or a shell are added here as evidence.")}</p>
                 )}
               </>
             ) : (
@@ -480,8 +464,8 @@ function SampleInvestigation() {
         </section>
 
         {/* Hypotheses and notes */}
-        <section aria-label="Hypotheses and notes" className="flex w-[372px] shrink-0 flex-col border-l border-line bg-surface-panel max-[1360px]:w-[340px]">
-          <ColumnHeader title="Hypotheses & notes" trailing={<span className="text-meta text-fg-muted">written by people</span>} />
+        <section aria-label={tt("Hypotheses and notes")} className="flex w-[372px] shrink-0 flex-col border-l border-line bg-surface-panel max-[1360px]:w-[340px]">
+          <ColumnHeader title={tt("Hypotheses & notes")} trailing={<span className="text-meta text-fg-muted">{tt("written by people")}</span>} />
           <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 py-3">
             {hypotheses.map((h) => (
               <HypothesisCard
@@ -559,7 +543,7 @@ function RelatedObject({ object: o, onOpen }: { object: InvolvedObject; onOpen?:
       <span className="truncate">
         <span className={cn("font-mono", o.muted && "text-fg-secondary")}>{o.name}</span>
         {crashing ? (
-          <span className="ml-1.5 text-fg-muted">api ✕ · envoy ✓</span>
+          <span className="ml-1.5 text-fg-muted">{tt("api ✕ · envoy ✓")}</span>
         ) : (
           o.kind && <span className="ml-1.5 text-fg-muted">{o.kind}</span>
         )}
@@ -605,7 +589,7 @@ function PodStatusTable() {
   ];
   const grid = "grid grid-cols-[minmax(0,1fr)_54px_92px_40px_64px] gap-x-2 py-[3px] text-ui";
   return (
-    <div role="table" aria-label="Last termination per pod" className="-my-1">
+    <div role="table" aria-label={tt("Last termination per pod")} className="-my-1">
       <div role="row" className={cn(grid, "text-fg-muted")}>
         {["Pod", "Restarts", "Reason", "Exit", "Finished"].map((h, i) => (
           <span key={h} role="columnheader" className={cn(i !== 0 && i !== 2 && "text-right")}>
@@ -653,7 +637,7 @@ function RestartLanes({ lanes }: { lanes: typeof checkoutInvestigation.lanes }) 
                 height="18"
                 preserveAspectRatio="none"
                 role="img"
-                aria-label={`${short}: ${lane.restarts.length} restarts in the last ${oldest} minutes`}
+                aria-label={tt("{short}: {length} restarts in the last {oldest} minutes", { short, length: lane.restarts.length, oldest })}
               >
                 <line x1="0" y1="9" x2="466" y2="9" stroke="var(--line-strong)" vectorEffect="non-scaling-stroke" />
                 {lane.restarts.map((ago) => (
@@ -671,7 +655,7 @@ function RestartLanes({ lanes }: { lanes: typeof checkoutInvestigation.lanes }) 
           ))}
         </div>
       </div>
-      <span className="pt-1 text-meta text-fg-muted">Restarts older than the Event TTL appear only in restartCount, without timestamps.</span>
+      <span className="pt-1 text-meta text-fg-muted">{tt("Restarts older than the Event TTL appear only in restartCount, without timestamps.")}</span>
     </div>
   );
 }
@@ -686,7 +670,7 @@ function MemoryChart() {
         height="64"
         preserveAspectRatio="none"
         role="img"
-        aria-label="Failing pods climb to the 256Mi limit and reset; healthy pods stay near 230Mi"
+        aria-label={tt("Failing pods climb to the 256Mi limit and reset; healthy pods stay near 230Mi")}
       >
         <line x1="0" y1="8" x2="560" y2="8" stroke="var(--status-critical)" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
         <path
@@ -700,9 +684,9 @@ function MemoryChart() {
         <line x1="0" y1="63.5" x2="560" y2="63.5" stroke="var(--line)" vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="flex flex-wrap items-center gap-3.5 text-meta text-fg-muted">
-        <Legend swatch="w-3 border-t-[1.5px] border-dashed border-status-critical" label="limit 256Mi" />
-        <Legend swatch="h-0.5 w-3 bg-status-critical" label="x2kqp, m8vtn" />
-        <Legend swatch="h-0.5 w-3 bg-accent" label="9rkzd 231Mi, h2pqs 226Mi" />
+        <Legend swatch="w-3 border-t-[1.5px] border-dashed border-status-critical" label={tt("limit 256Mi")} />
+        <Legend swatch="h-0.5 w-3 bg-status-critical" label={tt("x2kqp, m8vtn")} />
+        <Legend swatch="h-0.5 w-3 bg-accent" label={tt("9rkzd 231Mi, h2pqs 226Mi")} />
       </div>
     </>
   );
@@ -734,10 +718,8 @@ function Timeline() {
               </span>
               {t.note && <span className="text-ui text-fg-muted">{t.note}</span>}
             </span>
-            <Button size="sm" disabled title="Revision diffs open from the Deployment's history.">
-              <Diff aria-hidden />
-              rev 13 → 14
-            </Button>
+            <Button size="sm" disabled title={tt("Revision diffs open from the Deployment's history.")}>
+              <Diff aria-hidden />{tt("rev 13 → 14")}</Button>
           </div>
         ) : (
           <div key={t.id} className="grid grid-cols-[54px_14px_minmax(0,1fr)_auto] items-start gap-x-2.5 border-t border-line-row px-2.5 py-2 text-cell first:border-t-0">
@@ -782,7 +764,7 @@ function HypothesisCard({
         <span className="font-mono text-[11px] font-semibold leading-none text-accent">{h.id}</span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" aria-label={`Status: ${h.status}`} className="focus-ring rounded-[4px] border-0 bg-transparent p-0">
+            <button type="button" aria-label={tt("Status: {status}", { status: h.status })} className="focus-ring rounded-[4px] border-0 bg-transparent p-0">
               <Pill className={STATUS_PILL[h.status]}>{h.status}</Pill>
             </button>
           </DropdownMenuTrigger>
@@ -800,14 +782,14 @@ function HypothesisCard({
         <span className="text-meta text-fg-muted">
           {h.author} · {h.at}
         </span>
-        <IconButton aria-label={`Remove ${h.id}`} onClick={onRemove} className="size-5 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+        <IconButton aria-label={tt("Remove {id}", { id: h.id })} onClick={onRemove} className="size-5 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
           <X aria-hidden />
         </IconButton>
       </div>
       <span className="selectable">{h.text}</span>
       <div className="flex flex-wrap items-center gap-1">
-        <span className="text-meta text-fg-muted">Evidence</span>
-        {h.evidence.length === 0 && <span className="text-meta text-fg-muted">none linked</span>}
+        <span className="text-meta text-fg-muted">{tt("Evidence")}</span>
+        {h.evidence.length === 0 && <span className="text-meta text-fg-muted">{tt("none linked")}</span>}
         {h.evidence.map((id) => (
           <Pill key={id}>{id}</Pill>
         ))}
@@ -815,12 +797,10 @@ function HypothesisCard({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="ghost">
-              <Link2 aria-hidden />
-              Link
-            </Button>
+              <Link2 aria-hidden />{tt("Link")}</Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Evidence for {h.id}</DropdownMenuLabel>
+            <DropdownMenuLabel>{tt("Evidence for {id}", { id: h.id })}</DropdownMenuLabel>
             {evidenceIds.map((id) => (
               <DropdownMenuCheckboxItem
                 key={id}
@@ -852,15 +832,11 @@ function AddHypothesis({ onAdd }: { onAdd: (text: string) => void }) {
   if (draft === null)
     return (
       <Button size="sm" variant="ghost" className="self-start" onClick={() => setDraft("")}>
-        <Plus aria-hidden />
-        Add hypothesis
-      </Button>
+        <Plus aria-hidden />{tt("Add hypothesis")}</Button>
     );
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="sr-only" htmlFor="inv-hypothesis">
-        Hypothesis
-      </label>
+      <label className="sr-only" htmlFor="inv-hypothesis">{tt("Hypothesis")}</label>
       <textarea
         id="inv-hypothesis"
         autoFocus
@@ -871,16 +847,12 @@ function AddHypothesis({ onAdd }: { onAdd: (text: string) => void }) {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           if (e.key === "Escape") setDraft(null);
         }}
-        placeholder="What might explain the symptoms? Link evidence after saving."
+        placeholder={tt("What might explain the symptoms? Link evidence after saving.")}
         className={textareaClass}
       />
       <div className="flex justify-end gap-1.5">
-        <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>
-          Cancel
-        </Button>
-        <Button size="sm" variant="primary" onClick={save}>
-          Add
-        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>{tt("Cancel")}</Button>
+        <Button size="sm" variant="primary" onClick={save}>{tt("Add")}</Button>
       </div>
     </div>
   );
@@ -891,12 +863,12 @@ function Notes({ value, onChange }: { value: string; onChange: (v: string) => vo
   return (
     <div className="flex flex-col pt-1">
       <div className="flex items-center pb-1">
-        <span className="section-label flex-1">Notes</span>
-        <span className="text-meta text-fg-muted">Markdown</span>
+        <span className="section-label flex-1">{tt("Notes")}</span>
+        <span className="text-meta text-fg-muted">{tt("Markdown")}</span>
       </div>
       {editing ? (
         <textarea
-          aria-label="Notes"
+          aria-label={tt("Notes")}
           autoFocus
           rows={Math.max(4, value.split("\n").length + 1)}
           value={value}
@@ -909,7 +881,7 @@ function Notes({ value, onChange }: { value: string; onChange: (v: string) => vo
         <button
           type="button"
           onClick={() => setEditing(true)}
-          aria-label="Edit notes"
+          aria-label={tt("Edit notes")}
           className="focus-ring selectable rounded-lg border border-line-strong bg-surface-app px-2.5 py-[9px] text-left text-cell leading-normal text-fg"
         >
           {value.trim() ? (
@@ -928,7 +900,7 @@ function Notes({ value, onChange }: { value: string; onChange: (v: string) => vo
               );
             })
           ) : (
-            <span className="text-fg-muted">What did you check or decide?</span>
+            <span className="text-fg-muted">{tt("What did you check or decide?")}</span>
           )}
         </button>
       )}
@@ -950,34 +922,30 @@ function NextSteps({
   return (
     <div className="flex flex-col pt-1">
       <div className="flex items-center pb-1">
-        <span className="section-label flex-1">Next steps</span>
+        <span className="section-label flex-1">{tt("Next steps")}</span>
         <span className="font-mono text-label text-fg-muted">
-          {done.length} of {steps.length}
+          {done.length}{" "}{tt("of")}{" "}{steps.length}
         </span>
       </div>
       {steps.map((s, i) => {
         const isDone = done.includes(s.id);
         return (
           <div key={s.id} className={cn("grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-x-2 py-1.5 text-cell", i > 0 && "border-t border-line-row")}>
-            <Checkbox checked={isDone} onCheckedChange={(on) => onToggle(s.id, on === true)} aria-label={isDone ? `Mark "${s.text}" not done` : `Mark "${s.text}" done`} />
+            <Checkbox checked={isDone} onCheckedChange={(on) => onToggle(s.id, on === true)} aria-label={isDone ? tt("Mark \"{text}\" not done", { text: s.text }) : tt("Mark \"{text}\" done", { text: s.text })} />
             <span className={cn(isDone && "text-fg-muted line-through")}>{s.text}</span>
             {s.action === "compare" ? (
               <Button size="sm" onClick={onCompare}>
-                <ArrowLeftRight aria-hidden />
-                Compare
-              </Button>
+                <ArrowLeftRight aria-hidden />{tt("Compare")}</Button>
             ) : s.action === "source" ? (
               <Button size="sm" onClick={onSource}>
-                <GitBranch aria-hidden />
-                Source
-              </Button>
+                <GitBranch aria-hidden />{tt("Source")}</Button>
             ) : (
               <span />
             )}
           </div>
         );
       })}
-      <span className="pt-1.5 text-meta text-fg-muted">First two are standard checks Clustrail offers for OOMKilled containers; edit or remove freely.</span>
+      <span className="pt-1.5 text-meta text-fg-muted">{tt("First two are standard checks Clustrail offers for OOMKilled containers; edit or remove freely.")}</span>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { t } from "@/i18n";
 import type { ConnectionState, Environment } from "@/data/types";
 
 const badgeLabel: Record<Environment, string> = { prod: "PROD", stg: "STG", dev: "DEV" };
@@ -67,8 +68,8 @@ export function ConnectionDot({ state, className }: { state: ConnectionState; cl
   return (
     <span
       role="img"
-      aria-label={connectionLabel[state]}
-      title={connectionLabel[state]}
+      aria-label={t(connectionLabel[state])}
+      title={t(connectionLabel[state])}
       className={cn(
         "inline-block size-1.5 shrink-0 rounded-full",
         state === "connected" && "bg-status-healthy",

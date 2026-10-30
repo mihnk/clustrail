@@ -16,6 +16,7 @@ import { backend, errorText } from "@/backend/client";
 import { formatMemory } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { rollbackDeploymentRequest, scaleDeploymentRequest, strategyText } from "./requests";
+import { t as tt, tn } from "@/i18n";
 
 export type DeploymentTab = "overview" | "pods" | "history" | "events" | "yaml" | "related";
 
@@ -52,7 +53,7 @@ export function DeploymentInspector({
   const target = { env: d.env, protected: cluster?.protected ?? false, readOnly: cluster?.readOnly };
 
   const openPods = () => {
-    ws.openView({ kind: "pods", title: "Pods" });
+    ws.openView({ kind: "pods", title: tt("Pods") });
     ws.revealResource("filter", `pods:${d.name} ns:${d.namespace} cluster:${d.cluster}`);
   };
 
@@ -61,16 +62,14 @@ export function DeploymentInspector({
       <div className="flex flex-col gap-2 pl-3.5 pr-3 pt-2.5">
         <div className="flex items-center gap-1.5 text-ui text-fg-muted">
           <Layers className="size-3.5" aria-hidden />
-          <span>Deployment</span>
+          <span>{tt("Deployment")}</span>
           <EnvironmentBadge env={d.env} className="ml-1" />
           {cluster?.protected && (
             <span className="flex items-center gap-1.5 text-env-prod-ink">
-              <Lock className="size-3.5" aria-hidden />
-              Protected
-            </span>
+              <Lock className="size-3.5" aria-hidden />{tt("Protected")}</span>
           )}
           <div className="flex-1" />
-          <IconButton aria-label="Close inspector" onClick={onClose} className="[&_svg]:size-3.5">
+          <IconButton aria-label={tt("Close inspector")} onClick={onClose} className="[&_svg]:size-3.5">
             <X />
           </IconButton>
         </div>
@@ -87,8 +86,7 @@ export function DeploymentInspector({
                 onClick={() => ws.openView({ kind: "gitops", title: "GitOps" })}
                 className="focus-ring flex items-center gap-1 rounded-sm border-0 bg-transparent p-0 text-meta text-accent hover:text-fg"
               >
-                <GitBranch className="size-3" aria-hidden />
-                Argo CD app {d.argoApp}
+                <GitBranch className="size-3" aria-hidden />{tt("Argo CD app {argoApp}", { argoApp: d.argoApp })}
               </button>
             </>
           )}
@@ -98,37 +96,30 @@ export function DeploymentInspector({
             <StatusGlyph health={d.health} className="mt-0.5" />
             <div className="flex flex-col gap-0.5 text-ui">
               <span className="font-semibold">
-                <span className={healthTone[d.health]}>{d.rollout}</span> · {d.availableReplicas} of {d.replicas} replicas available
-              </span>
+                <span className={healthTone[d.health]}>{d.rollout}</span>{" "}{tt("· {availableReplicas} of {replicas} replicas available", { availableReplicas: d.availableReplicas, replicas: d.replicas })}</span>
               <span className="text-fg-secondary">
                 {d.reason.replace(": ", " · ")}
-                {d.since ? ` · since ${d.since}` : ""}
+                {d.since ? tt(" · since {since}", { since: d.since }) : ""}
               </span>
             </div>
           </div>
         )}
         <div className="flex items-center gap-1.5">
           <Button onClick={openPods}>
-            <Box aria-hidden />
-            Pods
-          </Button>
+            <Box aria-hidden />{tt("Pods")}</Button>
           <Button
             onClick={() =>
               ws.openView({
                 kind: "logs",
-                title: `Logs · ${d.name}`,
+                title: tt("Logs · {name}", { name: d.name }),
                 cluster: d.cluster,
                 params: { namespace: d.namespace, workload: d.name },
               })
             }
           >
-            <ScrollText aria-hidden />
-            Logs
-          </Button>
+            <ScrollText aria-hidden />{tt("Logs")}</Button>
           <Button onClick={() => onTabChange("events")} className="max-[1360px]:hidden">
-            <Activity aria-hidden />
-            Events
-          </Button>
+            <Activity aria-hidden />{tt("Events")}</Button>
           <div className="flex-1" />
           <ModifyMenuButton
             actions={actions}
@@ -137,7 +128,7 @@ export function DeploymentInspector({
             includeObserve
             footnote={[
               cluster?.protected ? `${d.cluster} is protected — each change opens a confirmation.` : "",
-              d.argoApp ? "Managed by Argo CD: direct changes may be reverted." : "",
+              d.argoApp ? tt("Managed by Argo CD: direct changes may be reverted.") : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -146,25 +137,22 @@ export function DeploymentInspector({
       </div>
 
       <Tabs value={tab} onValueChange={(v) => onTabChange(v as DeploymentTab)} className="flex min-h-0 flex-1 flex-col">
-        <TabsList aria-label="Deployment sections" className="mt-1 px-3.5 pt-1.5">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="pods">
-            Pods <TabCount>{pods.length}</TabCount>
+        <TabsList aria-label={tt("Deployment sections")} className="mt-1 px-3.5 pt-1.5">
+          <TabsTrigger value="overview">{tt("Overview")}</TabsTrigger>
+          <TabsTrigger value="pods">{tt("Pods")}{" "}<TabCount>{pods.length}</TabCount>
           </TabsTrigger>
-          <TabsTrigger value="history">
-            History <TabCount>{Math.max(...d.revisions.map((r) => r.rev))}</TabCount>
+          <TabsTrigger value="history">{tt("History")}{" "}<TabCount>{Math.max(...d.revisions.map((r) => r.rev))}</TabCount>
           </TabsTrigger>
-          <TabsTrigger value="events">Events</TabsTrigger>
+          <TabsTrigger value="events">{tt("Events")}</TabsTrigger>
           <TabsTrigger value="yaml">YAML</TabsTrigger>
-          <TabsTrigger value="related">Related</TabsTrigger>
+          <TabsTrigger value="related">{tt("Related")}</TabsTrigger>
         </TabsList>
 
         <Panel value="overview">
           <section className="flex flex-col gap-2">
             <div className="flex items-center">
-              <span className="section-label flex-1">Replicas</span>
-              <span className="font-mono text-meta text-fg-muted">
-                desired {d.replicas}
+              <span className="section-label flex-1">{tt("Replicas")}</span>
+              <span className="font-mono text-meta text-fg-muted">{tt("desired")}{" "}{d.replicas}
                 {d.hpa ? ` · HPA ${d.hpa.min}–${d.hpa.max}` : ""}
               </span>
             </div>
@@ -185,13 +173,12 @@ export function DeploymentInspector({
 
           <section className="flex flex-col">
             <div className="flex items-center pb-1">
-              <span className="section-label flex-1">Rollout history</span>
+              <span className="section-label flex-1">{tt("Rollout history")}</span>
               <button
                 type="button"
                 onClick={() => onTabChange("history")}
                 className="focus-ring rounded-sm border-0 bg-transparent p-0 text-ui text-accent hover:text-fg"
-              >
-                All {Math.max(...d.revisions.map((r) => r.rev))}
+              >{tt("All")}{" "}{Math.max(...d.revisions.map((r) => r.rev))}
               </button>
             </div>
             <Revisions d={d} cluster={cluster} limit={3} />
@@ -199,23 +186,22 @@ export function DeploymentInspector({
 
           {d.usage && (
             <section className="flex flex-col gap-2">
-              <div className="section-label">Usage · {d.replicas} pods</div>
+              <div className="section-label">{tt("Usage · {replicas} pods", { replicas: d.replicas })}</div>
               <dl className="m-0 grid grid-cols-[96px_minmax(0,1fr)] items-center gap-x-2.5 gap-y-[5px] text-ui">
                 <dt className="text-fg-muted">CPU</dt>
                 <dd className="m-0 flex items-center gap-1.5">
-                  <Meter value={d.usage.cpuMilli / d.usage.cpuRequestMilli} label="CPU used of requested" />
+                  <Meter value={d.usage.cpuMilli / d.usage.cpuRequestMilli} label={tt("CPU used of requested")} />
                   <span className="font-mono text-meta">
-                    {d.usage.cpuMilli}m / {d.usage.cpuRequestMilli}m req
-                  </span>
+                    {tt("{cpuMilli}m / {cpuRequestMilli}m req", { cpuMilli: d.usage.cpuMilli, cpuRequestMilli: d.usage.cpuRequestMilli })}</span>
                 </dd>
-                <dt className="text-fg-muted">Memory</dt>
+                <dt className="text-fg-muted">{tt("Memory")}</dt>
                 <dd className="m-0 flex items-center gap-1.5">
-                  <Meter value={d.usage.memoryMiB / d.usage.memoryLimitMiB} label="Memory used of limit" />
+                  <Meter value={d.usage.memoryMiB / d.usage.memoryLimitMiB} label={tt("Memory used of limit")} />
                   <span className={cn("font-mono text-meta", d.usage.memoryMiB / d.usage.memoryLimitMiB >= 0.8 && "text-status-warning")}>
                     {formatMemory(d.usage.memoryMiB)} / {formatMemory(d.usage.memoryLimitMiB)} lim
                   </span>
                 </dd>
-                <dt className="text-fg-muted">Strategy</dt>
+                <dt className="text-fg-muted">{tt("Strategy")}</dt>
                 <dd className="m-0 font-mono text-meta">{strategyText(d)}</dd>
               </dl>
             </section>
@@ -224,7 +210,7 @@ export function DeploymentInspector({
 
         <Panel value="pods">
           {pods.length === 0 ? (
-            <EmptyState title="No pods">This Deployment has no pods right now.</EmptyState>
+            <EmptyState title={tt("No pods")}>{tt("This Deployment has no pods right now.")}</EmptyState>
           ) : (
             <div className="flex flex-col">
               {pods.map((p, i) => (
@@ -232,7 +218,7 @@ export function DeploymentInspector({
                   key={p.id}
                   type="button"
                   onClick={() => {
-                    ws.openView({ kind: "pods", title: "Pods" });
+                    ws.openView({ kind: "pods", title: tt("Pods") });
                     ws.revealResource("pod", p.id);
                   }}
                   className={cn(
@@ -251,7 +237,7 @@ export function DeploymentInspector({
 
         <Panel value="history">
           <Revisions d={d} cluster={cluster} />
-          <p className="m-0 text-meta text-fg-muted">Revisions come from the Deployment’s ReplicaSets (revisionHistoryLimit applies).</p>
+          <p className="m-0 text-meta text-fg-muted">{tt("Revisions come from the Deployment’s ReplicaSets (revisionHistoryLimit applies).")}</p>
         </Panel>
 
         <Panel value="events">
@@ -260,7 +246,7 @@ export function DeploymentInspector({
 
         <Panel value="yaml">
           <EmptyState
-            title="YAML opens in its own tab"
+            title={tt("YAML opens in its own tab")}
             action={
               <Button
                 onClick={() =>
@@ -271,13 +257,9 @@ export function DeploymentInspector({
                     params: { kind: "Deployment", namespace: d.namespace, name: d.name },
                   })
                 }
-              >
-                Open YAML
-              </Button>
+              >{tt("Open YAML")}</Button>
             }
-          >
-            The editor needs the width; the Deployment stays selected here.
-          </EmptyState>
+          >{tt("The editor needs the width; the Deployment stays selected here.")}</EmptyState>
         </Panel>
 
         <Panel value="related">
@@ -285,20 +267,16 @@ export function DeploymentInspector({
             <DeploymentRelated d={d} />
           ) : (
             <dl className="m-0 flex flex-col text-ui">
-              <Rel label="Selected by" via="Service selector">
-                svc/{d.name}
+              <Rel label={tt("Selected by")} via={tt("Service selector")}>{tt("svc/{name}", { name: d.name })}
               </Rel>
               {d.hpa && (
-                <Rel label="Scaled by" via="scaleTargetRef">
-                  hpa/{d.hpa.name} · {d.hpa.min}–{d.hpa.max}
+                <Rel label={tt("Scaled by")} via={tt("scaleTargetRef")}>{tt("hpa/{name} · {min}–{max}", { name: d.hpa.name, min: d.hpa.min, max: d.hpa.max })}
                 </Rel>
               )}
-              <Rel label="Disruption" via="PDB selector">
-                pdb/{d.name}
+              <Rel label={tt("Disruption")} via={tt("PDB selector")}>{tt("pdb/{name}", { name: d.name })}
               </Rel>
               {d.argoApp && (
-                <Rel label="Managed by" via="Argo CD tracking annotation">
-                  Argo CD · {d.argoApp}
+                <Rel label={tt("Managed by")} via={tt("Argo CD tracking annotation")}>{tt("Argo CD · {argoApp}", { argoApp: d.argoApp })}
                 </Rel>
               )}
             </dl>
@@ -323,7 +301,7 @@ function Rel({ label, via, children }: { label: string; via: string; children: R
       <dt className="text-meta text-fg-muted">{label}</dt>
       <dd className="m-0 flex flex-col gap-0.5">
         <span className="font-mono">{children}</span>
-        <span className="text-label text-fg-muted">via {via}</span>
+        <span className="text-label text-fg-muted">{tt("via")}{" "}{via}</span>
       </dd>
     </div>
   );
@@ -346,28 +324,24 @@ function Revisions({ d, cluster, limit }: { d: DeploymentRow; cluster: Cluster |
           <span className="truncate">
             <span className="font-mono">{r.image}</span>{" "}
             <span className="text-fg-muted">
-              · {r.rev === current ? "current · " : ""}
+              · {r.rev === current ? tt("current · ") : ""}
               {r.age}
-              {r.sync ? ` · sync ${r.sync}` : ""}
+              {r.sync ? tt(" · sync {sync}", { sync: r.sync }) : ""}
             </span>
           </span>
           {r.rev === current ? (
-            <span className="rounded bg-surface-hover px-[5px] py-[3px] font-mono text-2xs leading-none text-fg-secondary">current</span>
+            <span className="rounded bg-surface-hover px-[5px] py-[3px] font-mono text-2xs leading-none text-fg-secondary">{tt("current")}</span>
           ) : (
             <span className="flex gap-1">
-              <Button size="sm" disabled title="Opens the YAML diff (not implemented in this build).">
-                <Diff aria-hidden />
-                Diff
-              </Button>
+              <Button size="sm" disabled title={tt("Opens the YAML diff (not implemented in this build).")}>
+                <Diff aria-hidden />{tt("Diff")}</Button>
               <Button
                 size="sm"
                 variant={locked ? "locked" : "default"}
                 disabled={cluster?.readOnly}
                 onClick={() => confirm(rollbackDeploymentRequest(d, cluster, r.rev, () => ws.rollbackDeployment(d.id, r.rev)))}
               >
-                {locked && <Lock aria-hidden />}
-                Roll back
-              </Button>
+                {locked && <Lock aria-hidden />}{tt("Roll back")}</Button>
             </span>
           )}
         </div>
@@ -397,12 +371,12 @@ function ScaleStepper({
   return (
     <div className="flex items-center gap-1.5">
       <div className="flex items-center overflow-hidden rounded-md border border-line-strong">
-        <IconButton aria-label="Decrease replicas" className="rounded-none" disabled={cluster?.readOnly || value <= 0} onClick={() => setValue(value - 1)}>
+        <IconButton aria-label={tt("Decrease replicas")} className="rounded-none" disabled={cluster?.readOnly || value <= 0} onClick={() => setValue(value - 1)}>
           <Minus />
         </IconButton>
         <input
           ref={inputRef}
-          aria-label="Replicas"
+          aria-label={tt("Replicas")}
           inputMode="numeric"
           value={value}
           disabled={cluster?.readOnly}
@@ -414,24 +388,19 @@ function ScaleStepper({
           }}
           className="h-7 w-[34px] border-0 bg-transparent text-center font-mono text-cell text-fg outline-none focus:bg-accent-soft"
         />
-        <IconButton aria-label="Increase replicas" className="rounded-none" disabled={cluster?.readOnly} onClick={() => setValue(value + 1)}>
+        <IconButton aria-label={tt("Increase replicas")} className="rounded-none" disabled={cluster?.readOnly} onClick={() => setValue(value + 1)}>
           <Plus />
         </IconButton>
       </div>
       {changed ? (
         <span className="flex items-center gap-1">
           <Button size="sm" variant={cluster?.protected ? "locked" : "primary"} onClick={() => onApply(value)}>
-            {cluster?.protected && <Lock aria-hidden />}
-            Apply {value}
+            {cluster?.protected && <Lock aria-hidden />}{tt("Apply")}{" "}{value}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setValue(d.replicas)}>
-            Reset
-          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setValue(d.replicas)}>{tt("Reset")}</Button>
         </span>
       ) : d.hpa ? (
-        <span className="text-meta leading-[1.35] text-fg-muted">
-          HPA <span className="font-mono">{d.hpa.name}</span> sets replicas. A manual scale is overridden.
-        </span>
+        <span className="text-meta leading-[1.35] text-fg-muted">{tn("HPA {name} sets replicas. A manual scale is overridden.", { name: <span className="font-mono">{d.hpa.name}</span> })}</span>
       ) : null}
     </div>
   );
@@ -439,8 +408,8 @@ function ScaleStepper({
 
 function ObjectEvents({ cluster, namespace, kind, name }: { cluster: string; namespace: string; kind: string; name: string }) {
   const events = useEvents(cluster, namespace, kind, name, true);
-  if (events === null) return <EmptyState title="Reading events…" />;
-  if (!events.length) return <EmptyState title="No recent events">The API server keeps events for about 1 hour by default.</EmptyState>;
+  if (events === null) return <EmptyState title={tt("Reading events…")} />;
+  if (!events.length) return <EmptyState title={tt("No recent events")}>{tt("The API server keeps events for about 1 hour by default.")}</EmptyState>;
   return <EventsPanel events={events} />;
 }
 
@@ -458,8 +427,8 @@ function DeploymentRelated({ d }: { d: DeploymentRow }) {
       cancelled = true;
     };
   }, [d.id]);
-  if (rels === null) return <EmptyState title="Finding related objects…" />;
-  if ("error" in rels) return <EmptyState title="Could not read related objects">{rels.error}</EmptyState>;
-  if (!rels.length) return <EmptyState title="No related objects">No Service, HPA, PodDisruptionBudget or configuration references this Deployment.</EmptyState>;
+  if (rels === null) return <EmptyState title={tt("Finding related objects…")} />;
+  if ("error" in rels) return <EmptyState title={tt("Could not read related objects")}>{rels.error}</EmptyState>;
+  if (!rels.length) return <EmptyState title={tt("No related objects")}>{tt("No Service, HPA, PodDisruptionBudget or configuration references this Deployment.")}</EmptyState>;
   return <RelatedList relations={rels} />;
 }

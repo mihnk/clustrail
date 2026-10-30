@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { applyClustrailTheme, monaco } from "./monaco";
 import { SecretKeys } from "@/features/resources/SecretKeys";
+import { t as tt, tn } from "@/i18n";
 
 type Mode = "view" | "edit";
 type DiffMode = "none" | "inline" | "side";
@@ -221,8 +222,8 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         .applyYaml(tab.cluster, edited, openedVersion, true, ownership.length > 0)
         .then((r) => {
           const checks: Check[] = r.conflict
-            ? [{ health: "failed", text: <>The API server reported a conflict: <span className="font-mono">{r.conflict}</span></> }]
-            : [{ health: "completed", text: "API server accepted the change in dry-run mode (validation and admission ran)." }, ...r.warnings.map((w) => ({ health: "warning" as const, text: w }))];
+            ? [{ health: "failed", text: <>{tt("The API server reported a conflict:")}{" "}<span className="font-mono">{r.conflict}</span></> }]
+            : [{ health: "completed", text: tt("API server accepted the change in dry-run mode (validation and admission ran).") }, ...r.warnings.map((w) => ({ health: "warning" as const, text: w }))];
           setDryRun({ at: new Date().toTimeString().slice(0, 8), ms: Math.round(performance.now() - started), checks });
         })
         .catch((e) =>
@@ -235,22 +236,18 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
     const checks: Check[] = [];
     // params.kind may be "group/Kind" (generic lists); the document carries only the Kind.
     if (!doc || doc.kind !== kindOnly || doc.metadata?.name !== params.name) {
-      checks.push({ health: "failed", text: <>The object must keep its kind and name (<span className="font-mono">{kindOnly}/{params.name}</span>).</> });
+      checks.push({ health: "failed", text: <>{tn("The object must keep its kind and name ({v0}).", { v0: <span className="font-mono">{kindOnly}/{params.name}</span> })}</> });
     } else {
       checks.push({
         health: "completed",
         text: (
-          <>
-            Schema valid against <span className="font-mono">{doc.apiVersion} {doc.kind}</span> (cluster OpenAPI v1.30)
-          </>
+          <>{tn("Schema valid against {v0} (cluster OpenAPI v1.30)", { v0: <span className="font-mono">{doc.apiVersion} {doc.kind}</span> })}</>
         ),
       });
       checks.push({
         health: "completed",
         text: (
-          <>
-            API server accepted the change in dry-run mode. Admission webhooks ran: <span className="font-mono">kyverno-resource-policy</span> (allowed)
-          </>
+          <>{tn("API server accepted the change in dry-run mode. Admission webhooks ran: {v0} (allowed)", { v0: <span className="font-mono">kyverno-resource-policy</span> })}</>
         ),
       });
     }
@@ -282,20 +279,17 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
 
   const apply = () =>
     confirm({
-      action: live.gitops ? "Apply anyway to" : "Apply changes to",
+      action: live.gitops ? tt("Apply anyway to") : tt("Apply changes to"),
       targetName: params.name ?? "",
       icon: <Upload />,
       env: cluster?.env ?? "dev",
       cluster: tab.cluster ?? "",
       namespace: params.namespace,
-      meta: `${changes.length} ${changes.length === 1 ? "field" : "fields"}`,
+      meta: changes.length === 1 ? tt("1 field") : tt("{n} fields", { n: changes.length }),
       protected: cluster?.protected ?? false,
       destructive: true,
       whatHappens: (
-        <>
-          Server-side apply as field manager <span className="font-mono text-ui">clustrail</span> with these fields:{" "}
-          <span className="font-mono text-ui">{changes.join(", ")}</span>.
-        </>
+        <>{tn("Server-side apply as field manager {v0} with these fields: {v1}.", { v0: <span className="font-mono text-ui">clustrail</span>, v1: <span className="font-mono text-ui">{changes.join(", ")}</span> })}</>
       ),
       currentState: [
         ...(live.gitops
@@ -303,10 +297,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
               {
                 health: "warning" as const,
                 text: (
-                  <>
-                    Managed by {live.gitops.tool} <span className="font-mono text-ui">{live.gitops.app}</span> with self-heal: the change is
-                    reverted at the next reconciliation. Change the source in Git to keep it.
-                  </>
+                  <>{tn("Managed by {tool} {app} with self-heal: the change is reverted at the next reconciliation. Change the source in Git to keep it.", { tool: live.gitops.tool, app: <span className="font-mono text-ui">{live.gitops.app}</span> })}</>
                 ),
               },
             ]
@@ -315,17 +306,15 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           health: "warning" as const,
           text: (
             <>
-              <span className="font-mono text-ui">{o.path}</span> is owned by <span className="font-mono text-ui">{o.manager}</span>; applying takes
-              ownership (force-conflicts).
-            </>
+              <span className="font-mono text-ui">{o.path}</span>{" "}{tn("is owned by {manager}; applying takes ownership (force-conflicts).", { manager: <span className="font-mono text-ui">{o.manager}</span> })}</>
           ),
         })),
         ...(conflict
-          ? [{ health: "failed" as const, text: `The live object changed since you opened it (resourceVersion ${openedVersion} → ${live.resourceVersion}).` }]
+          ? [{ health: "failed" as const, text: tt("The live object changed since you opened it (resourceVersion {openedVersion} → {resourceVersion}).", { openedVersion, resourceVersion: live.resourceVersion }) }]
           : []),
       ],
       command: `kubectl --context ${tab.cluster} apply --server-side --field-manager=clustrail${ownership.length ? " --force-conflicts" : ""} -f ${params.name}.yaml`,
-      confirmLabel: live.gitops ? "Apply anyway" : "Apply",
+      confirmLabel: live.gitops ? tt("Apply anyway") : tt("Apply"),
       onConfirm: () => {
         if (backend && tab.cluster) {
           const api = backend;
@@ -333,29 +322,29 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
             .applyYaml(tab.cluster, edited, openedVersion, false, ownership.length > 0)
             .then(async (r) => {
               if (r.conflict) {
-                toast.show({ kind: "error", title: "Not applied: conflict", target: `${params.name} · ${tab.cluster}`, detail: r.conflict, copyText: r.conflict });
+                toast.show({ kind: "error", title: tt("Not applied: conflict"), target: `${params.name} · ${tab.cluster}`, detail: r.conflict, copyText: r.conflict });
                 return;
               }
               const obj = await api.getObject(tab.cluster!, params.kind ?? "Deployment", params.namespace ?? "", params.name ?? "");
               setLive({ yaml: obj.yaml, resourceVersion: obj.resourceVersion, owners: obj.owners, gitops: obj.gitops });
               setOpenedVersion(obj.resourceVersion);
               setEdited(obj.yaml);
-              toast.show({ kind: "success", title: "Applied", target: `${params.name} · ${tab.cluster}`, env: cluster?.env, detail: `server-side apply · resourceVersion ${r.resourceVersion}` });
+              toast.show({ kind: "success", title: tt("Applied"), target: `${params.name} · ${tab.cluster}`, env: cluster?.env, detail: tt("server-side apply · resourceVersion {resourceVersion}", { resourceVersion: r.resourceVersion }) });
             })
-            .catch((e) => toast.show({ kind: "error", title: "Apply failed", target: `${params.name} · ${tab.cluster}`, detail: errorText(e), copyText: errorText(e) }));
+            .catch((e) => toast.show({ kind: "error", title: tt("Apply failed"), target: `${params.name} · ${tab.cluster}`, detail: errorText(e), copyText: errorText(e) }));
           return;
         }
         const nextVersion = String(Number(live.resourceVersion) + 1);
         const before = live.yaml;
         setLive({ ...live, yaml: edited, resourceVersion: nextVersion });
         setOpenedVersion(nextVersion);
-        toast.show({ kind: "success", title: "Applied", target: `${params.name} · ${tab.cluster}`, env: cluster?.env, detail: `server-side apply · resourceVersion ${nextVersion}` });
+        toast.show({ kind: "success", title: tt("Applied"), target: `${params.name} · ${tab.cluster}`, env: cluster?.env, detail: tt("server-side apply · resourceVersion {nextVersion}", { nextVersion }) });
         if (live.gitops?.selfHeal) {
           // Self-heal puts Git's version back; the editor reports the change.
           setTimeout(() => {
             setLive((l) => ({ ...l, yaml: before, resourceVersion: String(Number(l.resourceVersion) + 1) }));
             setLiveChanges((n) => n + 1);
-            toast.show({ kind: "error", title: `${live.gitops!.tool} reverted ${params.name}`, detail: "Self-heal synced the object back to Git. Change the source to keep the edit." });
+            toast.show({ kind: "error", title: `${live.gitops!.tool} reverted ${params.name}`, detail: tt("Self-heal synced the object back to Git. Change the source to keep the edit.") });
           }, 5000);
         }
       },
@@ -371,14 +360,11 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-app">
       {loadError && (
-        <Banner tone="critical" className="shrink-0 rounded-none border-b border-line">
-          Could not read {kindOnly}/{params.name}: <span className="selectable font-mono">{loadError}</span>
+        <Banner tone="critical" className="shrink-0 rounded-none border-b border-line">{tt("Could not read {kindOnly}/{name}:", { kindOnly, name: params.name })}{" "}<span className="selectable font-mono">{loadError}</span>
         </Banner>
       )}
       {backend && !loadError && live.resourceVersion === "" && (
-        <Banner tone="info" className="shrink-0 rounded-none border-b border-line">
-          Reading {kindOnly}/{params.name} from {tab.cluster}…
-        </Banner>
+        <Banner tone="info" className="shrink-0 rounded-none border-b border-line">{tt("Reading {kindOnly}/{name} from {cluster}…", { kindOnly, name: params.name, cluster: tab.cluster })}</Banner>
       )}
       {live.gitops && (
         <Banner
@@ -386,20 +372,18 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           className="min-h-[42px] shrink-0 rounded-none border-b border-line"
           action={
             <span className="flex gap-1">
-              <Button size="sm" onClick={() => ws.openView({ kind: "gitops", title: "GitOps" })}>
-                <GitBranch aria-hidden />
-                Open in GitOps
-              </Button>
+              <Button size="sm" onClick={() => ws.openView({ kind: "gitops", title: tt("GitOps") })}>
+                <GitBranch aria-hidden />{tt("Open in GitOps")}</Button>
               <Button size="sm" variant="ghost" onClick={() => void navigator.clipboard?.writeText(live.gitops!.source)}>
-                <Copy aria-hidden />
-                Copy source path
-              </Button>
+                <Copy aria-hidden />{tt("Copy source path")}</Button>
             </span>
           }
         >
-          <b className="font-semibold">Managed by {live.gitops.tool}</b> <span className="font-mono">{live.gitops.app}</span>{" "}
+          <b className="font-semibold">{tt("Managed by {tool}", { tool: live.gitops.tool })}</b> <span className="font-mono">{live.gitops.app}</span>{" "}
           <span className="text-fg-secondary">
-            · auto-sync{live.gitops.selfHeal ? " with self-heal" : ""}. Direct changes are reverted at the next reconciliation. Source:
+            {live.gitops.selfHeal
+              ? tt("· auto-sync with self-heal. Direct changes are reverted at the next reconciliation. Source:")
+              : tt("· auto-sync. Direct changes are reverted at the next reconciliation. Source:")}
           </span>{" "}
           <span className="font-mono">{live.gitops.source}</span>
         </Banner>
@@ -409,23 +393,22 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           tone="critical"
           className="shrink-0 rounded-none border-b border-line"
           action={
-            <Button size="sm" onClick={() => setOpenedVersion(live.resourceVersion)}>
-              Keep my edit on the new version
-            </Button>
+            <Button size="sm" onClick={() => setOpenedVersion(live.resourceVersion)}>{tt("Keep my edit on the new version")}</Button>
           }
         >
-          <b className="font-semibold">The live object changed</b> while you were editing (resourceVersion {openedVersion} → {live.resourceVersion}). The
-          diff now compares against the new version.
+          {tn("{changed} while you were editing (resourceVersion {from} → {to}). The diff now compares against the new version.", {
+            changed: <b className="font-semibold">{tt("The live object changed")}</b>,
+            from: openedVersion,
+            to: live.resourceVersion,
+          })}
         </Banner>
       )}
 
       {live.secret && tab.cluster && (
         <details className="shrink-0 border-b border-line bg-surface-panel px-3.5 py-2 text-ui dark:bg-transparent">
           <summary className="cursor-default select-none">
-            <b className="font-semibold">Secret values are hidden.</b>{" "}
-            <span className="text-fg-secondary">
-              Keep <span className="font-mono">(hidden, N bytes)</span> to keep a value; to change one, replace it with the new value in base64.
-            </span>
+            <b className="font-semibold">{tt("Secret values are hidden.")}</b>{" "}
+            <span className="text-fg-secondary">{tn("Keep {v0} to keep a value; to change one, replace it with the new value in base64.", { v0: <span className="font-mono">(hidden, N bytes)</span> })}</span>
           </summary>
           <SecretKeys className="mt-2 max-w-[720px]" cluster={tab.cluster} namespace={params.namespace ?? ""} name={params.name ?? ""} keys={live.secret.keys} type={live.secret.type} />
         </details>
@@ -440,37 +423,37 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         </span>
         {cluster && <EnvironmentBadge env={cluster.env} />}
         <span className="mx-1 h-7 w-px bg-line" aria-hidden />
-        <Segmented aria-label="Mode" value={mode} onValueChange={setMode} options={[{ value: "view", label: "View" }, { value: "edit", label: "Edit" }]} />
+        <Segmented aria-label={tt("Mode")} value={mode} onValueChange={setMode} options={[{ value: "view", label: tt("View") }, { value: "edit", label: tt("Edit") }]} />
         {mode === "edit" && changes.length > 0 && (
           <span className="flex items-center gap-1.5 text-ui text-fg-secondary">
             <span className="size-[7px] rounded-full bg-fg" aria-hidden />
-            {changes.length} unsaved {changes.length === 1 ? "change" : "changes"}
+            {tt(changes.length === 1 ? "1 unsaved change" : "{n} unsaved changes", { n: changes.length })}
           </span>
         )}
         <div className="flex-1" />
         {mode === "edit" && (
           <Segmented
-            aria-label="Diff"
+            aria-label={tt("Diff")}
             value={diff}
             onValueChange={setDiff}
             options={[
-              { value: "none", label: "No diff" },
-              { value: "inline", label: "Inline" },
-              { value: "side", label: "Side by side" },
+              { value: "none", label: tt("No diff") },
+              { value: "inline", label: tt("Inline") },
+              { value: "side", label: tt("Side by side") },
             ]}
           />
         )}
-        <IconButton aria-label="Find" onClick={find}>
+        <IconButton aria-label={tt("Find")} onClick={find}>
           <Search />
         </IconButton>
-        <IconButton aria-label="Fold all" onClick={fold}>
+        <IconButton aria-label={tt("Fold all")} onClick={fold}>
           <FoldVertical />
         </IconButton>
-        <IconButton aria-label="Copy YAML" onClick={() => void navigator.clipboard?.writeText(mode === "view" ? live.yaml : edited)}>
+        <IconButton aria-label={tt("Copy YAML")} onClick={() => void navigator.clipboard?.writeText(mode === "view" ? live.yaml : edited)}>
           <Copy />
         </IconButton>
         <IconButton
-          aria-label="Download YAML"
+          aria-label={tt("Download YAML")}
           onClick={() => {
             const url = URL.createObjectURL(new Blob([mode === "view" ? live.yaml : edited], { type: "text/yaml" }));
             const a = document.createElement("a");
@@ -487,28 +470,21 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       <div className="flex h-[30px] shrink-0 items-center border-b border-line bg-surface-panel text-meta text-fg-secondary">
         {mode === "edit" && diff === "side" && (
           <span className="flex h-full flex-1 items-center gap-2 border-r border-line px-3">
-            <Lock className="size-3.5" aria-hidden />
-            Live · resourceVersion <span className="font-mono">{live.resourceVersion}</span>
+            <Lock className="size-3.5" aria-hidden />{tt("Live · resourceVersion")}{" "}<span className="font-mono">{live.resourceVersion}</span>
             <span className="flex-1" />
-            <span className="text-fg-muted">read-only · changed {liveChanges} times since opened</span>
+            <span className="text-fg-muted">{tt("read-only · changed {liveChanges} times since opened", { liveChanges })}</span>
           </span>
         )}
         <span className="flex h-full flex-1 items-center gap-2 px-3">
           {mode === "edit" ? (
             <>
-              <span className="size-[7px] rounded-full bg-fg" aria-hidden />
-              Your edit
-            </>
+              <span className="size-[7px] rounded-full bg-fg" aria-hidden />{tt("Your edit")}</>
           ) : (
             <>
-              <Lock className="size-3.5" aria-hidden />
-              Live · resourceVersion <span className="font-mono">{live.resourceVersion}</span> · press E to edit
-            </>
+              <Lock className="size-3.5" aria-hidden />{tn("Live · resourceVersion {resourceVersion} · press E to edit", { resourceVersion: <span className="font-mono">{live.resourceVersion}</span> })}</>
           )}
           <span className="flex-1" />
-          <span className="text-fg-muted">
-            Ln {cursor.line}, Col {cursor.col} · YAML · spaces: 2
-          </span>
+          <span className="text-fg-muted">{tt("Ln {line}, Col {col} · YAML · spaces: 2", { line: cursor.line, col: cursor.col })}</span>
         </span>
       </div>
 
@@ -519,25 +495,21 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       {mode === "edit" && (
         <Tabs value={panel} onValueChange={setPanel} className="flex h-[138px] shrink-0 flex-col border-t border-line bg-surface-panel">
           <div className="flex items-center gap-3.5 border-b border-line px-3.5">
-            <TabsList className="border-0" aria-label="Validation">
+            <TabsList className="border-0" aria-label={tt("Validation")}>
               <TabsTrigger value="dryrun" className="h-[30px]">
-                {dryRun && <StatusGlyph health={dryRun.checks.some((c) => c.health === "failed") ? "failed" : "completed"} className={dryRun.checks.some((c) => c.health === "failed") ? undefined : "text-status-healthy"} />}
-                Dry run
-              </TabsTrigger>
-              <TabsTrigger value="problems" className="h-[30px]">
-                Problems <TabCount>{problems.length}</TabCount>
+                {dryRun && <StatusGlyph health={dryRun.checks.some((c) => c.health === "failed") ? "failed" : "completed"} className={dryRun.checks.some((c) => c.health === "failed") ? undefined : "text-status-healthy"} />}{tt("Dry run")}</TabsTrigger>
+              <TabsTrigger value="problems" className="h-[30px]">{tt("Problems")}{" "}<TabCount>{problems.length}</TabCount>
               </TabsTrigger>
               <TabsTrigger value="ownership" className="h-[30px]">
-                {ownership.length > 0 && <StatusGlyph health="warning" />}
-                Field ownership <TabCount>{ownership.length}</TabCount>
+                {ownership.length > 0 && <StatusGlyph health="warning" />}{tt("Field ownership")}{" "}<TabCount>{ownership.length}</TabCount>
               </TabsTrigger>
             </TabsList>
             <div className="flex-1" />
-            <span className="text-meta text-fg-muted">{dryRun ? `Server-side dry run · ${dryRun.at} · ${dryRun.ms}ms` : "Not run yet"}</span>
+            <span className="text-meta text-fg-muted">{dryRun ? tt("Server-side dry run · {at} · {ms}ms", { at: dryRun.at, ms: dryRun.ms }) : tt("Not run yet")}</span>
           </div>
           <TabsContent value="dryrun" className="min-h-0 flex-1 overflow-y-auto px-3.5 py-1.5">
             {!dryRun ? (
-              <p className="m-0 py-1.5 text-cell text-fg-muted">Dry run sends the edit to the API server with dryRun=All: admission and validation run, nothing is stored.</p>
+              <p className="m-0 py-1.5 text-cell text-fg-muted">{tt("Dry run sends the edit to the API server with dryRun=All: admission and validation run, nothing is stored.")}</p>
             ) : (
               [
                 ...dryRun.checks,
@@ -545,14 +517,15 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
                   health: "warning",
                   text: (
                     <>
-                      <span className="font-mono">{o.path}</span> is owned by field manager <span className="font-mono">{o.manager}</span>. Applying takes
-                      ownership{live.gitops ? `; ${live.gitops.tool} will set it back.` : "."}
+                      {tn(live.gitops ? "{path} is owned by field manager {manager}. Applying takes ownership; {tool} will set it back." : "{path} is owned by field manager {manager}. Applying takes ownership.", {
+                        path: <span className="font-mono">{o.path}</span>,
+                        manager: <span className="font-mono">{o.manager}</span>,
+                        tool: live.gitops?.tool,
+                      })}
                     </>
                   ),
                   action: (
-                    <Button size="sm" variant="ghost" onClick={() => setPanel("ownership")}>
-                      Show fields
-                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setPanel("ownership")}>{tt("Show fields")}</Button>
                   ),
                 })),
               ].map((c, i) => <CheckRow key={i} check={c} />)
@@ -560,14 +533,14 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           </TabsContent>
           <TabsContent value="problems" className="min-h-0 flex-1 overflow-y-auto px-3.5 py-1.5">
             {problems.length === 0 ? (
-              <p className="m-0 py-1.5 text-cell text-fg-muted">No syntax problems.</p>
+              <p className="m-0 py-1.5 text-cell text-fg-muted">{tt("No syntax problems.")}</p>
             ) : (
-              problems.map((p, i) => <CheckRow key={i} check={{ health: "failed", text: <>Line {p.line}, column {p.col}: {p.message}</> }} />)
+              problems.map((p, i) => <CheckRow key={i} check={{ health: "failed", text: <>{tt("Line {line}, column {col}: {message}", { line: p.line, col: p.col, message: p.message })}</> }} />)
             )}
           </TabsContent>
           <TabsContent value="ownership" className="min-h-0 flex-1 overflow-y-auto px-3.5 py-1.5">
             {changes.length === 0 ? (
-              <p className="m-0 py-1.5 text-cell text-fg-muted">No changed fields.</p>
+              <p className="m-0 py-1.5 text-cell text-fg-muted">{tt("No changed fields.")}</p>
             ) : (
               changes.map((p) => {
                 const o = ownership.find((x) => x.path === p);
@@ -578,7 +551,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
                       health: o ? "warning" : "completed",
                       text: (
                         <>
-                          <span className="font-mono">{p}</span> · {o ? <>owned by <span className="font-mono">{o.manager}</span></> : "no other manager"}
+                          <span className="font-mono">{p}</span> · {o ? <>{tt("owned by")}{" "}<span className="font-mono">{o.manager}</span></> : tt("no other manager")}
                         </>
                       ),
                     }}
@@ -592,17 +565,12 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
 
       {mode === "edit" && (
         <div className="flex h-[50px] shrink-0 items-center gap-2 border-t border-line px-3.5">
-          <span className="hidden text-meta text-fg-muted min-[1360px]:inline">
-            Applies with server-side apply as field manager <span className="font-mono">clustrail</span>
+          <span className="hidden text-meta text-fg-muted min-[1360px]:inline">{tn("Applies with server-side apply as field manager {v0}", { v0: <span className="font-mono">clustrail</span> })}
           </span>
           <div className="flex-1" />
-          <Button disabled={!changes.length} onClick={() => setEdited(live.yaml)}>
-            Discard changes
-          </Button>
+          <Button disabled={!changes.length} onClick={() => setEdited(live.yaml)}>{tt("Discard changes")}</Button>
           <Button disabled={!changes.length || problems.length > 0} onClick={runDryRun}>
-            <Play aria-hidden />
-            Dry run again
-          </Button>
+            <Play aria-hidden />{tt("Dry run again")}</Button>
           <Button
             variant={cluster?.protected ? "locked" : "primary"}
             disabled={blocked || cluster?.readOnly}
@@ -610,7 +578,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
             className={cn(cluster?.protected && "border-solid border-env-prod text-env-prod-ink")}
           >
             {cluster?.protected && <Lock aria-hidden />}
-            {live.gitops ? "Apply anyway…" : "Apply…"}
+            {live.gitops ? tt("Apply anyway…") : tt("Apply…")}
           </Button>
         </div>
       )}

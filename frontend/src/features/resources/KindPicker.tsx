@@ -6,6 +6,7 @@ import { backend, errorText, type KindInfo } from "@/backend/client";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import { kindKey, listLabel } from "./kinds";
+import { t } from "@/i18n";
 
 interface Entry extends KindInfo {
   key: string;
@@ -84,7 +85,7 @@ export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange
           aria-describedby={undefined}
           className="fixed left-1/2 top-[96px] z-50 flex max-h-[min(560px,calc(100vh-140px))] w-[620px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-xl border border-line-strong bg-surface-elevated p-2 text-fg shadow-dialog"
         >
-          <Dialog.Title className="sr-only">All resource kinds</Dialog.Title>
+          <Dialog.Title className="sr-only">{t("All resource kinds")}</Dialog.Title>
           <label className="flex h-9 shrink-0 items-center gap-2 rounded-md border border-accent bg-surface-panel px-2.5 text-fg-muted">
             <Search className="size-4" aria-hidden />
             <input
@@ -98,15 +99,15 @@ export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange
                 else return;
                 e.preventDefault();
               }}
-              placeholder="Kind, resource or short name (svc, sts, cj)…"
+              placeholder={t("Kind, resource or short name (svc, sts, cj)…")}
               spellCheck={false}
               className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
             />
             <span className="font-mono text-meta">{kinds ? shown.length : ""}</span>
           </label>
-          <ul ref={listRef} role="listbox" aria-label="Resource kinds" className="m-0 mt-1.5 min-h-0 flex-1 list-none overflow-y-auto p-0">
-            {kinds === null && <li className="px-2.5 py-2 text-ui text-fg-muted">Reading API discovery…</li>}
-            {kinds && !connected.length && <li className="px-2.5 py-2 text-ui text-fg-muted">{backend ? "Select a connected cluster first." : "Needs the desktop app connected to a cluster."}</li>}
+          <ul ref={listRef} role="listbox" aria-label={t("Resource kinds")} className="m-0 mt-1.5 min-h-0 flex-1 list-none overflow-y-auto p-0">
+            {kinds === null && <li className="px-2.5 py-2 text-ui text-fg-muted">{t("Reading API discovery…")}</li>}
+            {kinds && !connected.length && <li className="px-2.5 py-2 text-ui text-fg-muted">{backend ? t("Select a connected cluster first.") : t("Needs the desktop app connected to a cluster.")}</li>}
             {error && <li className="selectable px-2.5 py-2 font-mono text-meta text-status-warning">{error}</li>}
             {shown.map((k, i) => (
               <li
@@ -129,8 +130,7 @@ export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange
                 {!k.namespaced && <span className="text-meta text-fg-muted">cluster-scoped</span>}
                 {connected.length > 1 && k.clusters.length < connected.length && (
                   <span className="text-meta text-fg-muted">
-                    {k.clusters.length}/{connected.length} clusters
-                  </span>
+                    {k.clusters.length}/{connected.length}{" "}{t("clusters")}</span>
                 )}
               </li>
             ))}
@@ -138,13 +138,11 @@ export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange
           <div className="mt-1 flex shrink-0 items-center gap-2.5 border-t border-line px-2 pb-0.5 pt-1.5 text-meta text-fg-muted">
             <span className="flex items-center gap-1">
               <Kbd>↑</Kbd>
-              <Kbd>↓</Kbd> move
-            </span>
+              <Kbd>↓</Kbd>{" "}{t("move")}</span>
             <span className="flex items-center gap-1">
-              <Kbd>↵</Kbd> open list
-            </span>
+              <Kbd>↵</Kbd>{" "}{t("open list")}</span>
             <div className="flex-1" />
-            <span>From API discovery of the selected clusters</span>
+            <span>{t("From API discovery of the selected clusters")}</span>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

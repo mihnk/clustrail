@@ -36,12 +36,13 @@ import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { Logo } from "@/components/shell/Logo";
 import { cn } from "@/lib/cn";
 import { backend, backendInfo, errorText } from "@/backend/client";
+import { LANGUAGE_PREFERENCE, locale, t as tt, tn, type LanguageSetting } from "@/i18n";
 
 
 export const APP_VERSION = "0.9.0";
 
 /** Shown on settings this build stores but does not act on yet. */
-const NOT_YET = "Not available in this build yet.";
+const NOT_YET = tt("Not available in this build yet.");
 
 interface Category {
   id: string;
@@ -52,18 +53,18 @@ interface Category {
 }
 
 const CATEGORIES: Category[] = [
-  { id: "appearance", label: "Appearance", icon: <Sun /> },
-  { id: "clusters", label: "Clusters & namespaces", icon: <LayoutGrid /> },
-  { id: "connections", label: "Connections", icon: <KeyRound />, view: "connections" },
-  { id: "tables", label: "Tables & columns", icon: <Columns3 /> },
-  { id: "watch", label: "Refresh & watch", icon: <RefreshCw /> },
-  { id: "perf", label: "Memory & buffers", icon: <Cpu /> },
-  { id: "term", label: "Logs & terminal", icon: <SquareTerminal /> },
-  { id: "helm", label: "Helm repositories", icon: <LifeBuoy /> },
-  { id: "keys", label: "Keyboard shortcuts", icon: <Keyboard /> },
-  { id: "privacy", label: "Privacy & diagnostics", icon: <Shield /> },
-  { id: "updates", label: "Updates", icon: <Download /> },
-  { id: "about", label: "About & licenses", icon: <Info /> },
+  { id: "appearance", label: tt("Appearance"), icon: <Sun /> },
+  { id: "clusters", label: tt("Clusters & namespaces"), icon: <LayoutGrid /> },
+  { id: "connections", label: tt("Connections"), icon: <KeyRound />, view: "connections" },
+  { id: "tables", label: tt("Tables & columns"), icon: <Columns3 /> },
+  { id: "watch", label: tt("Refresh & watch"), icon: <RefreshCw /> },
+  { id: "perf", label: tt("Memory & buffers"), icon: <Cpu /> },
+  { id: "term", label: tt("Logs & terminal"), icon: <SquareTerminal /> },
+  { id: "helm", label: tt("Helm repositories"), icon: <LifeBuoy /> },
+  { id: "keys", label: tt("Keyboard shortcuts"), icon: <Keyboard /> },
+  { id: "privacy", label: tt("Privacy & diagnostics"), icon: <Shield /> },
+  { id: "updates", label: tt("Updates"), icon: <Download /> },
+  { id: "about", label: tt("About & licenses"), icon: <Info /> },
 ];
 
 interface HelmRepo {
@@ -159,10 +160,13 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
   }, [active]);
 
   const q = query.trim().toLowerCase();
-  const show = (...words: string[]) => !q || words.some((w) => w.toLowerCase().includes(q));
+  const [language, setLanguage] = usePersistentState<LanguageSetting>(LANGUAGE_PREFERENCE, "system");
+  // Search matches the English keywords and their translation.
+  const show = (...words: string[]) =>
+    !q || words.some((w) => w.toLowerCase().includes(q) || tt(w).toLocaleLowerCase(locale()).includes(q.toLocaleLowerCase(locale())));
 
   const go = (c: Category) => {
-    if (c.view) return ws.openView({ kind: "connections", title: "Connections" });
+    if (c.view) return ws.openView({ kind: "connections", title: tt("Connections") });
     setCurrent(c.id);
     scrollRef.current?.querySelector(`#settings-${c.id}`)?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
   };
@@ -190,39 +194,56 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "appearance",
       col: 0,
       node: (
-        <Section id="appearance" icon={<Sun />} title="Appearance">
+        <Section id="appearance" icon={<Sun />} title={tt("Appearance")}>
           {show("theme", "dark", "light", "system") && (
-            <Setting label="Theme" detail="System follows the OS appearance.">
+            <Setting label={tt("Theme")} detail={tt("System follows the OS appearance.")}>
               <Segmented<ThemePreference>
-                aria-label="Theme"
+                aria-label={tt("Theme")}
                 value={ws.themePreference}
                 onValueChange={ws.setTheme}
                 options={[
-                  { value: "system", label: "System" },
-                  { value: "dark", label: "Dark" },
-                  { value: "light", label: "Light" },
+                  { value: "system", label: tt("System") },
+                  { value: "dark", label: tt("Dark") },
+                  { value: "light", label: tt("Light") },
+                ]}
+              />
+            </Setting>
+          )}
+          {show("language", "türkçe", "english", "dil") && (
+            <Setting label={tt("Language")} detail={tt("System follows the OS language. Changing it reloads the window; open tabs are kept.")}>
+              <Segmented<LanguageSetting>
+                aria-label={tt("Language")}
+                value={language}
+                onValueChange={(v) => {
+                  setLanguage(v);
+                  window.location.reload();
+                }}
+                options={[
+                  { value: "system", label: tt("System") },
+                  { value: "en", label: "English" },
+                  { value: "tr", label: "Türkçe" },
                 ]}
               />
             </Setting>
           )}
           {show("density", "row height", "compact") && (
-            <Setting label="Density" detail="Row height 24 / 28 / 34 px.">
+            <Setting label={tt("Density")} detail={tt("Row height 24 / 28 / 34 px.")}>
               <Segmented<Density>
-                aria-label="Density"
+                aria-label={tt("Density")}
                 value={ws.density}
                 onValueChange={ws.setDensity}
                 options={[
-                  { value: "compact", label: "Compact" },
-                  { value: "default", label: "Default" },
-                  { value: "comfortable", label: "Comfortable" },
+                  { value: "compact", label: tt("Compact") },
+                  { value: "default", label: tt("Default") },
+                  { value: "comfortable", label: tt("Comfortable") },
                 ]}
               />
             </Setting>
           )}
           {show("interface font size", "zoom") && (
-            <Setting label="Interface font size" detail="Scales the whole interface from the 13 px base.">
+            <Setting label={tt("Interface font size")} detail={tt("Scales the whole interface from the 13 px base.")}>
               <Select
-                label="Interface font size"
+                label={tt("Interface font size")}
                 value={String(fontSize)}
                 onChange={(v) => setFontSize(Number(v))}
                 options={[
@@ -234,8 +255,8 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
             </Setting>
           )}
           {show("reduce motion", "animation") && (
-            <Setting label="Reduce motion" detail="Also follows the OS setting.">
-              <Switch checked={reduceMotion} onCheckedChange={setReduceMotion} aria-label="Reduce motion" />
+            <Setting label={tt("Reduce motion")} detail={tt("Also follows the OS setting.")}>
+              <Switch checked={reduceMotion} onCheckedChange={setReduceMotion} aria-label={tt("Reduce motion")} />
             </Setting>
           )}
         </Section>
@@ -245,45 +266,45 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "clusters",
       col: 0,
       node: (
-        <Section id="clusters" icon={<LayoutGrid />} title="Clusters & namespaces">
+        <Section id="clusters" icon={<LayoutGrid />} title={tt("Clusters & namespaces")}>
           {show("on launch", "restore", "workspace") && (
-            <Setting label="On launch" detail={backend ? "Logs and shell tabs start fresh; their streams are not resumed." : undefined}>
+            <Setting label={tt("On launch")} detail={backend ? tt("Logs and shell tabs start fresh; their streams are not resumed.") : undefined}>
               <Select
-                label="On launch"
+                label={tt("On launch")}
                 value={onLaunch}
                 onChange={(v) => setOnLaunch(v as typeof onLaunch)}
                 options={[
-                  ["restore", "Restore last workspace"],
-                  ["clusters", "Open Clusters overview"],
+                  ["restore", tt("Restore last workspace")],
+                  ["clusters", tt("Open Clusters overview")],
                 ]}
               />
             </Setting>
           )}
           {show("connect automatically", "auto connect") && (
-            <Setting label="Connect automatically" detail="Only clusters that were selected when you quit. Production clusters are never connected without that.">
-              <Switch checked={autoConnect} onCheckedChange={setAutoConnect} aria-label="Connect automatically" />
+            <Setting label={tt("Connect automatically")} detail={tt("Only clusters that were selected when you quit. Production clusters are never connected without that.")}>
+              <Switch checked={autoConnect} onCheckedChange={setAutoConnect} aria-label={tt("Connect automatically")} />
             </Setting>
           )}
           {show("default namespace filter") && (
             <Setting
-              label="Default namespace filter"
-              detail="Where Pods, Deployments and other lists start when a cluster is added to the selection. Remembered: the namespaces you last picked for that cluster."
+              label={tt("Default namespace filter")}
+              detail={tt("Where Pods, Deployments and other lists start when a cluster is added to the selection. Remembered: the namespaces you last picked for that cluster.")}
             >
               <Select
-                label="Default namespace filter"
+                label={tt("Default namespace filter")}
                 value={defaultNs}
                 onChange={(v) => setDefaultNs(v as typeof defaultNs)}
                 options={[
-                  ["remember", "Remember per cluster"],
-                  ["all", "All namespaces"],
-                  ["default", "Context namespace"],
+                  ["remember", tt("Remember per cluster")],
+                  ["all", tt("All namespaces")],
+                  ["default", tt("Context namespace")],
                 ]}
               />
             </Setting>
           )}
           {show("hide system namespaces", "kube-system") && (
-            <Setting label="Hide system namespaces" detail={<span className="font-mono">kube-system, kube-public, kube-node-lease</span>}>
-              <Switch checked={hideSystem} onCheckedChange={setHideSystem} aria-label="Hide system namespaces" />
+            <Setting label={tt("Hide system namespaces")} detail={<span className="font-mono">{tt("kube-system, kube-public, kube-node-lease")}</span>}>
+              <Switch checked={hideSystem} onCheckedChange={setHideSystem} aria-label={tt("Hide system namespaces")} />
             </Setting>
           )}
         </Section>
@@ -293,10 +314,10 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "tables",
       col: 0,
       node: (
-        <Section id="tables" icon={<Columns3 />} title="Tables & columns">
+        <Section id="tables" icon={<Columns3 />} title={tt("Tables & columns")}>
           {show("hide columns", "narrow", "priority") && (
-            <Setting label="Hide low-priority columns on narrow windows" detail="The footer names the hidden columns; the column menu brings them back.">
-              <Switch checked={autoHideColumns} onCheckedChange={setAutoHideColumns} aria-label="Hide low-priority columns" />
+            <Setting label={tt("Hide low-priority columns on narrow windows")} detail={tt("The footer names the hidden columns; the column menu brings them back.")}>
+              <Switch checked={autoHideColumns} onCheckedChange={setAutoHideColumns} aria-label={tt("Hide low-priority columns")} />
             </Setting>
           )}
         </Section>
@@ -306,34 +327,34 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "watch",
       col: 0,
       node: (
-        <Section id="watch" icon={<RefreshCw />} title="Refresh & watch">
+        <Section id="watch" icon={<RefreshCw />} title={tt("Refresh & watch")}>
           {show("update method", "watch", "poll") && (
             <Setting
-              label="Update method"
-              detail="Watch streams changes; polling lists every 30 s and uses fewer API server connections on very large clusters. Lists switch at once; connected clusters on their next connect."
+              label={tt("Update method")}
+              detail={tt("Watch streams changes; polling lists every 30 s and uses fewer API server connections on very large clusters. Lists switch at once; connected clusters on their next connect.")}
             >
               <Segmented
-                aria-label="Update method"
+                aria-label={tt("Update method")}
                 value={updateMethod}
                 onValueChange={setUpdateMethod}
                 options={[
-                  { value: "watch", label: "Watch" },
-                  { value: "poll", label: "Poll 30s" },
+                  { value: "watch", label: tt("Watch") },
+                  { value: "poll", label: tt("Poll 30s") },
                 ]}
               />
             </Setting>
           )}
           {show("pause watches in background tabs") && (
             <Setting
-              label="Pause watches in the background"
-              detail="After 5 minutes with Clustrail hidden or minimized; resumes with a full re-list when you return. Clusters with an open log stream, shell or port forward stay connected."
+              label={tt("Pause watches in the background")}
+              detail={tt("After 5 minutes with Clustrail hidden or minimized; resumes with a full re-list when you return. Clusters with an open log stream, shell or port forward stay connected.")}
             >
-              <Switch checked={pauseBackground} onCheckedChange={setPauseBackground} aria-label="Pause background watches" />
+              <Switch checked={pauseBackground} onCheckedChange={setPauseBackground} aria-label={tt("Pause background watches")} />
             </Setting>
           )}
           {show("metrics refresh", "metrics-server") && (
-            <Setting label="Metrics refresh" detail="metrics-server reports current usage only; Clustrail keeps its samples for 2 hours, across restarts.">
-              <NumberField label="Metrics refresh" value={metricsInterval} onChange={setMetricsInterval} min={10} max={300} unit="s" />
+            <Setting label={tt("Metrics refresh")} detail={tt("metrics-server reports current usage only; Clustrail keeps its samples for 2 hours, across restarts.")}>
+              <NumberField label={tt("Metrics refresh")} value={metricsInterval} onChange={setMetricsInterval} min={10} max={300} unit="s" />
             </Setting>
           )}
         </Section>
@@ -346,56 +367,55 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
         <Section
           id="perf"
           icon={<Cpu />}
-          title="Memory & buffers"
-          trailing={heap ? <span className="text-meta font-normal text-fg-muted">UI heap now {Math.round(heap / 1048576)} MB</span> : undefined}
+          title={tt("Memory & buffers")}
+          trailing={heap ? <span className="text-meta font-normal text-fg-muted">{tt("UI heap now {v0} MB", { v0: Math.round(heap / 1048576) })}</span> : undefined}
         >
           {show("resource cache budget", "memory") && (
             <Setting
-              label="Resource cache budget"
+              label={tt("Resource cache budget")}
               detail={
                 <span className="flex flex-col gap-0.5">
                   <span className="flex items-center gap-2">
-                    <span className="font-mono">{cachedObjects.toLocaleString()} objects cached</span>
+                    <span className="font-mono">{tt("{v0} objects cached", { v0: cachedObjects.toLocaleString() })}</span>
                     {goMem && (
-                      <span className="font-mono">
-                        · Go heap {goMem.heapMB} MB{budgetOn ? ` of ${cacheBudget} MB` : ""}
+                      <span className="font-mono">{tt("· Go heap")}{" "}{goMem.heapMB} MB{budgetOn ? tt(" of {cacheBudget} MB", { cacheBudget }) : ""}
                       </span>
                     )}
                   </span>
-                  <span>Over budget, connected clusters that are not selected are disconnected, largest first. Selected clusters stay.</span>
+                  <span>{tt("Over budget, connected clusters that are not selected are disconnected, largest first. Selected clusters stay.")}</span>
                 </span>
               }
             >
               <span className="flex items-center gap-2">
-                <Switch checked={budgetOn} onCheckedChange={setBudgetOn} aria-label="Enforce cache budget" disabled={!backend} />
-                <NumberField disabled={!budgetOn} label="Resource cache budget" value={cacheBudget} onChange={setCacheBudget} min={256} max={8192} unit="MB" />
+                <Switch checked={budgetOn} onCheckedChange={setBudgetOn} aria-label={tt("Enforce cache budget")} disabled={!backend} />
+                <NumberField disabled={!budgetOn} label={tt("Resource cache budget")} value={cacheBudget} onChange={setCacheBudget} min={256} max={8192} unit="MB" />
               </span>
             </Setting>
           )}
           {show("log buffer per stream", "lines") && (
-            <Setting label="Log buffer per stream" detail="Oldest lines are dropped when full; the footer shows how many.">
-              <NumberField label="Log buffer per stream" value={logBuffer} onChange={setLogBuffer} min={1000} max={1_000_000} />
+            <Setting label={tt("Log buffer per stream")} detail={tt("Oldest lines are dropped when full; the footer shows how many.")}>
+              <NumberField label={tt("Log buffer per stream")} value={logBuffer} onChange={setLogBuffer} min={1000} max={1_000_000} />
             </Setting>
           )}
           {show("total log memory") && (
             <Setting
-              label="Total log memory"
+              label={tt("Total log memory")}
               detail={
                 <span className="flex flex-col gap-0.5">
                   <span className="flex items-center gap-2">
-                    <Meter value={Math.min(1, (logBuffer * 260) / 1048576 / logMemory)} label="Log buffer of one stream vs total" className="max-w-24" />
-                    <span>one full stream ≈ {Math.round((logBuffer * 260) / 1048576)} MB</span>
+                    <Meter value={Math.min(1, (logBuffer * 260) / 1048576 / logMemory)} label={tt("Log buffer of one stream vs total")} className="max-w-24" />
+                    <span>{tt("one full stream ≈ {v0} MB", { v0: Math.round((logBuffer * 260) / 1048576) })}</span>
                   </span>
-                  <span>Shared by open log tabs: each keeps at most its share (≈260 bytes a line), oldest lines first to go.</span>
+                  <span>{tt("Shared by open log tabs: each keeps at most its share (≈260 bytes a line), oldest lines first to go.")}</span>
                 </span>
               }
             >
-              <NumberField label="Total log memory" value={logMemory} onChange={setLogMemory} min={64} max={4096} unit="MB" />
+              <NumberField label={tt("Total log memory")} value={logMemory} onChange={setLogMemory} min={64} max={4096} unit="MB" />
             </Setting>
           )}
           {show("terminal scrollback") && (
-            <Setting label="Terminal scrollback" detail="Lines kept per shell session.">
-              <NumberField label="Terminal scrollback" value={scrollback} onChange={setScrollback} min={1000} max={100_000} />
+            <Setting label={tt("Terminal scrollback")} detail={tt("Lines kept per shell session.")}>
+              <NumberField label={tt("Terminal scrollback")} value={scrollback} onChange={setScrollback} min={1000} max={100_000} />
             </Setting>
           )}
         </Section>
@@ -405,15 +425,15 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "term",
       col: 1,
       node: (
-        <Section id="term" icon={<SquareTerminal />} title="Logs & terminal">
+        <Section id="term" icon={<SquareTerminal />} title={tt("Logs & terminal")}>
           {show("timestamps", "logs") && (
-            <Setting label="Show timestamps in new log views">
-              <Switch checked={logTimestamps} onCheckedChange={setLogTimestamps} aria-label="Show timestamps" />
+            <Setting label={tt("Show timestamps in new log views")}>
+              <Switch checked={logTimestamps} onCheckedChange={setLogTimestamps} aria-label={tt("Show timestamps")} />
             </Setting>
           )}
           {show("wrap", "logs") && (
-            <Setting label="Wrap long log lines">
-              <Switch checked={logWrap} onCheckedChange={setLogWrap} aria-label="Wrap long lines" />
+            <Setting label={tt("Wrap long log lines")}>
+              <Switch checked={logWrap} onCheckedChange={setLogWrap} aria-label={tt("Wrap long lines")} />
             </Setting>
           )}
         </Section>
@@ -428,11 +448,9 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "keys",
       col: 1,
       node: show("keyboard shortcuts", "keys") ? (
-        <Section id="keys" icon={<Keyboard />} title="Keyboard shortcuts">
-          <Setting label="Shortcut reference" detail="⌘K opens the command palette from anywhere. Press ? for the full list.">
-            <Button size="sm" onClick={openHelp}>
-              Show all
-            </Button>
+        <Section id="keys" icon={<Keyboard />} title={tt("Keyboard shortcuts")}>
+          <Setting label={tt("Shortcut reference")} detail={tt("⌘K opens the command palette from anywhere. Press ? for the full list.")}>
+            <Button size="sm" onClick={openHelp}>{tt("Show all")}</Button>
           </Setting>
         </Section>
       ) : null,
@@ -441,50 +459,46 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "privacy",
       col: 1,
       node: (
-        <Section id="privacy" icon={<Shield />} title="Privacy & diagnostics">
+        <Section id="privacy" icon={<Shield />} title={tt("Privacy & diagnostics")}>
           {show("usage telemetry", "privacy") && (
-            <Setting label="Usage telemetry" detail="Off. This build has no telemetry and sends nothing.">
-              <Switch disabled checked={telemetry} onCheckedChange={setTelemetry} aria-label="Usage telemetry" />
+            <Setting label={tt("Usage telemetry")} detail={tt("Off. This build has no telemetry and sends nothing.")}>
+              <Switch disabled checked={telemetry} onCheckedChange={setTelemetry} aria-label={tt("Usage telemetry")} />
             </Setting>
           )}
           {show("log file", "diagnostics", "support") && (
             <Setting
-              label="Log file"
+              label={tt("Log file")}
               detail={
                 backend ? (
                   <span className="selectable font-mono">
                     {logFile ? `${logFile.path} · ${Math.max(1, Math.round(logFile.size / 1024))} KB` : "…"}
                   </span>
                 ) : (
-                  "The desktop app logs connections, errors and every change it makes. Never Secret values, YAML bodies, log lines or shell input."
+                  tt("The desktop app logs connections, errors and every change it makes. Never Secret values, YAML bodies, log lines or shell input.")
                 )
               }
             >
-              <Button size="sm" disabled={!backend} onClick={() => void backend?.revealLog().catch((e) => window.alert(errorText(e)))}>
-                Show in folder
-              </Button>
+              <Button size="sm" disabled={!backend} onClick={() => void backend?.revealLog().catch((e) => window.alert(errorText(e)))}>{tt("Show in folder")}</Button>
             </Setting>
           )}
           {show("crash reports") && (
-            <Setting label="Crash reports" detail={`This build sends no crash reports. ${NOT_YET}`}>
+            <Setting label={tt("Crash reports")} detail={tt("This build sends no crash reports. {NOT_YET}", { NOT_YET })}>
               <Select
                 disabled
-                label="Crash reports"
+                label={tt("Crash reports")}
                 value={crashReports}
                 onChange={(v) => setCrashReports(v as typeof crashReports)}
                 options={[
-                  ["ask", "Ask each time"],
-                  ["never", "Never send"],
-                  ["always", "Send automatically"],
+                  ["ask", tt("Ask each time")],
+                  ["never", tt("Never send")],
+                  ["always", tt("Send automatically")],
                 ]}
               />
             </Setting>
           )}
           {show("diagnostics bundle") && (
-            <Setting label="Diagnostics bundle" detail="Created locally with secrets and tokens redacted. You review it before sharing.">
-              <Button size="sm" disabled title="Available in the desktop app">
-                Create…
-              </Button>
+            <Setting label={tt("Diagnostics bundle")} detail={tt("Created locally with secrets and tokens redacted. You review it before sharing.")}>
+              <Button size="sm" disabled title={tt("Available in the desktop app")}>{tt("Create…")}</Button>
             </Setting>
           )}
         </Section>
@@ -494,10 +508,10 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "updates",
       col: 1,
       node: show("updates", "version", "check") ? (
-        <Section id="updates" icon={<Download />} title="Updates">
-          <Setting label="Check for updates" detail="Release notes from github.com/mihnk/clustrail. Signed builds only.">
+        <Section id="updates" icon={<Download />} title={tt("Updates")}>
+          <Setting label={tt("Check for updates")} detail={tt("Release notes from github.com/mihnk/clustrail. Signed builds only.")}>
             <Select
-              label="Check for updates"
+              label={tt("Check for updates")}
               value={updateChannel}
               onChange={(v) => setUpdateChannel(v as typeof updateChannel)}
               options={[
@@ -513,19 +527,17 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
               <span className="flex items-center gap-2">
                 <StatusGlyph health={checking ? "progressing" : "completed"} className={checking ? undefined : "text-status-healthy"} />
                 {checking
-                  ? "Checking…"
+                  ? tt("Checking…")
                   : update?.error
-                    ? `Could not check: ${update.error}`
+                    ? tt("Could not check: {error}", { error: update.error })
                     : update && !update.upToDate
-                      ? `Clustrail ${update.latest} is available (you have ${version})`
-                      : `Clustrail ${version}${update ? " is up to date" : ""}`}
+                      ? tt("Clustrail {latest} is available (you have {version})", { latest: update.latest, version })
+                      : tt("Clustrail {version}{v1}", { version, v1: update ? " is up to date" : "" })}
               </span>
             }
-            detail={checkedAt ? `Checked at ${checkedAt}` : undefined}
+            detail={checkedAt ? tt("Checked at {checkedAt}", { checkedAt }) : undefined}
           >
-            <Button size="sm" variant="ghost" onClick={checkUpdates} disabled={checking}>
-              Check now
-            </Button>
+            <Button size="sm" variant="ghost" onClick={checkUpdates} disabled={checking}>{tt("Check now")}</Button>
           </Setting>
         </Section>
       ) : null,
@@ -534,17 +546,15 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       id: "about",
       col: 1,
       node: show("about", "licenses", "version") ? (
-        <Section id="about" icon={<Logo size={18} />} title="About Clustrail">
-          <Setting label={`Version ${version} · Apache-2.0`} detail="Free and open source by mihnk. Every feature is free — no tiers, no account.">
+        <Section id="about" icon={<Logo size={18} />} title={tt("About Clustrail")}>
+          <Setting label={tt("Version {version} · Apache-2.0", { version })} detail={tt("Free and open source by mihnk. Every feature is free — no tiers, no account.")}>
             <Button size="sm" variant="ghost" onClick={() => window.open("https://github.com/mihnk/clustrail", "_blank", "noopener")}>
               <ExternalLink aria-hidden />
               github.com/mihnk/clustrail
             </Button>
           </Setting>
-          <Setting label="Open-source licenses" detail="Go modules and npm packages bundled with this build.">
-            <Button size="sm" disabled title="Generated into the desktop build">
-              View
-            </Button>
+          <Setting label={tt("Open-source licenses")} detail={tt("Go modules and npm packages bundled with this build.")}>
+            <Button size="sm" disabled title={tt("Generated into the desktop build")}>{tt("View")}</Button>
           </Setting>
         </Section>
       ) : null,
@@ -554,21 +564,21 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
   const visible = sections.filter((s) => s.node);
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <aside aria-label="Settings categories" className="flex w-[220px] shrink-0 flex-col gap-0.5 border-r border-line bg-surface-side px-2.5 py-3">
+      <aside aria-label={tt("Settings categories")} className="flex w-[220px] shrink-0 flex-col gap-0.5 border-r border-line bg-surface-side px-2.5 py-3">
         <label className="mb-2 flex h-7 items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-fg-muted focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
           <Search className="size-3.5 shrink-0" aria-hidden />
-          <span className="sr-only">Search settings</span>
+          <span className="sr-only">{tt("Search settings")}</span>
           <input
             ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && (query ? setQuery("") : e.currentTarget.blur())}
-            placeholder="Search settings"
+            placeholder={tt("Search settings")}
             spellCheck={false}
             className="min-w-0 flex-1 border-0 bg-transparent text-cell text-fg outline-none placeholder:text-fg-muted"
           />
         </label>
-        <nav className="flex flex-col gap-0.5" aria-label="Categories">
+        <nav className="flex flex-col gap-0.5" aria-label={tt("Categories")}>
           {CATEGORIES.map((c) => (
             <button
               key={c.id}
@@ -587,14 +597,12 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
           ))}
         </nav>
         <div className="flex-1" />
-        <span className="text-meta text-fg-muted">
-          Settings apply immediately and are stored locally in <span className="font-mono">~/.config/clustrail</span>.
-        </span>
+        <span className="text-meta text-fg-muted">{tn("Settings apply immediately and are stored locally in {v0}.", { v0: <span className="font-mono">~/.config/clustrail</span> })}</span>
       </aside>
 
       <main ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-4">
         {visible.length === 0 ? (
-          <p className="text-cell text-fg-secondary">No settings match “{query}”.</p>
+          <p className="text-cell text-fg-secondary">{tt("No settings match “{query}”.", { query })}</p>
         ) : (
           <div className="grid grid-cols-2 items-start gap-4 max-[1360px]:grid-cols-1">
             {[0, 1].map((col) => (
@@ -740,15 +748,15 @@ function HelmRepos({ repos, setRepos, visible }: { repos: HelmRepo[]; setRepos: 
   if (!visible) return null;
   if (backend) {
     return (
-      <Section id="helm" icon={<LifeBuoy />} title="Helm repositories">
+      <Section id="helm" icon={<LifeBuoy />} title={tt("Helm repositories")}>
         {(helmRepos ?? []).map((r) => (
           <Setting key={r.name} label={<span className="font-mono">{r.name}</span>} detail={<span className="font-mono">{r.url}</span>}>
             <span />
           </Setting>
         ))}
         <Setting
-          label={helmRepos?.length === 0 ? "No Helm repositories on this machine." : "From Helm's repositories.yaml on this machine."}
-          detail="Clustrail uses them to tell whether a release's chart source is known. Rollback works without them; upgrade is not available in this build. Manage them with helm repo add / remove."
+          label={helmRepos?.length === 0 ? tt("No Helm repositories on this machine.") : tt("From Helm's repositories.yaml on this machine.")}
+          detail={tt("Clustrail uses them to tell whether a release's chart source is known. Rollback works without them; upgrade is not available in this build. Manage them with helm repo add / remove.")}
         >
           <span />
         </Setting>
@@ -758,18 +766,18 @@ function HelmRepos({ repos, setRepos, visible }: { repos: HelmRepo[]; setRepos: 
   const valid = /^[a-z0-9][a-z0-9-]*$/.test(name) && /^(https:\/\/|oci:\/\/)\S+$/.test(url) && !repos.some((r) => r.name === name);
   const field = "h-[26px] min-w-0 rounded-md border border-line-strong bg-surface-app px-2 text-ui text-fg outline-none placeholder:text-fg-muted focus:border-accent";
   return (
-    <Section id="helm" icon={<LifeBuoy />} title="Helm repositories">
+    <Section id="helm" icon={<LifeBuoy />} title={tt("Helm repositories")}>
       {repos.map((r) => (
         <Setting key={r.name} label={<span className="font-mono">{r.name}</span>} detail={<span className="font-mono">{r.url}</span>}>
-          <IconButton aria-label={`Remove ${r.name}`} onClick={() => setRepos(repos.filter((x) => x.name !== r.name))}>
+          <IconButton aria-label={tt("Remove {name}", { name: r.name })} onClick={() => setRepos(repos.filter((x) => x.name !== r.name))}>
             <Trash2 />
           </IconButton>
         </Setting>
       ))}
       {adding ? (
         <div className="flex items-center gap-1.5 border-t border-line-row px-3.5 py-2">
-          <input aria-label="Repository name" value={name} onChange={(e) => setName(e.target.value)} placeholder="name" className={cn(field, "w-28 font-mono")} autoFocus />
-          <input aria-label="Repository URL" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https:// or oci://" className={cn(field, "flex-1 font-mono")} />
+          <input aria-label={tt("Repository name")} value={name} onChange={(e) => setName(e.target.value)} placeholder="name" className={cn(field, "w-28 font-mono")} autoFocus />
+          <input aria-label={tt("Repository URL")} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https:// or oci://" className={cn(field, "flex-1 font-mono")} />
           <Button
             size="sm"
             variant="primary"
@@ -780,19 +788,13 @@ function HelmRepos({ repos, setRepos, visible }: { repos: HelmRepo[]; setRepos: 
               setName("");
               setUrl("");
             }}
-          >
-            Add
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
-            Cancel
-          </Button>
+          >{tt("Add")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>{tt("Cancel")}</Button>
         </div>
       ) : (
-        <Setting label="Charts that are not in a configured repository can be rolled back but not upgraded." detail="Credentials for private repositories are stored in the OS keychain.">
+        <Setting label={tt("Charts that are not in a configured repository can be rolled back but not upgraded.")} detail={tt("Credentials for private repositories are stored in the OS keychain.")}>
           <Button size="sm" onClick={() => setAdding(true)}>
-            <Plus aria-hidden />
-            Add repository…
-          </Button>
+            <Plus aria-hidden />{tt("Add repository…")}</Button>
         </Setting>
       )}
     </Section>

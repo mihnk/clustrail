@@ -34,6 +34,7 @@ import { useBackendSync } from "./backendSync";
 import { backend } from "@/backend/client";
 import { DiagnosticsPanel } from "@/features/bench/DiagnosticsPanel";
 import { runBenchmark } from "@/features/bench/runner";
+import { t } from "@/i18n";
 
 export function App() {
   return (
@@ -70,7 +71,7 @@ function AppShell() {
       void backend.benchConfig().then((cfg) => {
         if (!cfg) return;
         setDiagnostics(true);
-        setTimeout(() => void runBenchmark(cfg, () => ws.openTab("pods") || ws.openView({ kind: "pods", title: "Pods" })), 500);
+        setTimeout(() => void runBenchmark(cfg, () => ws.openTab("pods") || ws.openView({ kind: "pods", title: t("Pods") })), 500);
       });
     }
     return () => window.removeEventListener("keydown", onKey);
@@ -128,13 +129,13 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <LogsWorkspace tab={tab} active={active} />;
     case "shell":
       return (
-        <Suspense fallback={<EmptyState className="flex-1" title="Loading terminal…" />}>
+        <Suspense fallback={<EmptyState className="flex-1" title={t("Loading terminal…")} />}>
           <ShellWorkspace tab={tab} active={active} />
         </Suspense>
       );
     case "yaml":
       return (
-        <Suspense fallback={<EmptyState className="flex-1" title="Loading editor…" />}>
+        <Suspense fallback={<EmptyState className="flex-1" title={t("Loading editor…")} />}>
           <YamlWorkspace tab={tab} active={active} />
         </Suspense>
       );
@@ -144,7 +145,7 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <ResourceListWorkspace tab={tab} active={active} />;
     case "create":
       return (
-        <Suspense fallback={<EmptyState className="flex-1" title="Loading editor…" />}>
+        <Suspense fallback={<EmptyState className="flex-1" title={t("Loading editor…")} />}>
           <CreateResourceWorkspace tab={tab} active={active} />
         </Suspense>
       );
@@ -164,9 +165,7 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <DeploymentsWorkspace cluster={tab.cluster ?? ""} namespace={tab.params?.namespace ?? ""} active={active} />;
     default:
       return (
-        <EmptyState className="flex-1" title={tab.title}>
-          This view is not implemented in this build.
-        </EmptyState>
+        <EmptyState className="flex-1" title={tab.title}>{t("This view is not implemented in this build.")}</EmptyState>
       );
   }
 }

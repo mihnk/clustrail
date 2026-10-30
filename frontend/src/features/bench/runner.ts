@@ -5,11 +5,13 @@ import { backend, type BackendDiagnostics } from "@/backend/client";
 import { podStream } from "@/backend/podStream";
 import type { PodRow } from "@/data/types";
 import { afterPaint, FrameMonitor, sleep, stats, timed } from "./monitor";
+import { t } from "@/i18n";
 
 type Open = (view: "pods") => void;
 
 const visibleEl = <T extends HTMLElement>(sel: string) => [...document.querySelectorAll<T>(sel)].find((e) => e.offsetParent !== null) ?? null;
-const grid = () => visibleEl<HTMLElement>('[role=grid][aria-label="Pods"]');
+// Selectors use the UI language's labels, so a run works in any language.
+const grid = () => visibleEl<HTMLElement>(`[role=grid][aria-label="${t("Pods")}"]`);
 const scroller = () => grid()?.querySelector<HTMLElement>('[tabindex="0"]') ?? null;
 const rowCount = () => Number(grid()?.getAttribute("aria-rowcount") ?? 0);
 
@@ -66,7 +68,7 @@ async function scrollTest(seconds: number, mode: "steady" | "jump") {
 }
 
 async function searchTest(rounds: number) {
-  const input = grid() && visibleEl<HTMLInputElement>('input[placeholder^="Filter name"]');
+  const input = grid() && visibleEl<HTMLInputElement>(`input[placeholder="${t("Filter name, label, node…")}"]`);
   if (!input) throw new Error("pods filter not found");
   const queries = ["checkout", "team-01", "crash", "node-001", "zzzz-none", ""];
   const samples: number[] = [];
@@ -89,7 +91,7 @@ async function searchTest(rounds: number) {
 async function sortTest(rounds: number) {
   const out: Record<string, ReturnType<typeof stats>> = {};
   for (const label of ["Status", "Restarts", "Age"]) {
-    const header = [...document.querySelectorAll<HTMLElement>('[role=grid][aria-label="Pods"] [role=columnheader]')].find((h) => h.textContent?.trim() === label);
+    const header = [...document.querySelectorAll<HTMLElement>(`[role=grid][aria-label="${t("Pods")}"] [role=columnheader]`)].find((h) => h.textContent?.trim() === t(label));
     const button = header?.querySelector("button");
     if (!header || !button) continue;
     const samples: number[] = [];
@@ -108,9 +110,9 @@ async function inspectorTest(samples: number) {
     if (!cell) break;
     const start = performance.now();
     cell.click();
-    await waitFor(() => !!document.querySelector('[aria-label="Pod inspector"]'), 2000, "inspector");
+    await waitFor(() => !!document.querySelector(`[aria-label="${t("Pod inspector")}"]`), 2000, "inspector");
     open.push((await afterPaint()) - start);
-    document.querySelector<HTMLElement>('[aria-label="Pod inspector"] button[aria-label^="Close"]')?.click();
+    document.querySelector<HTMLElement>(`[aria-label="${t("Pod inspector")}"] button[aria-label="${t("Close inspector")}"]`)?.click();
     await afterPaint();
   }
   return stats(open);
