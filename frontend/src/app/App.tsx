@@ -13,6 +13,7 @@ import { InvestigationWorkspace } from "@/features/investigation/InvestigationWo
 import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspace";
 import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
+import { LogsWorkspace } from "@/features/logs/LogsWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
@@ -37,7 +38,10 @@ function AppShell() {
   const { theme, density, tabs, activeTabId, activeTab, clusterById } = useWorkspace();
   const scopedCluster = activeTab?.cluster ? clusterById(activeTab.cluster) : undefined;
   // Single-cluster workspaces and investigations need the width: the sidebar collapses to a rail.
-  const railNav = activeTab?.kind === "investigation" || (activeTab?.kind === "deployments" && !!activeTab.cluster);
+  // Investigations, single-cluster lists and tool tabs (Logs, Shell, YAML, Compare) need the width.
+  const railNav =
+    ["investigation", "logs", "shell", "yaml", "compare"].includes(activeTab?.kind ?? "") ||
+    (activeTab?.kind === "deployments" && !!activeTab.cluster);
 
   // Theme and density are document-level so portals (menus, tooltips) match.
   useEffect(() => {
@@ -50,7 +54,8 @@ function AppShell() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-app text-fg">
       <WindowToolbar />
-      {scopedCluster?.protected && <ProtectedContextBar cluster={scopedCluster} />}
+      {/* The protected band belongs to single-cluster lists; tool tabs carry their own context. */}
+      {scopedCluster?.protected && activeTab?.kind === "deployments" && <ProtectedContextBar cluster={scopedCluster} />}
       <div className="flex min-h-0 flex-1">
         {railNav ? <NavigationRail /> : <ClusterNavigation />}
         {/* Inactive tabs stay mounted so filters, sort, scroll and selection survive tab switches. */}
@@ -73,6 +78,8 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <ClustersWorkspace active={active} />;
     case "nodes":
       return <NodesWorkspace active={active} />;
+    case "logs":
+      return <LogsWorkspace tab={tab} active={active} />;
     case "resource":
       return (
         <EmptyState className="flex-1" icon={<Layers />} title={`${tab.title} · ${tab.subtitle}`}>

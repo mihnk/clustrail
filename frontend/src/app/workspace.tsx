@@ -47,6 +47,16 @@ export interface MockScenarios {
   noMetrics: boolean;
 }
 
+/** Evidence pinned from Logs, Events, Terminal or Metrics into the investigation. */
+export interface Pin {
+  id: string;
+  at: string;
+  /** e.g. "Logs · checkout-api · A x2kqp". */
+  source: string;
+  cluster: string;
+  text: string;
+}
+
 /** A long-running operation shown in a progress toast and the status bar. */
 export interface BackgroundJob {
   id: string;
@@ -98,6 +108,8 @@ interface WorkspaceState {
   /** Cordons the node and evicts its pods in the background. */
   drainNode: (id: string, opts: { force: boolean; deleteEmptyDir: boolean; timeoutSec: number }) => void;
   jobs: BackgroundJob[];
+  pins: Pin[];
+  pinToInvestigation: (pin: Omit<Pin, "id" | "at">) => void;
 
   scenarios: MockScenarios;
   setScenario: (key: keyof MockScenarios, on: boolean) => void;
@@ -150,6 +162,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [deployments, setDeployments] = useState(initialDeployments);
   const [nodes, setNodes] = useState(initialNodes);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
+  const [pins, setPins] = usePersistentState<Pin[]>("investigation.checkout-api-restarts.pins", []);
   const [tabs, setTabs] = useState(initialTabs);
   const [closedTabs, setClosedTabs] = useState<WorkspaceTab[]>([]);
   const [activeTabId, setActiveTabId] = useState("pods");
@@ -516,6 +529,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setNodeCordoned,
       drainNode,
       jobs,
+      pins,
+      pinToInvestigation: (pin) => {
+        setPins([...pins, { ...pin, id: `${Date.now()}`, at: new Date().toISOString() }]);
+        toast.show({ kind: "success", title: "Pinned to investigation", target: "checkout-api restarts", action: { label: "Open investigation", onClick: () => setActiveTabId("inv-checkout-api") } });
+      },
       connectCluster,
       deletePod,
       restartDeployment,
@@ -577,6 +595,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setNodeCordoned,
     drainNode,
     jobs,
+    pins,
+    setPins,
     connectCluster,
     deletePod,
     restartDeployment,

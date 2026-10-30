@@ -12,6 +12,7 @@ interface PodActionDeps {
   restartDeployment: (id: string) => void;
   openTab: (id: string) => boolean;
   hasTab: (id: string) => boolean;
+  openLogs: (pod: PodRow) => void;
 }
 
 /** Owning Deployment name for a ReplicaSet-owned pod ("app-7d9f8b6c4" -> "app"). */
@@ -29,7 +30,7 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
 
   return [
     // Observe: nothing here changes the cluster.
-    { id: "logs", group: "observe", label: "Logs", icon: <ScrollText />, shortcut: "L", disabled: true },
+    { id: "logs", group: "observe", label: "Logs", icon: <ScrollText />, shortcut: "L", onSelect: () => deps.openLogs(pod) },
     { id: "shell", group: "observe", label: "Shell", icon: <SquareTerminal />, shortcut: "S", disabled: true },
     { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", disabled: true },
     {

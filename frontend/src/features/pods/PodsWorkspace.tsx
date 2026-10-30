@@ -42,7 +42,7 @@ import { cn } from "@/lib/cn";
 import { podColumns } from "./columns";
 import { matchesFilter, matchesLabel, parseFilter } from "./filter";
 import { PodInspector, type InspectorTab } from "./PodInspector";
-import { podActions } from "./actions";
+import { deploymentNameOf, podActions } from "./actions";
 
 type HealthFilter = "all" | "attention";
 type OwnerFilter = "any" | "ReplicaSet" | "StatefulSet" | "Job" | "none";
@@ -69,6 +69,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     restartDeployment,
     reveal,
     toggleCluster,
+    openView,
   } = useWorkspace();
   const { confirm } = useConfirm();
   const { clusterPickerOpen, setClusterPickerOpen } = useOverlays();
@@ -179,6 +180,13 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           restartDeployment,
           openTab,
           hasTab: (tabId) => tabs.some((t) => t.id === tabId),
+          openLogs: (p) =>
+            openView({
+              kind: "logs",
+              title: `Logs · ${deploymentNameOf(p) ?? p.name}`,
+              cluster: p.cluster,
+              params: { namespace: p.namespace, workload: deploymentNameOf(p) ?? p.name },
+            }),
         });
       return {
         target: { env: pod.env, protected: cluster?.protected ?? false, readOnly: cluster?.readOnly },
@@ -186,7 +194,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
         actions: pod.staleSeconds !== undefined ? actions.map((a) => ({ ...a, disabled: true })) : actions,
       };
     },
-    [pods, clusterById, deployments, confirm, deletePod, restartDeployment, openTab, tabs],
+    [pods, clusterById, deployments, confirm, deletePod, restartDeployment, openTab, openView, tabs],
   );
 
   // "/" focuses the filter while this tab is active.

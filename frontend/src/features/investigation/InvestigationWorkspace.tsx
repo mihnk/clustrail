@@ -40,7 +40,7 @@ interface Note {
 
 export function InvestigationWorkspace() {
   const inv = checkoutInvestigation;
-  const { clusterById, deployments, restartDeployment } = useWorkspace();
+  const { clusterById, deployments, restartDeployment, pins } = useWorkspace();
   const { confirm } = useConfirm();
   const cluster = clusterById(inv.target.cluster);
   const deployment = deployments.find((d) => d.cluster === inv.target.cluster && d.name === inv.target.name);
@@ -195,7 +195,7 @@ export function InvestigationWorkspace() {
           aria-label="Observations and next checks"
           className="flex w-[380px] shrink-0 flex-col overflow-y-auto border-l border-line bg-surface-panel px-4 py-3.5"
         >
-          {(draft !== null || notes.length > 0) && (
+          {(draft !== null || notes.length > 0 || pins.length > 0) && (
             <div className="flex flex-col gap-2 pb-3.5">
               <span className="section-label">Notes</span>
               {draft !== null && (
@@ -226,6 +226,16 @@ export function InvestigationWorkspace() {
                   </div>
                 </div>
               )}
+              {pins.map((p) => (
+                <div key={p.id} className="flex flex-col gap-[5px] border-t border-line-row pt-2 text-cell first:border-t-0">
+                  <span className="selectable truncate font-mono text-ui" title={p.text}>
+                    {p.text}
+                  </span>
+                  <span className="font-mono text-label text-fg-muted">
+                    Pinned · {p.source} · {p.cluster} · {new Date(p.at).toLocaleTimeString()}
+                  </span>
+                </div>
+              ))}
               {notes.map((n) => (
                 <div key={n.id} className="flex flex-col gap-[5px] border-t border-line-row pt-2 text-cell first:border-t-0">
                   <span className="selectable whitespace-pre-wrap">{n.text}</span>

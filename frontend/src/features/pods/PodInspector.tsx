@@ -84,7 +84,7 @@ export function PodInspector({
         {detail.problem && <ProblemSummary health={pod.health} problem={detail.problem} />}
 
         <div className="flex items-center gap-1.5">
-          <Button>
+          <Button onClick={() => actions.find((a) => a.id === "logs")?.onSelect?.()}>
             <ScrollText aria-hidden />
             Logs
           </Button>

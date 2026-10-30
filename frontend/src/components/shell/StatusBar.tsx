@@ -18,6 +18,12 @@ export function StatusBar() {
   if (scoped) {
     // Single-cluster workspace: its connection and what this kubeconfig user may do here.
     const access = getAccessSummary(scoped.id, "payments", "deployments", "patch");
+    const note =
+      activeTab?.kind === "logs"
+        ? "Read-only stream · protected mode does not apply to logs"
+        : activeTab?.kind === "shell"
+          ? "Shell commands are not checked by Clustrail · RBAC: pods/exec"
+          : null;
     return (
       <footer className="flex h-6 shrink-0 items-center gap-4 border-t border-line bg-surface-side px-3 text-meta text-fg-muted">
         <span className="flex items-center gap-1.5 whitespace-nowrap">
@@ -26,10 +32,14 @@ export function StatusBar() {
             {scoped.name} {scoped.connection === "connected" ? `connected · ${scoped.latencyMs}ms` : "not connected"}
           </span>
         </span>
-        <span className="truncate">
-          RBAC: <span className="font-mono">{access.user}</span> {access.allowed ? "can" : "cannot"} {access.verb}{" "}
-          {access.resource} in {access.namespace}
-        </span>
+        {note ? (
+          <span className="truncate">{note}</span>
+        ) : (
+          <span className="truncate">
+            RBAC: <span className="font-mono">{access.user}</span> {access.allowed ? "can" : "cannot"} {access.verb}{" "}
+            {access.resource} in {access.namespace}
+          </span>
+        )}
         <div className="flex-1" />
         {scoped.protected && (
           <span className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">
