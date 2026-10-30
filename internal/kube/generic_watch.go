@@ -25,9 +25,10 @@ const (
 	// maxListRows bounds one generic list per cluster; more is reported as truncated.
 	maxListRows = 20000
 	listPage    = 500
-	// pollEvery is the update interval in poll mode (Settings › Update method).
-	pollEvery = 30 * time.Second
 )
+
+// pollEvery is the update interval in poll mode (Settings › Update method); tests shorten it.
+var pollEvery = 30 * time.Second
 
 // pollMode switches watches to periodic lists (Settings › Update method).
 // It applies to generic lists immediately and to clusters on their next connect.
@@ -81,7 +82,7 @@ func (m *Manager) StartListWatch(cluster, kind, namespace string) (string, error
 	ctx, cancel := context.WithCancel(c.ctx)
 	m.lists.byID[id] = cancel
 	m.lists.mu.Unlock()
-	lw := &listWatch{id: id, cluster: cluster, c: c, gvr: gvr, namespaced: namespaced, ns: namespace, emit: m.emit}
+	lw := &listWatch{id: id, cluster: cluster, c: c, gvr: gvr, namespaced: namespaced, ns: namespace, emit: m.emit, every: pollEvery}
 	go lw.run(ctx)
 	return id, nil
 }
@@ -104,6 +105,7 @@ type listWatch struct {
 	ns          string
 	emit        Emitter
 
+	every time.Duration // poll interval
 	shown string
 	keep  []int // table cell indexes of the shown columns
 	rows  map[string]GenericRow
@@ -150,7 +152,7 @@ func (w *listWatch) run(ctx context.Context) {
 		}
 		if pollMode.Load() || list.Truncated || rv == "" {
 			// Truncated lists cannot be watched consistently; poll them instead.
-			if !sleepCtx(ctx, pollEvery) {
+			if !sleepCtx(ctx, w.every) {
 				return
 			}
 			continue

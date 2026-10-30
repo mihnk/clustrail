@@ -65,6 +65,10 @@ export interface Cluster {
   /** Kubernetes version and the identity RBAC sees (SelfSubjectReview), once connected. */
   version?: string;
   identity?: string;
+  /** The kubeconfig context's namespace, when it sets one (desktop). */
+  namespace?: string;
+  /** Disconnected while Clustrail was in the background; reconnects on return (desktop). */
+  paused?: boolean;
 }
 
 export interface PodRow {

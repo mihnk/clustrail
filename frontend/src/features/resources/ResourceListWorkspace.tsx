@@ -2,6 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { Cable, PanelTop, Check, Code, Copy, LayoutGrid, Pencil, Plus, RefreshCw, Search, SearchX, Trash2, X } from "lucide-react";
 import { openPortForward } from "@/features/portforward/PortForward";
+import { useNamespaceFilter } from "@/app/namespaceFilter";
 import { SYSTEM_NAMESPACES, useWorkspace, type WorkspaceTab } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { backend, errorText, EVENTS, onEvent, type GenericList, type GenericRow, type ListUpdate } from "@/backend/client";
@@ -131,7 +132,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
   const connected = selectedClusters.filter((c) => c.connection === "connected").map((c) => c.id);
   const { lists, errors, modes, loading, refresh } = useGenericLists(connected, kind, active);
   const [hideSystem] = usePersistentState("settings.hideSystemNamespaces", true);
-  const [namespaces, setNamespaces] = useState<Set<string> | null>(null);
+  const [namespaces, setNamespaces] = useNamespaceFilter();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [wide, setWide] = useState(false);

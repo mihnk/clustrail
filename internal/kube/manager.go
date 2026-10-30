@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
 	}
 	m.reload()
 	go m.watchKubeconfig()
+	go m.budgetLoop(ctx)
 	return m
 }
 
@@ -72,7 +74,7 @@ func (m *Manager) reload() {
 			st.Name = c.Name
 		}
 		st.Env, st.Protected, st.ReadOnly = cs.Env, cs.Protected, cs.ReadOnly
-		st.Server, st.Auth, st.Source = c.Server, c.Auth, c.Source
+		st.Server, st.Auth, st.Source, st.Namespace = c.Server, c.Auth, c.Source, c.Namespace
 		m.hidden[id] = cs.Hidden
 	}
 	var gone []*clusterConn
@@ -245,6 +247,7 @@ func (m *Manager) connect(id string) {
 	cfg, auth, err := m.restConfig(id)
 	fail := func(err error) {
 		state := classifyError(err)
+		slog.Warn("connect failed", "cluster", id, "state", state, "error", err)
 		m.setState(id, func(c *Cluster) {
 			c.Connection, c.Error, c.LatencyMs = state, errText(err), nil
 			if state == AuthExpired {
@@ -293,6 +296,8 @@ func (m *Manager) connect(id string) {
 		return
 	}
 	go conn.probeLoop(conn.ctx, func(ms int, err error) { m.onProbe(id, ms, err) })
+	slog.Info("connected", "cluster", id, "version", info.Version, "identity", info.Identity, "latencyMs", info.LatencyMs, "metrics", info.Metrics,
+		"poll", pollMode.Load(), "forbidden", len(conn.forbidden))
 	m.setState(id, func(c *Cluster) {
 		c.Connection, c.Error, c.AuthHint, c.Stale = Connected, "", nil, nil
 		c.LatencyMs = ptr(info.LatencyMs)
@@ -335,6 +340,9 @@ func (m *Manager) onConnState(id string, s ConnectionState, err error) {
 	m.attempts[id]++
 	attempt := m.attempts[id]
 	m.mu.Unlock()
+	if attempt == 1 || attempt%10 == 0 {
+		slog.Warn("watch lost, reconnecting", "cluster", id, "attempt", attempt, "error", err)
+	}
 	m.setState(id, func(c *Cluster) {
 		if c.Connection == Connected || c.Connection == Reconnecting {
 			if c.Stale == nil {
@@ -374,6 +382,7 @@ func (m *Manager) onProbe(id string, ms int, err error) {
 
 // Disconnect stops the informers and drops the cache of a context.
 func (m *Manager) Disconnect(id string) {
+	slog.Info("disconnect", "cluster", id)
 	m.stopForwardsOf(id)
 	m.mu.Lock()
 	conn := m.conns[id]

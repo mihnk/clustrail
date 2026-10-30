@@ -90,12 +90,13 @@ func splitTimestamp(line string) (time.Time, string) {
 }
 
 type logStream struct {
-	id     string
-	cancel context.CancelFunc
-	mu     sync.Mutex
-	lines  []LogLine
-	states map[string]LogSourceState
-	dirty  bool
+	id      string
+	cluster string
+	cancel  context.CancelFunc
+	mu      sync.Mutex
+	lines   []LogLine
+	states  map[string]LogSourceState
+	dirty   bool
 }
 
 type streams struct {
@@ -122,7 +123,7 @@ func (m *Manager) StartLogs(req LogsRequest) (string, error) {
 	}
 	id := m.streams.next("logs")
 	ctx, cancel := context.WithCancel(c.ctx)
-	ls := &logStream{id: id, cancel: cancel, states: map[string]LogSourceState{}}
+	ls := &logStream{id: id, cluster: req.Cluster, cancel: cancel, states: map[string]LogSourceState{}}
 	m.streams.mu.Lock()
 	m.streams.logs[id] = ls
 	m.streams.mu.Unlock()
@@ -296,9 +297,10 @@ type ExecOutput struct {
 }
 
 type execSession struct {
-	stdin  *io.PipeWriter
-	sizes  chan remotecommand.TerminalSize
-	cancel context.CancelFunc
+	cluster string
+	stdin   *io.PipeWriter
+	sizes   chan remotecommand.TerminalSize
+	cancel  context.CancelFunc
 }
 
 type sizeQueue chan remotecommand.TerminalSize
@@ -348,7 +350,7 @@ func (m *Manager) StartExec(req ExecRequest) (string, error) {
 	id := m.streams.next("exec")
 	pr, pw := io.Pipe()
 	ctx, cancel := context.WithCancel(c.ctx)
-	sess := &execSession{stdin: pw, sizes: make(chan remotecommand.TerminalSize, 4), cancel: cancel}
+	sess := &execSession{cluster: req.Cluster, stdin: pw, sizes: make(chan remotecommand.TerminalSize, 4), cancel: cancel}
 	if req.Cols > 0 {
 		sess.sizes <- remotecommand.TerminalSize{Width: req.Cols, Height: req.Rows}
 	}

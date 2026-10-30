@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { ChevronDown, Columns3, Layers, Plus, Search, SearchX } from "lucide-react";
+import { useNamespaceFilter } from "@/app/namespaceFilter";
 import { useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
 import { ROW_HEIGHT } from "@/app/preferences";
@@ -173,7 +174,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
   const { clusterPickerOpen, setClusterPickerOpen } = useOverlays();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const [namespaces, setNamespaces] = useState<Set<string> | null>(null);
+  const [namespaces, setNamespaces] = useNamespaceFilter();
   const [rolloutFilter, setRolloutFilter] = useState<RolloutFilter>("any");
   const [health, setHealth] = useState<HealthFilter>("all");
   const [view, setView] = useState<"aggregated" | "by-cluster">("aggregated");

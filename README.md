@@ -68,6 +68,16 @@ through one Wails service (`internal/app.Workspace`) and its events.
   with SPDY fallback (a dropped shell reconnects with backoff), and port
   forwards to a pod, or a ready pod behind a Service or Deployment, that
   re-resolve the pod and keep their local port when it goes away.
+- **Update method** (`cluster.go`, `generic_watch.go`): informers and watches by
+  default; in poll mode (Settings) every resource is listed every 30 s
+  instead. After 5 minutes in the background watches pause and resume with a
+  full re-list; clusters with an open log stream, shell or port forward stay
+  connected. An optional cache budget disconnects connected clusters that are
+  not selected when the Go heap grows past it.
+- **Log** (`internal/app/logging.go`): `clustrail.log` in the user cache
+  directory (5 MB, one rotated file) records connections, errors and every
+  change Clustrail makes to a cluster, never Secret values, YAML bodies, log
+  lines or shell input. Settings › Privacy & diagnostics shows it.
 - **PATH** (`internal/app/env.go`): apps started from Finder or a desktop
   launcher get a minimal PATH, so the login shell's PATH is read at startup and
   exec auth plugins (`aws`, `gke-gcloud-auth-plugin`, `kubelogin`) are found.

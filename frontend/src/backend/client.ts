@@ -268,6 +268,13 @@ export const backendApi = {
   helmRepositories: () => call<{ name: string; url: string }[]>("HelmRepositories"),
   checkForUpdates: () => call<{ current: string; latest: string; url: string; upToDate: boolean }>("CheckForUpdates"),
   setMetricsInterval: (seconds: number) => call<void>("SetMetricsInterval", seconds),
+  setUpdateMethod: (method: "watch" | "poll") => call<void>("SetUpdateMethod", method),
+  setCacheBudget: (mb: number) => call<void>("SetCacheBudget", mb),
+  memoryStats: () => call<{ heapMB: number; budgetMB: number; objects: Record<string, number> }>("MemoryStats"),
+  pauseWatches: () => call<string[]>("PauseWatches"),
+  resumeWatches: () => call<void>("ResumeWatches"),
+  logFile: () => call<{ path: string; size: number }>("LogFile"),
+  revealLog: () => call<void>("RevealLog"),
   testConnection: (id: string) => call<{ name: string; result: "ok" | "failed" | "skipped"; detail?: string; ms?: number }[]>("TestConnection", id),
 
   podDetail: (cluster: string, ns: string, name: string) => call<PodDetail>("PodDetail", cluster, ns, name),
@@ -331,6 +338,7 @@ export const EVENTS = {
   exec: "clustrail:exec",
   portForwards: "clustrail:portforwards",
   list: "clustrail:list",
+  notice: "clustrail:notice",
 } as const;
 
 /** Opens a URL in the system browser (desktop) or a new tab (browser preview). */

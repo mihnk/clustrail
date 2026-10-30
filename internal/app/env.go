@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +30,7 @@ func FixPath() {
 		}
 	}
 	os.Setenv("PATH", mergePath(os.Getenv("PATH"), shellPath, strings.Join(extra, string(os.PathListSeparator))))
+	slog.Info("PATH prepared", "fromLoginShell", shellPath != "", "entries", len(filepath.SplitList(os.Getenv("PATH"))))
 }
 
 // loginShellPath runs the user's shell as an interactive login shell and reads

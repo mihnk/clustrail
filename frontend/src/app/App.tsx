@@ -30,6 +30,7 @@ const CreateResourceWorkspace = lazy(() => import("@/features/resources/CreateRe
 import { usePersistentState } from "@/app/preferences";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
+import { useBackendSync } from "./backendSync";
 
 export function App() {
   return (
@@ -50,6 +51,7 @@ export function App() {
 
 function AppShell() {
   const { theme, density, tabs, activeTabId, activeTab, clusterById } = useWorkspace();
+  useBackendSync();
   const scopedCluster = activeTab?.cluster ? clusterById(activeTab.cluster) : undefined;
   // Single-cluster workspaces and investigations need the width: the sidebar collapses to a rail.
   // Investigations, single-cluster lists and tool tabs (Logs, Shell, YAML, Compare) need the width.

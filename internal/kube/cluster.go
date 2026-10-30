@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"net"
 	"net/url"
 	"strings"
@@ -281,7 +282,9 @@ func (c *clusterConn) scope(ctx context.Context, identity, group, resource, labe
 func (c *clusterConn) start(parent context.Context, identity string, withMetrics bool) error {
 	c.ctx, c.cancel = context.WithCancel(parent)
 	ctx := c.ctx
-	c.factory = informers.NewSharedInformerFactory(c.client, 0)
+	// managedFields are never read from the caches (YAML views fetch the live
+	// object), and they are often the largest part of an object.
+	c.factory = informers.NewSharedInformerFactoryWithOptions(c.client, 0, informers.WithTransform(stripManagedFields))
 
 	watchErr := func(_ *cache.Reflector, err error) {
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
@@ -316,94 +319,130 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			return c.factory
 		}
 		if nsFactory == nil {
-			nsFactory = informers.NewSharedInformerFactoryWithOptions(c.client, 0, informers.WithNamespace(ns))
+			nsFactory = informers.NewSharedInformerFactoryWithOptions(c.client, 0, informers.WithNamespace(ns), informers.WithTransform(stripManagedFields))
 		}
 		return nsFactory
+	}
+	// source returns the cache of one resource: an informer's (watch), or one
+	// filled by listing every pollEvery (Settings › Update method: Poll).
+	poll := pollMode.Load()
+	source := func(inf func() cache.SharedIndexInformer, list func(context.Context) ([]any, error), indexers cache.Indexers, onChange func(obj any)) cache.Indexer {
+		if poll {
+			return c.pollSource(ctx, list, indexers, onChange)
+		}
+		i := inf()
+		if indexers != nil {
+			_ = i.AddIndexers(indexers)
+		}
+		add(i, onChange)
+		return i.GetIndexer()
 	}
 
 	if ns, ok := c.scope(ctx, identity, "", "pods", "pods"); ok {
 		c.podsNS = ns
-		inf := factoryFor(ns).Core().V1().Pods()
-		c.pods = inf.Lister()
-		_ = inf.Informer().AddIndexers(cache.Indexers{indexNode: func(obj any) ([]string, error) {
-			if p, ok := obj.(*corev1.Pod); ok && p.Spec.NodeName != "" {
-				return []string{p.Spec.NodeName}, nil
-			}
-			return nil, nil
-		}})
-		c.podsByNode = inf.Informer().GetIndexer()
-		add(inf.Informer(), func(obj any) {
-			if p, ok := obj.(*corev1.Pod); ok {
-				c.mu.Lock()
-				c.dirtyPods[p.Namespace+"/"+p.Name] = true
-				if p.Spec.NodeName != "" {
-					c.dirtyNodes[p.Spec.NodeName] = true
+		idx := source(func() cache.SharedIndexInformer { return factoryFor(ns).Core().V1().Pods().Informer() },
+			func(ctx context.Context) ([]any, error) {
+				l, err := c.client.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
+				return items(l, err, func() []corev1.Pod { return l.Items })
+			},
+			cache.Indexers{indexNode: func(obj any) ([]string, error) {
+				if p, ok := obj.(*corev1.Pod); ok && p.Spec.NodeName != "" {
+					return []string{p.Spec.NodeName}, nil
 				}
-				if o := metav1.GetControllerOf(p); o != nil && o.Kind == "ReplicaSet" {
-					if dep := c.deploymentOfRS(p.Namespace, o.Name); dep != "" {
-						c.dirtyDeps[p.Namespace+"/"+dep] = true
+				return nil, nil
+			}},
+			func(obj any) {
+				if p, ok := obj.(*corev1.Pod); ok {
+					c.mu.Lock()
+					c.dirtyPods[p.Namespace+"/"+p.Name] = true
+					if p.Spec.NodeName != "" {
+						c.dirtyNodes[p.Spec.NodeName] = true
+					}
+					c.mu.Unlock()
+					if o := metav1.GetControllerOf(p); o != nil && o.Kind == "ReplicaSet" {
+						if dep := c.deploymentOfRS(p.Namespace, o.Name); dep != "" {
+							c.mu.Lock()
+							c.dirtyDeps[p.Namespace+"/"+dep] = true
+							c.mu.Unlock()
+						}
 					}
 				}
-				c.mu.Unlock()
-			}
-		})
+			})
+		c.pods, c.podsByNode = listerscorev1.NewPodLister(idx), idx
 	}
 	if c.canList(ctx, "", "nodes") { // cluster-scoped: no namespace to fall back to
-		inf := c.factory.Core().V1().Nodes()
-		c.nodes = inf.Lister()
-		add(inf.Informer(), func(obj any) {
-			if n, ok := obj.(*corev1.Node); ok {
-				c.mu.Lock()
-				c.dirtyNodes[n.Name] = true
-				c.mu.Unlock()
-			}
-		})
+		idx := source(func() cache.SharedIndexInformer { return c.factory.Core().V1().Nodes().Informer() },
+			func(ctx context.Context) ([]any, error) {
+				l, err := c.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+				return items(l, err, func() []corev1.Node { return l.Items })
+			}, nil,
+			func(obj any) {
+				if n, ok := obj.(*corev1.Node); ok {
+					c.mu.Lock()
+					c.dirtyNodes[n.Name] = true
+					c.mu.Unlock()
+				}
+			})
+		c.nodes = listerscorev1.NewNodeLister(idx)
 	} else {
 		c.forbidden = append(c.forbidden, Forbidden{Cluster: c.id, Namespace: "cluster", User: identity, Resource: "nodes"})
 	}
 	if ns, ok := c.scope(ctx, identity, "apps", "deployments", "deployments"); ok {
-		inf := factoryFor(ns).Apps().V1().Deployments()
-		c.deploys = inf.Lister()
-		add(inf.Informer(), func(obj any) {
-			if d, ok := obj.(*appsv1.Deployment); ok {
-				c.mu.Lock()
-				c.dirtyDeps[d.Namespace+"/"+d.Name] = true
-				c.mu.Unlock()
-			}
-		})
-	}
-	if ns, ok := c.scope(ctx, identity, "apps", "replicasets", "replicasets"); ok {
-		inf := factoryFor(ns).Apps().V1().ReplicaSets()
-		c.rsets = inf.Lister()
-		_ = inf.Informer().AddIndexers(cache.Indexers{indexOwner: func(obj any) ([]string, error) {
-			if rs, ok := obj.(*appsv1.ReplicaSet); ok {
-				if o := metav1.GetControllerOf(rs); o != nil {
-					return []string{string(o.UID)}, nil
-				}
-			}
-			return nil, nil
-		}})
-		c.rsByOwner = inf.Informer().GetIndexer()
-		add(inf.Informer(), func(obj any) {
-			if rs, ok := obj.(*appsv1.ReplicaSet); ok {
-				if o := metav1.GetControllerOf(rs); o != nil && o.Kind == "Deployment" {
+		idx := source(func() cache.SharedIndexInformer { return factoryFor(ns).Apps().V1().Deployments().Informer() },
+			func(ctx context.Context) ([]any, error) {
+				l, err := c.client.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
+				return items(l, err, func() []appsv1.Deployment { return l.Items })
+			}, nil,
+			func(obj any) {
+				if d, ok := obj.(*appsv1.Deployment); ok {
 					c.mu.Lock()
-					c.dirtyDeps[rs.Namespace+"/"+o.Name] = true
+					c.dirtyDeps[d.Namespace+"/"+d.Name] = true
 					c.mu.Unlock()
 				}
-			}
-		})
+			})
+		c.deploys = listersappsv1.NewDeploymentLister(idx)
+	}
+	if ns, ok := c.scope(ctx, identity, "apps", "replicasets", "replicasets"); ok {
+		idx := source(func() cache.SharedIndexInformer { return factoryFor(ns).Apps().V1().ReplicaSets().Informer() },
+			func(ctx context.Context) ([]any, error) {
+				l, err := c.client.AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{})
+				return items(l, err, func() []appsv1.ReplicaSet { return l.Items })
+			},
+			cache.Indexers{indexOwner: func(obj any) ([]string, error) {
+				if rs, ok := obj.(*appsv1.ReplicaSet); ok {
+					if o := metav1.GetControllerOf(rs); o != nil {
+						return []string{string(o.UID)}, nil
+					}
+				}
+				return nil, nil
+			}},
+			func(obj any) {
+				if rs, ok := obj.(*appsv1.ReplicaSet); ok {
+					if o := metav1.GetControllerOf(rs); o != nil && o.Kind == "Deployment" {
+						c.mu.Lock()
+						c.dirtyDeps[rs.Namespace+"/"+o.Name] = true
+						c.mu.Unlock()
+					}
+				}
+			})
+		c.rsets, c.rsByOwner = listersappsv1.NewReplicaSetLister(idx), idx
 	}
 	if ns, ok := c.scope(ctx, identity, "autoscaling", "horizontalpodautoscalers", "horizontalpodautoscalers"); ok {
-		inf := factoryFor(ns).Autoscaling().V2().HorizontalPodAutoscalers()
-		c.hpas = inf.Lister()
-		add(inf.Informer(), func(obj any) {
-			if h, ok := obj.(*autoscalingv2.HorizontalPodAutoscaler); ok && h.Spec.ScaleTargetRef.Kind == "Deployment" {
-				c.mu.Lock()
-				c.dirtyDeps[h.Namespace+"/"+h.Spec.ScaleTargetRef.Name] = true
-				c.mu.Unlock()
-			}
-		})
+		idx := source(func() cache.SharedIndexInformer {
+			return factoryFor(ns).Autoscaling().V2().HorizontalPodAutoscalers().Informer()
+		},
+			func(ctx context.Context) ([]any, error) {
+				l, err := c.client.AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, metav1.ListOptions{})
+				return items(l, err, func() []autoscalingv2.HorizontalPodAutoscaler { return l.Items })
+			}, nil,
+			func(obj any) {
+				if h, ok := obj.(*autoscalingv2.HorizontalPodAutoscaler); ok && h.Spec.ScaleTargetRef.Kind == "Deployment" {
+					c.mu.Lock()
+					c.dirtyDeps[h.Namespace+"/"+h.Spec.ScaleTargetRef.Name] = true
+					c.mu.Unlock()
+				}
+			})
+		c.hpas = listersautoscalingv2.NewHorizontalPodAutoscalerLister(idx)
 	}
 	c.nsFactory = nsFactory
 
@@ -826,4 +865,92 @@ func errText(err error) string {
 		return ""
 	}
 	return fmt.Sprint(err)
+}
+
+// stripManagedFields drops metadata.managedFields from cached objects.
+func stripManagedFields(obj any) (any, error) {
+	if a, err := meta.Accessor(obj); err == nil {
+		a.SetManagedFields(nil)
+	}
+	return obj, nil
+}
+
+// items turns a typed list's items into pointers for a cache.
+func items[T any, L any](l L, err error, get func() []T) ([]any, error) {
+	if err != nil {
+		return nil, err
+	}
+	src := get()
+	out := make([]any, len(src))
+	for i := range src {
+		out[i] = &src[i]
+	}
+	return out, nil
+}
+
+// pollSource fills a cache by listing every pollEvery and calls onChange for
+// objects that were added, changed (new resourceVersion) or removed, like an
+// informer's handlers would.
+func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context) ([]any, error), indexers cache.Indexers, onChange func(obj any)) cache.Indexer {
+	if indexers == nil {
+		indexers = cache.Indexers{}
+	}
+	idx := cache.NewIndexer(cache.MetaNamespaceKeyFunc, indexers)
+	every := pollEvery
+	var synced atomic.Bool
+	c.syncFns = append(c.syncFns, synced.Load)
+	go func() {
+		for {
+			lctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			objs, err := list(lctx)
+			cancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				c.onState(Reconnecting, err)
+			} else {
+				old := map[string]any{}
+				for _, o := range idx.List() {
+					if k, err := cache.MetaNamespaceKeyFunc(o); err == nil {
+						old[k] = o
+					}
+				}
+				var changed []any
+				for _, o := range objs {
+					_, _ = stripManagedFields(o)
+					k, err := cache.MetaNamespaceKeyFunc(o)
+					if err != nil {
+						continue
+					}
+					prev, ok := old[k]
+					delete(old, k)
+					if !ok || resourceVersion(prev) != resourceVersion(o) {
+						changed = append(changed, o)
+					}
+				}
+				_ = idx.Replace(objs, "")
+				synced.Store(true)
+				for _, o := range changed {
+					onChange(o)
+				}
+				for _, o := range old {
+					onChange(o) // removed: handlers look it up and find it gone
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(every):
+			}
+		}
+	}()
+	return idx
+}
+
+func resourceVersion(obj any) string {
+	if a, err := meta.Accessor(obj); err == nil {
+		return a.GetResourceVersion()
+	}
+	return ""
 }

@@ -5,12 +5,15 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
 
 	"github.com/mihnk/clustrail/internal/kube"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"sigs.k8s.io/yaml"
 )
 
 // Version is set at build time (-ldflags "-X github.com/mihnk/clustrail/internal/app.Version=…").
@@ -91,31 +94,31 @@ func (w *Workspace) Events(cluster, ns, kind, name string) ([]kube.ResourceEvent
 }
 
 func (w *Workspace) DeletePod(cluster, ns, name string) error {
-	return w.m.DeletePod(cluster, ns, name)
+	return audit("delete pod", cluster, target(ns, name), w.m.DeletePod(cluster, ns, name))
 }
 
 func (w *Workspace) RestartDeployment(cluster, ns, name string) error {
-	return w.m.RestartDeployment(cluster, ns, name)
+	return audit("restart deployment", cluster, target(ns, name), w.m.RestartDeployment(cluster, ns, name))
 }
 
 func (w *Workspace) ScaleDeployment(cluster, ns, name string, replicas int32) error {
-	return w.m.ScaleDeployment(cluster, ns, name, replicas)
+	return audit(fmt.Sprintf("scale deployment to %d", replicas), cluster, target(ns, name), w.m.ScaleDeployment(cluster, ns, name, replicas))
 }
 
 func (w *Workspace) RollbackDeployment(cluster, ns, name string, revision int64) error {
-	return w.m.RollbackDeployment(cluster, ns, name, revision)
+	return audit(fmt.Sprintf("roll back deployment to revision %d", revision), cluster, target(ns, name), w.m.RollbackDeployment(cluster, ns, name, revision))
 }
 
 func (w *Workspace) SetDeploymentPaused(cluster, ns, name string, paused bool) error {
-	return w.m.SetDeploymentPaused(cluster, ns, name, paused)
+	return audit(fmt.Sprintf("set deployment paused=%t", paused), cluster, target(ns, name), w.m.SetDeploymentPaused(cluster, ns, name, paused))
 }
 
 func (w *Workspace) DeleteDeployment(cluster, ns, name string) error {
-	return w.m.DeleteDeployment(cluster, ns, name)
+	return audit("delete deployment", cluster, target(ns, name), w.m.DeleteDeployment(cluster, ns, name))
 }
 
 func (w *Workspace) SetNodeCordoned(cluster, node string, cordoned bool) error {
-	return w.m.SetNodeCordoned(cluster, node, cordoned, w.user)
+	return audit(fmt.Sprintf("set node cordoned=%t", cordoned), cluster, node, w.m.SetNodeCordoned(cluster, node, cordoned, w.user))
 }
 
 func (w *Workspace) PreviewDrain(cluster, node string, opts kube.DrainOptions) (kube.DrainPlan, error) {
@@ -123,7 +126,8 @@ func (w *Workspace) PreviewDrain(cluster, node string, opts kube.DrainOptions) (
 }
 
 func (w *Workspace) DrainNode(cluster, node string, opts kube.DrainOptions) (string, error) {
-	return w.m.DrainNode(cluster, node, opts, w.user)
+	job, err := w.m.DrainNode(cluster, node, opts, w.user)
+	return job, audit("drain node", cluster, node, err)
 }
 
 // YAML.
@@ -132,10 +136,32 @@ func (w *Workspace) GetObject(cluster, kind, ns, name string) (kube.LiveObject, 
 	return w.m.GetObject(cluster, kind, ns, name)
 }
 
+// Background and memory (Settings).
+
+func (w *Workspace) PauseWatches() []string { return w.m.PauseWatches() }
+func (w *Workspace) ResumeWatches()         { w.m.ResumeWatches() }
+func (w *Workspace) SetCacheBudget(mb int)  { kube.SetCacheBudget(mb) }
+func (w *Workspace) MemoryStats() kube.MemoryStats {
+	return w.m.MemoryStats()
+}
+
+// SetUpdateMethod switches between watches and 30 s polling. Generic lists
+// follow at once; connected clusters on their next connect.
+func (w *Workspace) SetUpdateMethod(method string) {
+	kube.SetPollMode(method == "poll")
+	slog.Info("update method", "method", method)
+}
+
 // Port forwards.
 
 func (w *Workspace) StartPortForward(req kube.PortForwardRequest) (kube.PortForward, error) {
-	return w.m.StartPortForward(req)
+	pf, err := w.m.StartPortForward(req)
+	if err != nil {
+		slog.Warn("port forward failed", "cluster", req.Cluster, "target", target(req.Namespace, req.Kind, req.Name), "port", req.Port, "error", err)
+	} else {
+		slog.Info("port forward started", "cluster", req.Cluster, "target", target(req.Namespace, req.Kind, req.Name), "port", req.Port, "local", pf.LocalPort)
+	}
+	return pf, err
 }
 
 func (w *Workspace) StopPortForward(id string) { w.m.StopPortForward(id) }
@@ -157,7 +183,22 @@ func (w *Workspace) ListResources(cluster, kind, namespace string) (kube.Generic
 }
 
 func (w *Workspace) CreateObjects(cluster, text string, dryRun bool) ([]kube.CreateResult, error) {
-	return w.m.CreateObjects(cluster, text, dryRun)
+	res, err := w.m.CreateObjects(cluster, text, dryRun)
+	if !dryRun {
+		for _, r := range res {
+			if r.Status == "created" || r.Status == "failed" {
+				var e error
+				if r.Error != "" {
+					e = fmt.Errorf("%s", r.Error)
+				}
+				_ = audit("create "+r.Kind, cluster, target(r.Namespace, r.Name), e)
+			}
+		}
+		if err != nil {
+			_ = audit("create from YAML", cluster, "", err)
+		}
+	}
+	return res, err
 }
 
 func (w *Workspace) StartListWatch(cluster, kind, namespace string) (string, error) {
@@ -167,39 +208,52 @@ func (w *Workspace) StartListWatch(cluster, kind, namespace string) (string, err
 func (w *Workspace) StopListWatch(id string) { w.m.StopListWatch(id) }
 
 func (w *Workspace) DeleteResource(cluster, kind, ns, name string) error {
-	return w.m.DeleteResource(cluster, kind, ns, name)
+	return audit("delete "+kind, cluster, target(ns, name), w.m.DeleteResource(cluster, kind, ns, name))
 }
 
 func (w *Workspace) ApplyYAML(cluster, text, openedVersion string, dryRun, force bool) (kube.ApplyResult, error) {
-	return w.m.ApplyYAML(cluster, text, openedVersion, dryRun, force)
+	res, err := w.m.ApplyYAML(cluster, text, openedVersion, dryRun, force)
+	if !dryRun {
+		if err == nil && res.Conflict != "" {
+			err = fmt.Errorf("conflict: %s", res.Conflict)
+		}
+		_ = audit(fmt.Sprintf("server-side apply (force=%t)", force), cluster, yamlTarget(text), err)
+	}
+	return res, err
 }
 
 // Helm and GitOps.
 
 func (w *Workspace) RollbackRelease(cluster, ns, name string, revision int) (string, error) {
-	return w.m.RollbackRelease(cluster, ns, name, revision)
+	job, err := w.m.RollbackRelease(cluster, ns, name, revision)
+	return job, audit(fmt.Sprintf("helm rollback to revision %d", revision), cluster, target(ns, name), err)
 }
 
 func (w *Workspace) RefreshGitOps(cluster, kind, ns, name string) error {
-	return w.m.RefreshGitOps(cluster, kind, ns, name)
+	return audit("refresh "+kind, cluster, target(ns, name), w.m.RefreshGitOps(cluster, kind, ns, name))
 }
 
 func (w *Workspace) SyncGitOps(cluster, kind, ns, name string) error {
-	return w.m.SyncGitOps(cluster, kind, ns, name)
+	return audit("sync "+kind, cluster, target(ns, name), w.m.SyncGitOps(cluster, kind, ns, name))
 }
 
 func (w *Workspace) SetGitOpsSuspended(cluster, kind, ns, name string, suspended bool) error {
-	return w.m.SetGitOpsSuspended(cluster, kind, ns, name, suspended)
+	return audit(fmt.Sprintf("set %s suspended=%t", kind, suspended), cluster, target(ns, name), w.m.SetGitOpsSuspended(cluster, kind, ns, name, suspended))
 }
 
 // Logs and shells.
 
 func (w *Workspace) StartLogs(req kube.LogsRequest) (string, error) { return w.m.StartLogs(req) }
 func (w *Workspace) StopLogs(id string)                             { w.m.StopLogs(id) }
-func (w *Workspace) StartExec(req kube.ExecRequest) (string, error) { return w.m.StartExec(req) }
-func (w *Workspace) ExecInput(id, data string) error                { return w.m.ExecInput(id, data) }
-func (w *Workspace) ExecResize(id string, cols, rows uint16)        { w.m.ExecResize(id, cols, rows) }
-func (w *Workspace) CloseExec(id string)                            { w.m.CloseExec(id) }
+func (w *Workspace) StartExec(req kube.ExecRequest) (string, error) {
+	id, err := w.m.StartExec(req)
+	// A shell can change the workload; who opened it where is recorded (never what was typed).
+	_ = audit("open shell", req.Cluster, target(req.Namespace, req.Pod, req.Container), err)
+	return id, err
+}
+func (w *Workspace) ExecInput(id, data string) error         { return w.m.ExecInput(id, data) }
+func (w *Workspace) ExecResize(id string, cols, rows uint16) { w.m.ExecResize(id, cols, rows) }
+func (w *Workspace) CloseExec(id string)                     { w.m.CloseExec(id) }
 
 func (w *Workspace) TestConnection(id string) ([]kube.TestStep, error) { return w.m.TestConnection(id) }
 
@@ -227,4 +281,19 @@ func (w *Workspace) HelmRevision(cluster, ns, name string, rev int) (kube.HelmRe
 
 func (w *Workspace) DeploymentRelations(cluster, ns, name string) ([]kube.PodRelation, error) {
 	return w.m.DeploymentRelations(cluster, ns, name)
+}
+
+// yamlTarget names the object of a YAML document for the log, without its content.
+func yamlTarget(text string) string {
+	var obj struct {
+		Kind     string `json:"kind"`
+		Metadata struct {
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
+		} `json:"metadata"`
+	}
+	if yaml.Unmarshal([]byte(text), &obj) != nil {
+		return ""
+	}
+	return target(obj.Kind, obj.Metadata.Namespace, obj.Metadata.Name)
 }

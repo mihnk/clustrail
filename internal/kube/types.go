@@ -72,6 +72,10 @@ type Cluster struct {
 	Source        string          `json:"source,omitempty"`
 	Version       string          `json:"version,omitempty"`
 	Identity      string          `json:"identity,omitempty"`
+	// Namespace is the kubeconfig context's namespace ("" when it sets none).
+	Namespace string `json:"namespace,omitempty"`
+	// Paused: disconnected while the app was in the background; it reconnects on return.
+	Paused bool `json:"paused,omitempty"`
 }
 
 type OwnerRef struct {

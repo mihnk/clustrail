@@ -94,14 +94,41 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
   const [defaultNs, setDefaultNs] = usePersistentState<"remember" | "all" | "default">("settings.defaultNamespace", "remember");
   const [hideSystem, setHideSystem] = usePersistentState("settings.hideSystemNamespaces", true);
   const [autoHideColumns, setAutoHideColumns] = usePersistentState("settings.autoHideColumns", true);
-  const [updateMethod, setUpdateMethod] = usePersistentState<"watch" | "poll">("settings.updateMethod", "watch");
+  const [updateMethod, setUpdateMethodPref] = usePersistentState<"watch" | "poll">("settings.updateMethod", "watch");
+  const setUpdateMethod = (v: "watch" | "poll") => {
+    setUpdateMethodPref(v);
+    void backend?.setUpdateMethod(v);
+  };
   const [pauseBackground, setPauseBackground] = usePersistentState("settings.pauseBackgroundWatches", true);
   const [metricsInterval, setMetricsIntervalPref] = usePersistentState("settings.metricsIntervalSec", 15);
   const setMetricsInterval = (v: number) => {
     setMetricsIntervalPref(v);
     void backend?.setMetricsInterval(v);
   };
-  const [cacheBudget, setCacheBudget] = usePersistentState("settings.cacheBudgetMB", 1024);
+  const [cacheBudget, setCacheBudgetPref] = usePersistentState("settings.cacheBudgetMB", 1024);
+  const [budgetOn, setBudgetOnPref] = usePersistentState("settings.cacheBudgetEnabled", false);
+  const setCacheBudget = (v: number) => {
+    setCacheBudgetPref(v);
+    if (budgetOn) void backend?.setCacheBudget(v);
+  };
+  const setBudgetOn = (on: boolean) => {
+    setBudgetOnPref(on);
+    void backend?.setCacheBudget(on ? cacheBudget : 0);
+  };
+  // Desktop: the Go side's memory and cache sizes, and where its log is.
+  const [goMem, setGoMem] = useState<{ heapMB: number; objects: Record<string, number> } | null>(null);
+  const [logFile, setLogFile] = useState<{ path: string; size: number } | null>(null);
+  useEffect(() => {
+    if (!backend || !active) return;
+    const api = backend;
+    const load = () => {
+      void api.memoryStats().then(setGoMem).catch(() => {});
+      void api.logFile().then(setLogFile).catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [active]);
   const [logBuffer, setLogBuffer] = usePersistentState("logs.bufferLines", 100_000);
   const [logMemory, setLogMemory] = usePersistentState("settings.logMemoryMB", 256);
   const [scrollback, setScrollback] = usePersistentState("terminal.scrollback", 10_000);
@@ -114,7 +141,9 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
   const [checking, setChecking] = useState(false);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
 
-  const cachedObjects = ws.allPods.length + ws.deployments.length + ws.nodes.length + ws.helmReleases.length + ws.gitops.length;
+  const cachedObjects = goMem
+    ? Object.values(goMem.objects).reduce((a, b) => a + b, 0)
+    : ws.allPods.length + ws.deployments.length + ws.nodes.length + ws.helmReleases.length + ws.gitops.length;
   const heap = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize;
 
   useEffect(() => {
@@ -236,9 +265,11 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
             </Setting>
           )}
           {show("default namespace filter") && (
-            <Setting label="Default namespace filter" detail={`Applied when a cluster is added to the selection.${backend ? ` ${NOT_YET}` : ""}`}>
+            <Setting
+              label="Default namespace filter"
+              detail="Where Pods, Deployments and other lists start when a cluster is added to the selection. Remembered: the namespaces you last picked for that cluster."
+            >
               <Select
-                disabled={!!backend}
                 label="Default namespace filter"
                 value={defaultNs}
                 onChange={(v) => setDefaultNs(v as typeof defaultNs)}
@@ -277,21 +308,27 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       node: (
         <Section id="watch" icon={<RefreshCw />} title="Refresh & watch">
           {show("update method", "watch", "poll") && (
-            <Setting label="Update method" detail={`Watch streams changes; polling uses less API quota on very large clusters. ${NOT_YET}`}>
+            <Setting
+              label="Update method"
+              detail="Watch streams changes; polling lists every 30 s and uses fewer API server connections on very large clusters. Lists switch at once; connected clusters on their next connect."
+            >
               <Segmented
                 aria-label="Update method"
                 value={updateMethod}
                 onValueChange={setUpdateMethod}
                 options={[
                   { value: "watch", label: "Watch" },
-                  { value: "poll", label: "Poll 30s", disabled: true },
+                  { value: "poll", label: "Poll 30s" },
                 ]}
               />
             </Setting>
           )}
           {show("pause watches in background tabs") && (
-            <Setting label="Pause watches in background tabs" detail={`After 5 minutes; resumes with a full re-list. ${NOT_YET}`}>
-              <Switch disabled checked={pauseBackground} onCheckedChange={setPauseBackground} aria-label="Pause background watches" />
+            <Setting
+              label="Pause watches in the background"
+              detail="After 5 minutes with Clustrail hidden or minimized; resumes with a full re-list when you return. Clusters with an open log stream, shell or port forward stay connected."
+            >
+              <Switch checked={pauseBackground} onCheckedChange={setPauseBackground} aria-label="Pause background watches" />
             </Setting>
           )}
           {show("metrics refresh", "metrics-server") && (
@@ -316,13 +353,23 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
             <Setting
               label="Resource cache budget"
               detail={
-                <span className="flex items-center gap-2">
-                  <span className="font-mono">{cachedObjects.toLocaleString()} objects cached</span>
-                  <span>· budget {NOT_YET.toLowerCase()}</span>
+                <span className="flex flex-col gap-0.5">
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono">{cachedObjects.toLocaleString()} objects cached</span>
+                    {goMem && (
+                      <span className="font-mono">
+                        · Go heap {goMem.heapMB} MB{budgetOn ? ` of ${cacheBudget} MB` : ""}
+                      </span>
+                    )}
+                  </span>
+                  <span>Over budget, connected clusters that are not selected are disconnected, largest first. Selected clusters stay.</span>
                 </span>
               }
             >
-              <NumberField disabled label="Resource cache budget" value={cacheBudget} onChange={setCacheBudget} min={256} max={8192} unit="MB" />
+              <span className="flex items-center gap-2">
+                <Switch checked={budgetOn} onCheckedChange={setBudgetOn} aria-label="Enforce cache budget" disabled={!backend} />
+                <NumberField disabled={!budgetOn} label="Resource cache budget" value={cacheBudget} onChange={setCacheBudget} min={256} max={8192} unit="MB" />
+              </span>
             </Setting>
           )}
           {show("log buffer per stream", "lines") && (
@@ -395,6 +442,24 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
           {show("usage telemetry", "privacy") && (
             <Setting label="Usage telemetry" detail="Off. This build has no telemetry and sends nothing.">
               <Switch disabled checked={telemetry} onCheckedChange={setTelemetry} aria-label="Usage telemetry" />
+            </Setting>
+          )}
+          {show("log file", "diagnostics", "support") && (
+            <Setting
+              label="Log file"
+              detail={
+                backend ? (
+                  <span className="selectable font-mono">
+                    {logFile ? `${logFile.path} · ${Math.max(1, Math.round(logFile.size / 1024))} KB` : "…"}
+                  </span>
+                ) : (
+                  "The desktop app logs connections, errors and every change it makes. Never Secret values, YAML bodies, log lines or shell input."
+                )
+              }
+            >
+              <Button size="sm" disabled={!backend} onClick={() => void backend?.revealLog().catch((e) => window.alert(errorText(e)))}>
+                Show in folder
+              </Button>
             </Setting>
           )}
           {show("crash reports") && (

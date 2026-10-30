@@ -23,6 +23,7 @@ var assets embed.FS
 var appIcon []byte
 
 func main() {
+	app.SetupLogging()
 	// Exec auth plugins (aws, gcloud, kubelogin) must be on PATH even when started from Finder.
 	app.FixPath()
 

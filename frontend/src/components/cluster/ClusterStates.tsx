@@ -34,10 +34,16 @@ export function ClusterStateBanners({
   const stale = clusters.filter((c) => c.connection === "reconnecting");
   const offline = clusters.filter(isOffline);
   const noMetrics = clusters.filter((c) => c.connection === "connected" && c.metrics === null);
-  if (!loading && !stale.length && !offline.length && !noMetrics.length) return null;
+  const paused = clusters.filter((c) => c.paused);
+  if (!loading && !stale.length && !offline.length && !noMetrics.length && !paused.length) return null;
 
   return (
     <div className="flex shrink-0 flex-col gap-1.5 px-3 py-2">
+      {paused.length > 0 && (
+        <Banner tone="info">
+          <b className="font-semibold">Paused in the background:</b> {paused.map((c) => c.name).join(", ")} · reconnecting with a full re-list
+        </Banner>
+      )}
       {loading && (
         <div className="flex flex-wrap items-center gap-1.5" role="status" aria-label="Loading per cluster">
           {clusters

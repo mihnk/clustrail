@@ -124,3 +124,25 @@ test("port-forwards a Service and restores tabs on the next launch", async ({ pa
   await page.reload();
   await expect(visible(page, "10.96.12.4")).toBeVisible();
 });
+
+test("settings drive the backend: poll mode, cache budget and the log file", async ({ page }) => {
+  await palette(page, "Settings");
+  expect(backend.calls).toEqual(expect.arrayContaining(["SetUpdateMethod", "SetCacheBudget", "SetMetricsInterval"]));
+  await expect(visible(page, "/Users/tester/Library/Caches/clustrail/clustrail.log · 20 KB")).toBeVisible();
+  await expect(visible(page, /Go heap 212 MB/)).toBeVisible();
+  const before = backend.calls.filter((c) => c === "SetUpdateMethod").length;
+  await page.getByRole("radio", { name: "Poll 30s" }).click();
+  await expect.poll(() => backend.calls.filter((c) => c === "SetUpdateMethod").length).toBe(before + 1);
+  await page.getByRole("switch", { name: "Enforce cache budget" }).click();
+  await expect.poll(() => backend.calls.filter((c) => c === "SetCacheBudget").length).toBeGreaterThan(1);
+});
+
+test("starts and names a new investigation", async ({ page }) => {
+  await sidebar(page, /^New investigation/).click();
+  const title = page.getByRole("textbox", { name: "Investigation title" });
+  await expect(title).toHaveValue("Investigation 2");
+  await title.fill("DNS timeouts");
+  await title.press("Enter");
+  await expect(page.getByRole("tab", { name: /DNS timeouts/ })).toBeVisible();
+  await expect(visible(page, /new pins land here/)).toBeVisible();
+});

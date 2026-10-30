@@ -118,6 +118,12 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
     }
     case "PortForwards":
       return [];
+    case "LogFile":
+      return { path: "/Users/tester/Library/Caches/clustrail/clustrail.log", size: 20480 };
+    case "MemoryStats":
+      return { heapMB: 212, budgetMB: 0, objects: { "prod-eu-west-1": 1450 } };
+    case "PauseWatches":
+      return [];
     case "ForwardablePorts":
       return [{ port: 80, name: "web", detail: "→ http" }];
     case "StartPortForward": {

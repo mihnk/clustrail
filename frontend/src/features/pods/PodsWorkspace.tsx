@@ -15,6 +15,7 @@ import { useClusterGrouping } from "@/components/cluster/useClusterGrouping";
 import type { PodRow } from "@/data/types";
 import { FilterToken, RemovableFilterToken } from "@/components/ui/filter-token";
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
+import { useNamespaceFilter } from "@/app/namespaceFilter";
 import { useWorkspace } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { usePodDetail } from "@/backend/hooks";
@@ -96,7 +97,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   // View state kept per tab: filters, sort, selection, inspector.
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const [namespaces, setNamespaces] = useState<Set<string> | null>(null);
+  const [namespaces, setNamespaces] = useNamespaceFilter();
   const [owner, setOwner] = useState<OwnerFilter>("any");
   const [labelFilters, setLabelFilters] = useState<string[]>([]);
   const [view, setView] = useState<ClusterView>("aggregated");

@@ -658,3 +658,46 @@ func TestNodeRowsUpdateIncrementally(t *testing.T) {
 		return false
 	})
 }
+
+func TestPollModeListsInsteadOfWatching(t *testing.T) {
+	pollMode.Store(true)
+	old := pollEvery
+	pollEvery = 100 * time.Millisecond
+	t.Cleanup(func() { pollMode.Store(false); pollEvery = old })
+
+	c, client, rec := newFakeConn(t, pod("a", nil))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := c.start(ctx, "tester", false); err != nil {
+		t.Fatal(err)
+	}
+	defer c.stop()
+	waitFor(t, "reset", func() bool { return len(rec.deltas("pods")) > 0 })
+	if d := rec.deltas("pods")[0]; !d.Reset || len(d.Upserts) != 1 {
+		t.Fatalf("first = %+v", d)
+	}
+	if _, err := client.CoreV1().Pods("payments").Create(ctx, pod("b", nil), metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.CoreV1().Pods("payments").Delete(ctx, "a", metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "next poll", func() bool {
+		var up, del bool
+		for _, d := range rec.deltas("pods")[1:] {
+			for _, u := range d.Upserts {
+				up = up || u.(PodRow).Name == "b"
+			}
+			for _, id := range d.Deletes {
+				del = del || id == "test/payments/a"
+			}
+		}
+		return up && del
+	})
+	// No informer ran: the fake saw lists, never a watch.
+	for _, a := range client.Actions() {
+		if a.GetVerb() == "watch" && a.GetResource().Resource == "pods" {
+			t.Fatal("pods were watched in poll mode")
+		}
+	}
+}
