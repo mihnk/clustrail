@@ -128,3 +128,20 @@ go vet ./... && go test -race ./internal/...
 
 The Go tests run the informers, actions and Helm/GitOps readers against
 client-go's fake clientsets; no cluster is needed.
+
+### Against a real cluster
+
+`hack/kind-smoke.sh` creates a three-node [kind](https://kind.sigs.k8s.io)
+cluster with workloads that exercise the app: a healthy Deployment guarded by
+a PodDisruptionBudget, a crash-looping one, a Helm release whose last
+revision failed (when `helm` is installed), metrics-server, and a second
+context `clustrail-smoke-team-a` that may only see the `team-a` namespace.
+It needs Docker, `kind` and `kubectl`, and prints what to check in the app.
+
+```bash
+hack/kind-smoke.sh
+```
+
+```bash
+hack/kind-smoke.sh down
+```
