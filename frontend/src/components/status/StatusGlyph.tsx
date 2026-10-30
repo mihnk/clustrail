@@ -11,6 +11,7 @@ export const healthTone: Record<Health, string> = {
   unknown: "text-status-neutral",
   idle: "text-status-neutral",
   paused: "text-status-neutral",
+  cordoned: "text-status-progressing",
 };
 
 /**
@@ -69,6 +70,13 @@ function glyph(health: Health) {
       );
     case "idle":
       return <circle cx="6" cy="6" r="4.4" fill="none" stroke="currentColor" strokeWidth="1.4" />;
+    case "cordoned":
+      return (
+        <>
+          <circle cx="6" cy="6" r="4.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M2.9 9.1l6.2-6.2" stroke="currentColor" strokeWidth="1.5" />
+        </>
+      );
     case "paused":
       return (
         <>

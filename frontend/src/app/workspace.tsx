@@ -6,6 +6,7 @@ import {
   pods as initialPods,
 } from "@/data/mock";
 import type { Cluster, DeploymentRow, PodRow } from "@/data/types";
+import { nodes as initialNodes, type NodeRow } from "@/data/nodes";
 import { useToast } from "@/components/ui/toast";
 import { usePersistentState, type Density, type Theme } from "./preferences";
 
@@ -46,6 +47,15 @@ export interface MockScenarios {
   noMetrics: boolean;
 }
 
+/** A long-running operation shown in a progress toast and the status bar. */
+export interface BackgroundJob {
+  id: string;
+  title: string;
+  /** 0–1 */
+  progress: number;
+  detail: string;
+}
+
 /** A request from another view (command palette, links) to select a resource in its explorer. */
 export interface RevealRequest {
   /** "filter": id is "<view kind>:<filter text>", e.g. "pods:cluster:prod-eu-west-1". */
@@ -71,6 +81,7 @@ interface WorkspaceState {
   /** Pods from every connected cluster, for per-cluster counts. */
   allPods: PodRow[];
   deployments: DeploymentRow[];
+  nodes: NodeRow[];
 
   /** Connect, retry or re-authenticate a cluster (mock: simulated outcome). */
   connectCluster: (id: string) => void;
@@ -83,6 +94,10 @@ interface WorkspaceState {
   rollbackDeployment: (id: string, rev: number) => void;
   setDeploymentPaused: (id: string, paused: boolean) => void;
   deleteDeployment: (id: string) => void;
+  setNodeCordoned: (id: string, cordoned: boolean) => void;
+  /** Cordons the node and evicts its pods in the background. */
+  drainNode: (id: string, opts: { force: boolean; deleteEmptyDir: boolean; timeoutSec: number }) => void;
+  jobs: BackgroundJob[];
 
   scenarios: MockScenarios;
   setScenario: (key: keyof MockScenarios, on: boolean) => void;
@@ -133,6 +148,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [clusters, setClusters] = useState(initialClusters);
   const [allPods, setAllPods] = useState(initialPods);
   const [deployments, setDeployments] = useState(initialDeployments);
+  const [nodes, setNodes] = useState(initialNodes);
+  const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [tabs, setTabs] = useState(initialTabs);
   const [closedTabs, setClosedTabs] = useState<WorkspaceTab[]>([]);
   const [activeTabId, setActiveTabId] = useState("pods");
@@ -332,6 +349,96 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [deployments, later, patchDeployment, toast],
   );
 
+  const setNodeCordoned = useCallback(
+    (id: string, cordoned: boolean) => {
+      setNodes((ns) =>
+        ns.map((n) =>
+          n.id !== id
+            ? n
+            : cordoned
+              ? {
+                  ...n,
+                  health: n.health === "healthy" ? "cordoned" : n.health,
+                  status: n.health === "healthy" ? "Cordoned" : n.status,
+                  reason: "Ready, SchedulingDisabled",
+                  cordonedBy: "you in Clustrail",
+                  cordonedAgo: "now",
+                  taints: [...n.taints.filter((t) => t.key !== "node.kubernetes.io/unschedulable"), { key: "node.kubernetes.io/unschedulable", effect: "NoSchedule" }],
+                }
+              : {
+                  ...n,
+                  health: n.health === "cordoned" ? "healthy" : n.health,
+                  status: n.health === "cordoned" ? "Ready" : n.status,
+                  reason: n.health === "cordoned" ? "Ready=True" : n.reason,
+                  cordonedBy: undefined,
+                  cordonedAgo: undefined,
+                  taints: n.taints.filter((t) => t.key !== "node.kubernetes.io/unschedulable"),
+                },
+        ),
+      );
+      const n = nodes.find((x) => x.id === id);
+      if (n) toast.show({ kind: "success", title: cordoned ? "Node cordoned" : "Node uncordoned", target: `${n.name.split(".")[0]} · ${n.cluster}`, env: n.env });
+    },
+    [nodes, toast],
+  );
+
+  const drainNode = useCallback<WorkspaceState["drainNode"]>(
+    (id, opts) => {
+      const n = nodes.find((x) => x.id === id);
+      if (!n) return;
+      // Drain cordons first; an already cordoned node stays as it is.
+      if (!n.taints.some((t) => t.key === "node.kubernetes.io/unschedulable")) setNodeCordoned(id, true);
+      const short = n.name.split(".")[0]!;
+      const blocked = n.name.startsWith("ip-10-42-3-17") ? 2 : 0;
+      // DaemonSet pods stay on the node.
+      const total = Math.max(1, n.pods - (n.cluster === "staging-eu-1" ? 3 : 5));
+      const evictable = total - blocked;
+      const jobId = `drain-${id}`;
+      let evicted = 0;
+      let elapsed = 0;
+      let cancelled = false;
+      const detail = () =>
+        `${evicted} of ${total} evicted${blocked ? ` · ${blocked} waiting on PDB` : ""} · ${Math.max(0, opts.timeoutSec - elapsed)}s left`;
+      const tid = toast.show({
+        kind: "progress",
+        title: `Draining ${short}`,
+        env: n.env,
+        progress: 0,
+        detail: detail(),
+        onCancel: () => {
+          cancelled = true;
+        },
+      });
+      setJobs((js) => [...js, { id: jobId, title: `Draining ${short}`, progress: 0, detail: detail() }]);
+      const step = setInterval(() => {
+        elapsed += 1;
+        if (cancelled) {
+          clearInterval(step);
+          setJobs((js) => js.filter((j) => j.id !== jobId));
+          toast.update(tid, { kind: "error", title: `Drain cancelled · ${short}`, progress: undefined, onCancel: undefined, detail: `${evicted} pods evicted. The node stays cordoned.` });
+          return;
+        }
+        evicted = Math.min(evictable, evicted + 2);
+        const progress = evicted / total;
+        setJobs((js) => js.map((j) => (j.id === jobId ? { ...j, progress, detail: detail() } : j)));
+        toast.update(tid, { progress, detail: detail() });
+        // PDB-blocked pods are retried until the timeout, then reported.
+        if (evicted >= evictable && (blocked === 0 || elapsed >= Math.min(opts.timeoutSec, evictable / 2 + 8))) {
+          clearInterval(step);
+          setJobs((js) => js.filter((j) => j.id !== jobId));
+          setNodes((ns) => ns.map((x) => (x.id === id ? { ...x, pods: x.pods - evicted } : x)));
+          toast.update(
+            tid,
+            blocked
+              ? { kind: "error", title: `Drain incomplete · ${short}`, progress: undefined, onCancel: undefined, detail: `${blocked} pods still blocked by PodDisruptionBudget checkout-api after the timeout. The node stays cordoned.`, copyText: `kubectl --context ${n.cluster} get pdb -A` }
+              : { kind: "success", title: `Drained ${short}`, progress: undefined, onCancel: undefined, detail: `${evicted} pods evicted` },
+          );
+        }
+      }, 1000);
+    },
+    [nodes, setNodeCordoned, toast],
+  );
+
   // Watch-like updates for the mock: usage numbers move, and the cart-web
   // rollout that is in progress at start finishes after a while.
   useEffect(() => {
@@ -405,6 +512,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .map((p) => (clusterById(p.cluster)?.metrics === null ? { ...p, cpuMilli: null, memoryMiB: null } : p)),
       allPods,
       deployments,
+      nodes,
+      setNodeCordoned,
+      drainNode,
+      jobs,
       connectCluster,
       deletePod,
       restartDeployment,
@@ -462,6 +573,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     clusters,
     allPods,
     deployments,
+    nodes,
+    setNodeCordoned,
+    drainNode,
+    jobs,
     connectCluster,
     deletePod,
     restartDeployment,

@@ -4,7 +4,14 @@ import { IS_MOCK, getAccessSummary } from "@/data/mock";
 import { ConnectionDot } from "@/components/status/EnvironmentBadge";
 
 export function StatusBar() {
-  const { clusters, selectedClusters, activeTab, clusterById } = useWorkspace();
+  const { clusters, selectedClusters, activeTab, clusterById, jobs } = useWorkspace();
+  const job = jobs[0];
+  const jobItem = job ? (
+    <span className="flex items-center gap-1.5 whitespace-nowrap text-status-progressing" role="status">
+      <span className="size-1.5 rounded-full bg-status-progressing" />
+      {job.title} · {job.detail.split(" · ")[0]}
+    </span>
+  ) : null;
   const investigating = activeTab?.kind === "investigation";
   const scoped = activeTab?.cluster ? clusterById(activeTab.cluster) : undefined;
 
@@ -57,6 +64,7 @@ export function StatusBar() {
           {connected.map((c) => `${c.name} ${c.latencyMs}ms`).join(" · ")}
         </span>
       )}
+      {jobItem}
       {expired > 0 && (
         <span className="whitespace-nowrap text-status-warning">
           {expired} {expired === 1 ? "credential" : "credentials"} expired

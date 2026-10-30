@@ -30,7 +30,9 @@ export type Health =
   /** Exists but runs nothing, e.g. an old ReplicaSet with 0 pods. */
   | "idle"
   /** Rollout paused on purpose (spec.paused). */
-  | "paused";
+  | "paused"
+  /** Node marked unschedulable. */
+  | "cordoned";
 
 export interface Cluster {
   /** Stable id; also the display name. */
