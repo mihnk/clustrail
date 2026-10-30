@@ -10,6 +10,8 @@ import { StatusGlyph, healthTone } from "@/components/status/StatusGlyph";
 import { ModifyMenuButton, type ResourceAction } from "@/components/resource-actions/ResourceActions";
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { EmptyState } from "@/components/EmptyState";
+import { useEvents } from "@/backend/hooks";
+import { EventsPanel } from "@/features/pods/PodInspector";
 import { formatMemory } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { rollbackDeploymentRequest, scaleDeploymentRequest, strategyText } from "./requests";
@@ -252,7 +254,7 @@ export function DeploymentInspector({
         </Panel>
 
         <Panel value="events">
-          <EmptyState title="No recent events">The API server keeps events for about 1 hour by default.</EmptyState>
+          <ObjectEvents cluster={d.cluster} namespace={d.namespace} kind="Deployment" name={d.name} />
         </Panel>
 
         <Panel value="yaml">
@@ -428,4 +430,11 @@ function ScaleStepper({
       ) : null}
     </div>
   );
+}
+
+function ObjectEvents({ cluster, namespace, kind, name }: { cluster: string; namespace: string; kind: string; name: string }) {
+  const events = useEvents(cluster, namespace, kind, name, true);
+  if (events === null) return <EmptyState title="Reading events…" />;
+  if (!events.length) return <EmptyState title="No recent events">The API server keeps events for about 1 hour by default.</EmptyState>;
+  return <EventsPanel events={events} />;
 }

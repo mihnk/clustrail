@@ -327,7 +327,7 @@ function RelatedList({ relations }: { relations: PodDetail["relations"] }) {
 }
 
 /** Events of the pod, optionally with its owners', newest first. */
-function EventsPanel({ events }: { events: ResourceEvent[] }) {
+export function EventsPanel({ events }: { events: ResourceEvent[] }) {
   const [type, setType] = useState<"all" | "warnings">("all");
   const [includeOwners, setIncludeOwners] = useState(true);
   const warnings = events.filter((e) => e.type === "Warning" && (includeOwners || e.object === "pod")).length;

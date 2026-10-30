@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { backend } from "./client";
 import { getPodDetail } from "@/data/mock";
-import type { PodDetail, PodRow } from "@/data/types";
+import type { PodDetail, PodRow, ResourceEvent } from "@/data/types";
 import { drainPreflight, type DrainPreflight, type NodeRow } from "@/data/nodes";
 import { useWorkspace } from "@/app/workspace";
 
@@ -74,4 +74,25 @@ export function useDrainPreflight(node: NodeRow): DrainPreflight | null {
     };
   }, [node.id]);
   return backend ? remote : mock;
+}
+
+/** Recent events of an object (desktop); the mock has none for Deployments and Nodes. */
+export function useEvents(cluster: string, namespace: string, kind: string, name: string, active: boolean): ResourceEvent[] | null {
+  const [events, setEvents] = useState<ResourceEvent[] | null>(backend ? null : []);
+  useEffect(() => {
+    if (!backend || !active) return;
+    let cancelled = false;
+    const load = () =>
+      void backend!
+        .events(cluster, namespace, kind, name)
+        .then((ev) => !cancelled && setEvents(ev))
+        .catch(() => !cancelled && setEvents([]));
+    load();
+    const t = setInterval(load, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [cluster, namespace, kind, name, active]);
+  return events;
 }

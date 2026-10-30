@@ -13,11 +13,10 @@ const GROUPS: { env: Environment; label: string }[] = [
   { env: "dev", label: "Development" },
 ];
 
-/** Saved selections. Stored locally like every other preference. */
-const SAVED_SETS: { name: string; ids: string[] }[] = [
-  { name: "All prod", ids: ["prod-eu-west-1", "prod-us-east-1"] },
-  { name: "EU", ids: ["prod-eu-west-1", "staging-eu-1"] },
-];
+/** Quick selections by group: every cluster of one environment. */
+function groupSets(clusters: { id: string; env: Environment }[]): { name: string; ids: string[] }[] {
+  return GROUPS.map((g) => ({ name: `All ${g.label.toLowerCase()}`, ids: clusters.filter((c) => c.env === g.env).map((c) => c.id) })).filter((s) => s.ids.length > 1);
+}
 
 /**
  * Multi-cluster picker (⌘⇧C). Same selection as the sidebar. Clusters that
@@ -133,7 +132,7 @@ export function ClusterPicker({
               {selected.size} selected · {new Set(clusters.filter((c) => selected.has(c.id)).map((c) => c.env)).size} groups
             </span>
             <span>Saved:</span>
-            {SAVED_SETS.map((s) => (
+            {groupSets(clusters).map((s) => (
               <button
                 key={s.name}
                 type="button"

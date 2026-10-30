@@ -175,6 +175,7 @@ export const backendApi = {
   updateCluster: (id: string, env: Environment, prot: boolean, readOnly: boolean) => call<void>("UpdateCluster", id, env, prot, readOnly),
   addCluster: (id: string, env: Environment, prot: boolean, readOnly: boolean) => call<void>("AddCluster", id, env, prot, readOnly),
 
+  addKubeconfig: () => call<string>("AddKubeconfig"),
   testConnection: (id: string) => call<{ name: string; result: "ok" | "failed" | "skipped"; detail?: string; ms?: number }[]>("TestConnection", id),
 
   podDetail: (cluster: string, ns: string, name: string) => call<PodDetail>("PodDetail", cluster, ns, name),

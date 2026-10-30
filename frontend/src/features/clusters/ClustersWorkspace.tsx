@@ -16,6 +16,7 @@ import { InspectorPanel } from "@/components/ui/inspector-panel";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -113,6 +114,18 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
   }, [reveal?.seq]);
 
   const connected = clusters.filter((c) => c.connection === "connected").length;
+  // Workloads that exist (same namespace and name) in at least two selected clusters, most clusters first.
+  const comparable = useMemo(() => {
+    const by = new Map<string, { key: string; name: string; namespace: string; clusters: string[] }>();
+    for (const d of ws.deployments) {
+      if (!selected.has(d.cluster)) continue;
+      const key = `${d.namespace}/${d.name}`;
+      const w = by.get(key) ?? { key, name: d.name, namespace: d.namespace, clusters: [] };
+      w.clusters.push(d.cluster);
+      by.set(key, w);
+    }
+    return [...by.values()].filter((w) => w.clusters.length > 1).sort((a, b) => b.clusters.length - a.clusters.length || a.name.localeCompare(b.name));
+  }, [ws.deployments, selected]);
   const needAttention = allRows.filter((r) => isOffline(r.cluster) && r.cluster.connection !== "disconnected").length;
   const selectedRow = allRows.find((r) => r.id === selectedId);
   const selectedNames = clusters.filter((c) => selected.has(c.id)).map((c) => c.name);
@@ -276,21 +289,35 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
               <Layers aria-hidden />
               Deployments
             </Button>
-            <Button
-              size="sm"
-              disabled={selected.size < 2}
-              title={selected.size < 2 ? "Select at least two clusters to compare" : undefined}
-              onClick={() =>
-                openView({
-                  kind: "compare",
-                  title: "Compare · checkout-api",
-                  params: { kind: "Deployment", namespace: "payments", name: "checkout-api", clusters: [...selected].join(",") },
-                })
-              }
-            >
-              <ArrowLeftRight aria-hidden />
-              Compare workload…
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" disabled={selected.size < 2} title={selected.size < 2 ? "Select at least two clusters to compare" : undefined}>
+                  <ArrowLeftRight aria-hidden />
+                  Compare workload…
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-[360px] overflow-y-auto">
+                <DropdownMenuLabel>Deployments in {comparable.length ? "two or more selected clusters" : "the selection"}</DropdownMenuLabel>
+                {comparable.length === 0 && <div className="px-2 py-1.5 text-ui text-fg-muted">No Deployment exists in more than one selected cluster.</div>}
+                {comparable.map((w) => (
+                  <DropdownMenuItem
+                    key={w.key}
+                    onSelect={() =>
+                      openView({
+                        kind: "compare",
+                        title: `Compare · ${w.name}`,
+                        params: { kind: "Deployment", namespace: w.namespace, name: w.name, clusters: w.clusters.join(",") },
+                      })
+                    }
+                  >
+                    <span className="font-mono">{w.name}</span>
+                    <span className="ml-auto pl-3 text-label text-fg-muted">
+                      {w.namespace} · {w.clusters.length} clusters
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button size="sm" variant="ghost" onClick={() => setSelectedClusterIds([])}>
               Clear
             </Button>

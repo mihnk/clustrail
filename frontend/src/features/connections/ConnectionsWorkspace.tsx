@@ -141,7 +141,16 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
             {s.error && <span className="selectable text-meta text-status-critical">{s.error}</span>}
           </div>
         ))}
-        <Button disabled title="Opens a file picker in the desktop app">
+        <Button
+          disabled={!backend}
+          title={backend ? undefined : "Opens a file picker in the desktop app"}
+          onClick={() =>
+            void backend
+              ?.addKubeconfig()
+              .then((path) => path && toast.show({ kind: "success", title: "Kubeconfig added", detail: path }))
+              .catch((e) => toast.show({ kind: "error", title: "Could not add the file", detail: errorText(e), copyText: errorText(e) }))
+          }
+        >
           <Plus aria-hidden />
           Add kubeconfig file…
         </Button>

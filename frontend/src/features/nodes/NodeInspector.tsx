@@ -10,6 +10,8 @@ import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { ModifyMenuButton, type ResourceAction } from "@/components/resource-actions/ResourceActions";
 import { EmptyState } from "@/components/EmptyState";
+import { useEvents } from "@/backend/hooks";
+import { EventsPanel } from "@/features/pods/PodInspector";
 import { cn } from "@/lib/cn";
 
 export function NodeInspector({
@@ -187,7 +189,7 @@ export function NodeInspector({
           <Taints node={node} />
         </Panel>
         <Panel value="events">
-          <EmptyState title="No recent events">The API server keeps events for about 1 hour by default.</EmptyState>
+          <ObjectEvents cluster={node.cluster} namespace={""} kind="Node" name={node.name} />
         </Panel>
       </Tabs>
     </>
@@ -279,4 +281,11 @@ function Taints({ node }: { node: NodeRow }) {
       {node.taints.some((t) => t.key === "node.kubernetes.io/unschedulable") && <span className="text-meta text-fg-muted">Added by cordon. Removed by Uncordon.</span>}
     </section>
   );
+}
+
+function ObjectEvents({ cluster, namespace, kind, name }: { cluster: string; namespace: string; kind: string; name: string }) {
+  const events = useEvents(cluster, namespace, kind, name, true);
+  if (events === null) return <EmptyState title="Reading events…" />;
+  if (!events.length) return <EmptyState title="No recent events">The API server keeps events for about 1 hour by default.</EmptyState>;
+  return <EventsPanel events={events} />;
 }

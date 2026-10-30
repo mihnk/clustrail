@@ -474,3 +474,16 @@ func (m *Manager) Shutdown() {
 		c.stop()
 	}
 }
+
+// AddKubeconfig adds a kubeconfig file to the loading chain and re-reads the
+// contexts. Contexts it brings appear as New.
+func (m *Manager) AddKubeconfig(path string) error {
+	if _, err := clientcmd.LoadFromFile(path); err != nil {
+		return fmt.Errorf("not a kubeconfig file: %w", err)
+	}
+	if err := m.store.AddKubeconfig(path); err != nil {
+		return err
+	}
+	m.reload()
+	return nil
+}

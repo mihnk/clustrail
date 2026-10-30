@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"os/user"
+	"path/filepath"
 
 	"github.com/mihnk/clustrail/internal/kube"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -163,3 +164,19 @@ func (w *Workspace) ExecResize(id string, cols, rows uint16)        { w.m.ExecRe
 func (w *Workspace) CloseExec(id string)                            { w.m.CloseExec(id) }
 
 func (w *Workspace) TestConnection(id string) ([]kube.TestStep, error) { return w.m.TestConnection(id) }
+
+// AddKubeconfig asks for a kubeconfig file with the native file dialog and adds it.
+// It returns the chosen path, or "" when the dialog was cancelled.
+func (w *Workspace) AddKubeconfig() (string, error) {
+	home, _ := os.UserHomeDir()
+	path, err := application.Get().Dialog.OpenFile().
+		SetTitle("Add kubeconfig file").
+		SetDirectory(filepath.Join(home, ".kube")).
+		ShowHiddenFiles(true).
+		CanChooseFiles(true).
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return "", err
+	}
+	return path, w.m.AddKubeconfig(path)
+}

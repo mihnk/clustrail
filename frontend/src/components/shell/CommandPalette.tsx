@@ -15,6 +15,7 @@ import {
   Sun,
 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
+import { IS_MOCK } from "@/data/mock";
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { restartDeploymentRequest } from "@/features/deployments/requests";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
@@ -119,7 +120,11 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       ["Pods", <Box key="p" />, () => ws.openView({ kind: "pods", title: "Pods" })],
       ["Deployments", <Layers key="d" />, () => ws.openView({ kind: "deployments", title: "Deployments" })],
       ["Nodes", <Server key="n" />, () => ws.openView({ kind: "nodes", title: "Nodes" })],
-      ["Investigation · checkout-api", <Route key="i" />, () => ws.openTab("inv-checkout-api")],
+      [
+        IS_MOCK ? "Investigation · checkout-api" : "Investigation · pinned evidence",
+        <Route key="i" />,
+        () => ws.openTab("inv-checkout-api") || ws.openView({ id: "inv-checkout-api", kind: "investigation", title: "Investigation" }),
+      ],
       ["Connections", <KeyRound key="k" />, () => ws.openView({ kind: "connections", title: "Connections" })],
       ["Settings", <Settings key="s" />, () => ws.openView({ kind: "settings", title: "Settings" })],
     ];
