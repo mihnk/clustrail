@@ -1,3 +1,4 @@
+import { PortForwardIndicator } from "@/features/portforward/PortForward";
 import { Lock } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { IS_MOCK, getAccessSummary } from "@/data/mock";
@@ -47,6 +48,7 @@ export function StatusBar() {
           </span>
         ) : null}
         <div className="flex-1" />
+        <PortForwardIndicator />
         {scoped.protected && (
           <span className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">
             <Lock className="size-3" aria-hidden />
@@ -87,6 +89,7 @@ export function StatusBar() {
         </span>
       )}
       <div className="flex-1" />
+      <PortForwardIndicator />
       {protectedCount > 0 && (
         <span className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">
           <Lock className="size-3" aria-hidden />

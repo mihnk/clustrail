@@ -132,6 +132,20 @@ func (w *Workspace) GetObject(cluster, kind, ns, name string) (kube.LiveObject, 
 	return w.m.GetObject(cluster, kind, ns, name)
 }
 
+// Port forwards.
+
+func (w *Workspace) StartPortForward(req kube.PortForwardRequest) (kube.PortForward, error) {
+	return w.m.StartPortForward(req)
+}
+
+func (w *Workspace) StopPortForward(id string) { w.m.StopPortForward(id) }
+
+func (w *Workspace) PortForwards() []kube.PortForward { return w.m.PortForwards() }
+
+func (w *Workspace) ForwardablePorts(cluster, kind, ns, name string) ([]kube.PortOption, error) {
+	return w.m.ForwardablePorts(cluster, kind, ns, name)
+}
+
 // Generic lists: any kind the cluster serves, with the server's columns.
 
 func (w *Workspace) ResourceKinds(cluster string) ([]kube.KindInfo, error) {

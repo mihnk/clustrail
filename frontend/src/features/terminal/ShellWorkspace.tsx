@@ -33,6 +33,10 @@ export interface ShellSession {
   ended?: string;
   restore?: boolean;
   openedAt: string;
+  /** Desktop: bumped on every reconnect; each value is a new exec. */
+  connection?: number;
+  /** Desktop: when the current exec started, to tell a flapping session from a long-lived one. */
+  connectedAt?: number;
 }
 
 const PRESET: ShellSession[] = [
@@ -97,20 +101,38 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
   const secondary = split ? sessions.find((s) => s.id !== current?.id && s.state !== "ended") : undefined;
   const update = (id: string, patch: Partial<ShellSession>) => setSessions((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)));
 
-  // Reconnect countdown; success on the next attempt in the mock.
+  // Reconnect countdown. Mock: the next attempt succeeds. Desktop: a new exec starts.
   useEffect(() => {
-    if (backend) return;
     const t = setInterval(() => {
       setSessions((ss) =>
-        ss.map((s) => {
-          if (s.state !== "reconnecting" || !s.reconnect) return s;
-          if (s.reconnect.inSec > 1) return { ...s, reconnect: { ...s.reconnect, inSec: s.reconnect.inSec - 1 } };
-          return { ...s, state: "connected", reconnect: undefined };
-        }),
+        ss.some((s) => s.state === "reconnecting")
+          ? ss.map((s) => {
+              if (s.state !== "reconnecting" || !s.reconnect) return s;
+              if (s.reconnect.inSec > 1) return { ...s, reconnect: { ...s.reconnect, inSec: s.reconnect.inSec - 1 } };
+              return { ...s, state: "connected", connection: (s.connection ?? 0) + 1, connectedAt: Date.now() };
+            })
+          : ss,
       );
     }, 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Desktop: a dropped stream (not an exit) reconnects with backoff; an exit ends the session.
+  const onExit = (id: string, code: number, error?: string) =>
+    setSessions((ss) =>
+      ss.map((s) => {
+        if (s.id !== id) return s;
+        if (!backend) return { ...s, state: "ended", ended: `exit ${code} (you typed exit)` };
+        if (code === -1 && error) {
+          // A session that ran a while starts its attempts over.
+          const attempt = s.connectedAt && Date.now() - s.connectedAt > 30_000 ? 1 : (s.reconnect?.attempt ?? 0) + 1;
+          if (attempt <= MAX_ATTEMPTS) {
+            return { ...s, state: "reconnecting", reconnect: { attempt, inSec: Math.min(2 ** (attempt - 1), 10), reason: error } };
+          }
+        }
+        return { ...s, state: "ended", reconnect: undefined, ended: error ?? `exit ${code}` };
+      }),
+    );
 
   // Sessions requested from elsewhere (pod inspector, row menu) after confirmation.
   useEffect(() => {
@@ -129,6 +151,8 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
         shell: "/bin/sh",
         state: "connected",
         openedAt: new Date().toTimeString().slice(0, 5),
+        connection: 0,
+        connectedAt: Date.now(),
       },
     ]);
     setActiveId(id);
@@ -157,7 +181,14 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
     setSessions(rest);
     if (id === activeId && rest[0]) setActiveId(rest[0].id);
   };
-  const reconnect = (id: string) => update(id, { state: "connected", reconnect: undefined, ended: undefined, restore: false });
+  const reconnect = (id: string) =>
+    setSessions((ss) =>
+      ss.map((s) =>
+        s.id === id
+          ? { ...s, state: "connected", reconnect: undefined, ended: undefined, restore: false, connection: (s.connection ?? 0) + (backend ? 1 : 0), connectedAt: Date.now() }
+          : s,
+      ),
+    );
 
   const prodSessions = sessions.filter((s) => s.env === "prod" && s.state !== "ended").length;
   const live = sessions.filter((s) => s.state !== "ended").length;
@@ -337,7 +368,8 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                   themeKey={ws.theme}
                   interactive={s.state === "connected"}
                   onResize={(c, r) => setSize((m) => (m[s.id] === `${c}×${r}` ? m : { ...m, [s.id]: `${c}×${r}` }))}
-                  onExit={(code, error) => update(s.id, { state: "ended", ended: error ?? (backend ? `exit ${code}` : `exit ${code} (you typed exit)`) })}
+                  onExit={(code, error) => onExit(s.id, code, error)}
+                  connection={s.connection ?? 0}
                   target={backend ? { cluster: s.cluster, namespace: s.namespace, pod: s.pod, container: s.container } : undefined}
                   onLeave={() => (document.querySelector('[role="tab"][aria-selected="true"]') as HTMLElement | null)?.focus()}
                 />
@@ -349,7 +381,8 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                     <b className="font-semibold">Connection lost — reconnecting in {s.reconnect.inSec}s</b>
                   </div>
                   <span className="text-fg-secondary">
-                    {s.reconnect.reason} Attempt {s.reconnect.attempt} of {MAX_ATTEMPTS}. The container is still Running; scrollback is kept.
+                    {s.reconnect.reason} Attempt {s.reconnect.attempt} of {MAX_ATTEMPTS}.{" "}
+                    {backend ? "Reconnecting starts a new shell process; scrollback is kept." : "The container is still Running; scrollback is kept."}
                   </span>
                   <div className="flex gap-1.5">
                     <Button size="sm" variant="primary" onClick={() => reconnect(s.id)}>

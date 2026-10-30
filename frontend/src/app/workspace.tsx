@@ -10,7 +10,7 @@ import { nodes as initialNodes, type NodeRow } from "@/data/nodes";
 import { helmReleases as initialReleases, helmHealth, type HelmRelease } from "@/data/helm";
 import { gitopsObjects as initialGitOps, gitopsHealth, type GitOpsObject } from "@/data/gitops";
 import { useToast } from "@/components/ui/toast";
-import { useMediaQuery, usePersistentState, type Density, type Theme, type ThemePreference } from "./preferences";
+import { readPreference, useMediaQuery, usePersistentState, writePreference, type Density, type Theme, type ThemePreference } from "./preferences";
 import { backend, type ClusterList } from "@/backend/client";
 import { useDesktopWorkspace } from "./desktop";
 
@@ -41,6 +41,23 @@ export interface WorkspaceTab {
   cluster?: string;
   /** View parameters, e.g. { namespace, name } for a Logs tab. */
   params?: Record<string, string>;
+}
+
+const SAVED_TABS = "workspace.desktop.tabs";
+/** Tabs that reopen on launch. Streams (Logs, Shell) and unsaved drafts (Create) start fresh. */
+const RESTORABLE: WorkspaceTabKind[] = ["clusters", "pods", "deployments", "nodes", "helm", "gitops", "connections", "settings", "list", "yaml", "investigation", "compare"];
+const DEFAULT_TABS: WorkspaceTab[] = [
+  { id: "clusters", kind: "clusters", title: "Clusters" },
+  { id: "pods", kind: "pods", title: "Pods" },
+];
+
+function launchTabs(): { tabs: WorkspaceTab[]; active: string } {
+  if (readPreference<"restore" | "clusters">("settings.onLaunch", "restore") === "restore") {
+    const saved = readPreference<{ tabs?: WorkspaceTab[]; active?: string } | null>(SAVED_TABS, null);
+    const tabs = (saved?.tabs ?? []).filter((t) => t && typeof t.id === "string" && RESTORABLE.includes(t.kind));
+    if (tabs.length) return { tabs, active: tabs.some((t) => t.id === saved?.active) ? saved!.active! : tabs[0]!.id };
+  }
+  return { tabs: DEFAULT_TABS, active: "clusters" };
 }
 
 /** Explorer kinds have one tab each; tool tabs (Logs, Shell, YAML, Compare) open per target. */
@@ -209,12 +226,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [gitops, setGitops] = useState<GitOpsObject[]>(desktop ? [] : initialGitOps);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [pins, setPins] = usePersistentState<Pin[]>(desktop ? "investigation.desktop.pins" : "investigation.checkout-api-restarts.pins", []);
-  // Desktop opens on the clusters overview; the mock opens the design's tab set.
-  const [tabs, setTabs] = useState<WorkspaceTab[]>(
-    desktop ? [{ id: "clusters", kind: "clusters", title: "Clusters" }, { id: "pods", kind: "pods", title: "Pods" }] : initialTabs,
-  );
+  // Desktop opens the last workspace (Settings › On launch) or the clusters overview; the mock opens the design's tab set.
+  const [launch] = useState(() => (desktop ? launchTabs() : { tabs: initialTabs, active: "pods" }));
+  const [tabs, setTabs] = useState<WorkspaceTab[]>(launch.tabs);
   const [closedTabs, setClosedTabs] = useState<WorkspaceTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState(desktop ? "clusters" : "pods");
+  const [activeTabId, setActiveTabId] = useState(launch.active);
+  useEffect(() => {
+    if (desktop) writePreference(SAVED_TABS, { tabs: tabs.filter((t) => RESTORABLE.includes(t.kind)), active: activeTabId });
+  }, [tabs, activeTabId]);
   const [scenarios, setScenarios] = useState<MockScenarios>({ watchLost: false, noMetrics: false });
   const [reveal, setReveal] = useState<RevealRequest | null>(null);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());

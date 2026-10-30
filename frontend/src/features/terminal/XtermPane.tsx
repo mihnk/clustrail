@@ -23,6 +23,8 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
+const NO_REMOTE = { resize: () => {} };
+
 export interface XtermHandle {
   copySelection: () => void;
   clear: () => void;
@@ -70,8 +72,10 @@ export const XtermPane = forwardRef<
     target?: ExecTarget;
     /** Esc Esc moves focus back to the app. */
     onLeave: () => void;
+    /** Desktop: bump to start a new exec in the same terminal (reconnect). */
+    connection?: number;
   }
->(function XtermPane({ sessionId, restore, cwd, themeKey, interactive, onResize, onExit, onLeave, target }, ref) {
+>(function XtermPane({ sessionId, restore, cwd, themeKey, interactive, onResize, onExit, onLeave, target, connection = 0 }, ref) {
   const [scrollback] = usePersistentState("terminal.scrollback", 10_000);
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -79,6 +83,7 @@ export const XtermPane = forwardRef<
   const interactiveRef = useRef(interactive);
   interactiveRef.current = interactive;
   const cb = useRef({ onResize, onExit, onLeave });
+  const remote = useRef<{ resize: (cols: number, rows: number) => void }>(NO_REMOTE);
   cb.current = { onResize, onExit, onLeave };
 
   useEffect(() => {
@@ -117,47 +122,8 @@ export const XtermPane = forwardRef<
       return true;
     });
 
-    let sub: { dispose: () => void };
-    let resizeRemote = (_c: number, _r: number) => {};
-    let closeRemote = () => {};
-    if (target && backend) {
-      // A real exec stream: output arrives as base64 chunks, input and resizes go back to the backend.
-      const api = backend;
-      let execId: string | null = null;
-      let ended = false;
-      const early: ExecOutput[] = [];
-      const handle = (o: ExecOutput) => {
-        if (o.data) term.write(base64ToBytes(o.data));
-        if (o.exit !== undefined) {
-          ended = true;
-          if (o.error) term.write(`\r\n\x1b[31m${o.error}\x1b[0m\r\n`);
-          cb.current.onExit(o.exit, o.error);
-        }
-      };
-      const off = onEvent<ExecOutput>(EVENTS.exec, (o) => {
-        if (execId === null) early.push(o);
-        else if (o.id === execId) handle(o);
-      });
-      api
-        .startExec({ ...target, command: [], cols: term.cols, rows: term.rows })
-        .then((id) => {
-          execId = id;
-          early.filter((o) => o.id === id).forEach(handle);
-        })
-        .catch((e) => {
-          const msg = errorText(e);
-          term.write(`\x1b[31m${msg}\x1b[0m\r\n`);
-          cb.current.onExit(-1, msg);
-        });
-      sub = term.onData((d) => {
-        if (interactiveRef.current && execId) void api.execInput(execId, d);
-      });
-      resizeRemote = (c, r) => execId && void api.execResize(execId, c, r);
-      closeRemote = () => {
-        off();
-        if (execId && !ended) void api.closeExec(execId);
-      };
-    } else {
+    let sub: { dispose: () => void } | null = null;
+    if (!(target && backend)) {
       const shell = new MockShell((d) => term.write(d), cwd, (code) => cb.current.onExit(code));
       if (restore) term.write(SCROLLBACK);
       shell.prompt();
@@ -168,7 +134,7 @@ export const XtermPane = forwardRef<
       if (!host.offsetWidth || !host.offsetHeight) return;
       fit.fit();
       cb.current.onResize(term.cols, term.rows);
-      resizeRemote(term.cols, term.rows);
+      remote.current.resize(term.cols, term.rows);
     };
     const ro = new ResizeObserver(doFit);
     ro.observe(host);
@@ -176,12 +142,60 @@ export const XtermPane = forwardRef<
 
     return () => {
       ro.disconnect();
-      sub.dispose();
-      closeRemote();
+      sub?.dispose();
       term.dispose();
       termRef.current = null;
     };
   }, [sessionId]);
+
+  // Desktop: the exec stream, separate from the terminal so a reconnect keeps the scrollback.
+  // A new connection value starts a new exec (a new shell process in the container).
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || !target || !backend) return;
+    const api = backend;
+    let execId: string | null = null;
+    let ended = false;
+    const early: ExecOutput[] = [];
+    if (connection > 0) term.write(`\r\n\x1b[2m— reconnected · new shell process —\x1b[0m\r\n`);
+    const handle = (o: ExecOutput) => {
+      if (o.data) term.write(base64ToBytes(o.data));
+      if (o.exit !== undefined) {
+        ended = true;
+        if (o.error) term.write(`\r\n\x1b[31m${o.error}\x1b[0m\r\n`);
+        cb.current.onExit(o.exit, o.error);
+      }
+    };
+    const off = onEvent<ExecOutput>(EVENTS.exec, (o) => {
+      if (execId === null) early.push(o);
+      else if (o.id === execId) handle(o);
+    });
+    let disposed = false;
+    api
+      .startExec({ ...target, command: [], cols: term.cols, rows: term.rows })
+      .then((id) => {
+        if (disposed) return void api.closeExec(id);
+        execId = id;
+        void api.execResize(id, term.cols, term.rows);
+        early.filter((o) => o.id === id).forEach(handle);
+      })
+      .catch((e) => {
+        const msg = errorText(e);
+        term.write(`\x1b[31m${msg}\x1b[0m\r\n`);
+        cb.current.onExit(-1, msg);
+      });
+    const sub = term.onData((d) => {
+      if (interactiveRef.current && execId) void api.execInput(execId, d);
+    });
+    remote.current = { resize: (c, r) => execId && void api.execResize(execId, c, r) };
+    return () => {
+      disposed = true;
+      off();
+      sub.dispose();
+      remote.current = NO_REMOTE;
+      if (execId && !ended) void api.closeExec(execId);
+    };
+  }, [sessionId, connection]);
 
   useEffect(() => {
     if (termRef.current) termRef.current.options.theme = themeFromTokens();

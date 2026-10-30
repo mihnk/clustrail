@@ -1,4 +1,6 @@
-import { Code, Layers, RotateCcw, ScrollText, SquareTerminal, Trash2 } from "lucide-react";
+import { Cable, Code, Layers, RotateCcw, ScrollText, SquareTerminal, Trash2 } from "lucide-react";
+import { backend } from "@/backend/client";
+import { openPortForward } from "@/features/portforward/PortForward";
 import type { ResourceAction } from "@/components/resource-actions/ResourceActions";
 import type { ConfirmationRequest } from "@/components/safety/ConfirmationDialog";
 import type { Cluster, DeploymentRow, PodRow } from "@/data/types";
@@ -44,6 +46,14 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       onSelect: () => deps.confirm(shellRequest(pod, deps.cluster, () => deps.openShell(pod))),
     },
     { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", onSelect: () => deps.openYaml(pod) },
+    {
+      id: "forward",
+      group: "observe",
+      label: "Port forward…",
+      icon: <Cable />,
+      disabled: !backend || pod.status !== "Running",
+      onSelect: () => openPortForward({ cluster: pod.cluster, namespace: pod.namespace, kind: "Pod", name: pod.name }),
+    },
     {
       id: "owner",
       group: "observe",

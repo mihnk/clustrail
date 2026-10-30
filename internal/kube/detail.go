@@ -166,13 +166,13 @@ func (m *Manager) GetPodDetail(cluster, ns, name string) (PodDetail, error) {
 		d.Problem = &Problem{Title: d.Pod.Status, Container: "", Detail: d.Pod.Reason}
 	}
 
-	// Memory samples Clustrail collected since it connected (metrics-server keeps no history).
+	// Memory samples Clustrail collected (metrics-server keeps no history); see samples.go.
 	for _, cs := range d.Containers {
 		ts, vals := c.samples.series(ns + "/" + name + "/" + cs.Name)
 		if len(ts) < 2 {
 			continue
 		}
-		series := MetricSeries{Source: "sampled from metrics-server · 15s · since Clustrail connected", Timestamps: ts, Values: vals, Markers: oomAt}
+		series := MetricSeries{Source: fmt.Sprintf("sampled from metrics-server every %ds by Clustrail · kept %s across restarts", metricsEvery.Load(), ago(sampleMaxAge)), Timestamps: ts, Values: vals, Markers: oomAt}
 		if spec, ok := specs[cs.Name]; ok {
 			if q, ok := spec.Resources.Limits[corev1.ResourceMemory]; ok {
 				series.Limit = ptr(float64(q.Value()) / (1024 * 1024))

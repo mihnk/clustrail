@@ -675,6 +675,11 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 			c.mu.Unlock()
 		}
 	}
+	// Samples from earlier sessions (kept for sampleMaxAge) come first.
+	path := samplesPath(c.id)
+	c.samples.load(path, time.Now(), sampleMaxAge)
+	defer func() { _ = c.samples.save(path) }()
+	lastSave := time.Now()
 	tick()
 	for {
 		select {
@@ -682,6 +687,10 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 			return
 		case <-time.After(time.Duration(metricsEvery.Load()) * time.Second):
 			tick()
+			if time.Since(lastSave) > 5*time.Minute {
+				lastSave = time.Now()
+				_ = c.samples.save(path)
+			}
 		}
 	}
 }

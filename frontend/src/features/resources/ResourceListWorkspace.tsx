@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
-import { Check, Code, Copy, LayoutGrid, Pencil, Plus, RefreshCw, Search, SearchX, Trash2, X } from "lucide-react";
+import { Cable, Check, Code, Copy, LayoutGrid, Pencil, Plus, RefreshCw, Search, SearchX, Trash2, X } from "lucide-react";
+import { openPortForward } from "@/features/portforward/PortForward";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { backend, errorText, type GenericList, type GenericRow } from "@/backend/client";
@@ -203,6 +204,9 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
       const params = { kind, namespace: r.namespace ?? "", name: r.name };
       return [
         { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params }) },
+        ...(kind === "Service"
+          ? [{ id: "forward", group: "observe" as const, label: "Port forward…", icon: <Cable />, onSelect: () => openPortForward({ cluster: r.cluster, namespace: r.namespace ?? "", kind: "Service", name: r.name }) }]
+          : []),
         { id: "edit", group: "modify", label: "Edit YAML…", icon: <Pencil />, onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params: { ...params, mode: "edit" } }) },
         {
           id: "delete",

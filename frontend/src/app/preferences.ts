@@ -10,6 +10,16 @@ export type Density = "compact" | "default" | "comfortable";
 
 export const ROW_HEIGHT: Record<Density, number> = { compact: 24, default: 28, comfortable: 34 };
 
+/** Reads a persisted value outside React (initial state). */
+export function readPreference<T>(key: string, fallback: T): T {
+  return read(key, fallback);
+}
+
+/** Writes a persisted value outside React; hooks reading the key are not notified. */
+export function writePreference(key: string, value: unknown): void {
+  write(key, value);
+}
+
 function read<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(`clustrail.${key}`);

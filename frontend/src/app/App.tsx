@@ -20,6 +20,7 @@ import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
 import { LogsWorkspace } from "@/features/logs/LogsWorkspace";
 import { ResourceListWorkspace } from "@/features/resources/ResourceListWorkspace";
+import { PortForwardHost } from "@/features/portforward/PortForward";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
 // xterm.js and Monaco only load when a Shell or YAML tab renders.
@@ -38,6 +39,7 @@ export function App() {
           <ConfirmationProvider>
             <ShortcutsProvider>
               <AppShell />
+              <PortForwardHost />
             </ShortcutsProvider>
           </ConfirmationProvider>
         </TooltipProvider>

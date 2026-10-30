@@ -1,7 +1,7 @@
 // The only way the UI reaches clusters: calls into the Go Workspace service
 // and events it emits. Running in a plain browser (vite dev) there is no Go
 // side, so the app falls back to the mock data layer.
-import { Call, Events } from "@wailsio/runtime";
+import { Browser, Call, Events } from "@wailsio/runtime";
 import type { Cluster, DeploymentRow, Environment, PodDetail, PodRelation, PodRow, ResourceEvent } from "@/data/types";
 import type { NodeRow } from "@/data/nodes";
 import type { HelmRelease } from "@/data/helm";
@@ -147,6 +147,32 @@ export interface GenericList {
   shown?: string;
 }
 
+export interface PortForwardRequest {
+  cluster: string;
+  namespace: string;
+  kind: "Pod" | "Service" | "Deployment";
+  name: string;
+  /** Service port for Services, else a container port. */
+  port: number;
+  /** 0 picks a free port. */
+  localPort: number;
+}
+
+export interface PortForwardInfo {
+  id: string;
+  cluster: string;
+  namespace: string;
+  kind: string;
+  name: string;
+  port: number;
+  localPort: number;
+  pod?: string;
+  podPort?: number;
+  state: "starting" | "active" | "reconnecting" | "failed";
+  error?: string;
+  started: string;
+}
+
 export interface LogsRequest {
   cluster: string;
   namespace: string;
@@ -251,6 +277,12 @@ export const backendApi = {
   setGitOpsSuspended: (cluster: string, kind: string, ns: string, name: string, suspended: boolean) =>
     call<void>("SetGitOpsSuspended", cluster, kind, ns, name, suspended),
 
+  startPortForward: (req: PortForwardRequest) => call<PortForwardInfo>("StartPortForward", req),
+  stopPortForward: (id: string) => call<void>("StopPortForward", id),
+  portForwards: () => call<PortForwardInfo[]>("PortForwards"),
+  forwardablePorts: (cluster: string, kind: string, ns: string, name: string) =>
+    call<{ port: number; name?: string; detail?: string }[]>("ForwardablePorts", cluster, kind, ns, name),
+
   startLogs: (req: LogsRequest) => call<string>("StartLogs", req),
   stopLogs: (id: string) => call<void>("StopLogs", id),
   startExec: (req: ExecRequest) => call<string>("StartExec", req),
@@ -272,7 +304,14 @@ export const EVENTS = {
   job: "clustrail:job",
   logs: "clustrail:logs",
   exec: "clustrail:exec",
+  portForwards: "clustrail:portforwards",
 } as const;
+
+/** Opens a URL in the system browser (desktop) or a new tab (browser preview). */
+export function openExternal(url: string): void {
+  if (backend) void Browser.OpenURL(url);
+  else window.open(url, "_blank", "noopener");
+}
 
 /** Set once at startup: the Go backend when running in the desktop app, else null (mock data). */
 export let backend: BackendApi | null = null;

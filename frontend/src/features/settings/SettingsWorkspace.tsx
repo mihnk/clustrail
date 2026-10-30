@@ -218,9 +218,8 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       node: (
         <Section id="clusters" icon={<LayoutGrid />} title="Clusters & namespaces">
           {show("on launch", "restore", "workspace") && (
-            <Setting label="On launch" detail={backend ? NOT_YET : undefined}>
+            <Setting label="On launch" detail={backend ? "Logs and shell tabs start fresh; their streams are not resumed." : undefined}>
               <Select
-                disabled={!!backend}
                 label="On launch"
                 value={onLaunch}
                 onChange={(v) => setOnLaunch(v as typeof onLaunch)}
@@ -296,7 +295,7 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
             </Setting>
           )}
           {show("metrics refresh", "metrics-server") && (
-            <Setting label="Metrics refresh" detail="metrics-server reports current usage only; Clustrail keeps samples while it runs.">
+            <Setting label="Metrics refresh" detail="metrics-server reports current usage only; Clustrail keeps its samples for 2 hours, across restarts.">
               <NumberField label="Metrics refresh" value={metricsInterval} onChange={setMetricsInterval} min={10} max={300} unit="s" />
             </Setting>
           )}

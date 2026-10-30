@@ -1,4 +1,6 @@
-import { ArrowLeftRight, Code, History, Pause, Play, RotateCcw, Scaling, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Cable, Code, History, Pause, Play, RotateCcw, Scaling, Trash2 } from "lucide-react";
+import { backend } from "@/backend/client";
+import { openPortForward } from "@/features/portforward/PortForward";
 import type { ResourceAction } from "@/components/resource-actions/ResourceActions";
 import type { ConfirmationRequest } from "@/components/safety/ConfirmationDialog";
 import type { Cluster, DeploymentRow } from "@/data/types";
@@ -28,6 +30,14 @@ export function deploymentActions(d: DeploymentRow, deps: DeploymentActionDeps):
     { id: "history", group: "observe", label: "Rollout history", icon: <History />, shortcut: "H", onSelect: deps.showHistory },
     { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", onSelect: () => deps.openYaml(false) },
     { id: "compare", group: "observe", label: "Compare with…", icon: <ArrowLeftRight />, shortcut: "C", onSelect: deps.compare },
+    {
+      id: "forward",
+      group: "observe",
+      label: "Port forward…",
+      icon: <Cable />,
+      disabled: !backend || d.readyReplicas === 0,
+      onSelect: () => openPortForward({ cluster: d.cluster, namespace: d.namespace, kind: "Deployment", name: d.name }),
+    },
     {
       id: "scale",
       group: "modify",

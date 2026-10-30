@@ -27,6 +27,7 @@ type Manager struct {
 	hidden   map[string]bool
 	attempts map[string]int
 	streams  streams
+	forwards forwards
 }
 
 func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
@@ -370,6 +371,7 @@ func (m *Manager) onProbe(id string, ms int, err error) {
 
 // Disconnect stops the informers and drops the cache of a context.
 func (m *Manager) Disconnect(id string) {
+	m.stopForwardsOf(id)
 	m.mu.Lock()
 	conn := m.conns[id]
 	delete(m.conns, id)
@@ -487,6 +489,7 @@ func (m *Manager) Snapshot() Snapshot {
 
 // Shutdown stops every connection.
 func (m *Manager) Shutdown() {
+	m.stopAllForwards()
 	m.mu.Lock()
 	conns := m.conns
 	m.conns = map[string]*clusterConn{}
