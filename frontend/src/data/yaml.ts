@@ -10,6 +10,8 @@ export interface LiveObject {
   gitops?: { tool: "Argo CD" | "Flux"; app: string; selfHeal: boolean; source: string };
   /** Field paths and the manager that owns them (from managedFields). */
   owners: Record<string, string>;
+  /** Secrets (desktop): keys and sizes; values are hidden in the YAML. */
+  secret?: { type: string; keys: { key: string; bytes: number }[] };
 }
 
 const CHECKOUT = `apiVersion: apps/v1

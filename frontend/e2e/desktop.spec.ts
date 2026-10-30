@@ -146,3 +146,16 @@ test("starts and names a new investigation", async ({ page }) => {
   await expect(page.getByRole("tab", { name: /DNS timeouts/ })).toBeVisible();
   await expect(visible(page, /new pins land here/)).toBeVisible();
 });
+
+test("shows Secret keys and reveals a value only on request", async ({ page }) => {
+  await sidebar(page, /^Secrets/).click();
+  await visible(page, "Opaque").click();
+  await page.getByRole("tab", { name: "Data" }).click();
+  await expect(visible(page, "password")).toBeVisible();
+  await expect(page.getByText("hunter2")).toHaveCount(0);
+  expect(backend.calls).not.toContain("RevealSecretKey");
+  await page.getByRole("button", { name: "Show" }).click();
+  await expect(visible(page, "hunter2")).toBeVisible();
+  await page.getByRole("button", { name: "Hide" }).click();
+  await expect(page.getByText("hunter2")).toHaveCount(0);
+});

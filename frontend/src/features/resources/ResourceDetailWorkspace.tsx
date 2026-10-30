@@ -12,6 +12,7 @@ import { deploymentActions } from "@/features/deployments/actions";
 import { useDeploymentDeps, type DeploymentNav } from "@/features/deployments/DeploymentsWorkspace";
 import { EventsPanel } from "@/features/pods/PodInspector";
 import { kindName } from "./kinds";
+import { SecretKeys } from "./SecretKeys";
 
 /** One object in its own tab: the full Deployment inspector, or YAML and events for any other kind. */
 export function ResourceDetailWorkspace({ tab }: { tab: WorkspaceTab; active: boolean }) {
@@ -70,6 +71,7 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
   const ns = tab.params?.namespace ?? "";
   const name = tab.params?.name ?? tab.title;
   const [yaml, setYaml] = useState<string | null>(null);
+  const [secret, setSecret] = useState<{ type: string; keys: { key: string; bytes: number }[] } | undefined>();
   const [error, setError] = useState<string | null>(null);
   const events = useEvents(tab.cluster ?? "", ns, kindName(kind), name, !!backend);
   useEffect(() => {
@@ -77,7 +79,11 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
     let cancelled = false;
     backend
       .getObject(tab.cluster, kind, ns, name)
-      .then((o) => !cancelled && setYaml(o.yaml))
+      .then((o) => {
+        if (cancelled) return;
+        setYaml(o.yaml);
+        setSecret(o.secret);
+      })
       .catch((e) => !cancelled && setError(errorText(e)));
     return () => {
       cancelled = true;
@@ -111,9 +117,15 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
         </div>
         <Tabs defaultValue="yaml" className="flex min-h-0 flex-1 flex-col">
           <TabsList aria-label="Sections" className="mt-1 gap-3 px-4 pt-1.5">
+            {secret && <TabsTrigger value="data">Data</TabsTrigger>}
             <TabsTrigger value="yaml">YAML</TabsTrigger>
             <TabsTrigger value="events">Events {events !== null && <TabCount>{events.length}</TabCount>}</TabsTrigger>
           </TabsList>
+          {secret && (
+            <TabsContent value="data" className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+              <SecretKeys cluster={tab.cluster ?? ""} namespace={ns} name={name} keys={secret.keys} type={secret.type} />
+            </TabsContent>
+          )}
           <TabsContent value="yaml" className="min-h-0 flex-1 overflow-auto">
             {error ? (
               <EmptyState title="Could not read the object">

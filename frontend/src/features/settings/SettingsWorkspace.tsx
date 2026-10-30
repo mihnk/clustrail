@@ -381,13 +381,16 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
             <Setting
               label="Total log memory"
               detail={
-                <span className="flex items-center gap-2">
-                  <Meter value={Math.min(1, (logBuffer * 260) / 1048576 / logMemory)} label="Log buffer of one stream vs total" className="max-w-24" />
-                  <span>one full stream ≈ {Math.round((logBuffer * 260) / 1048576)} MB</span>
+                <span className="flex flex-col gap-0.5">
+                  <span className="flex items-center gap-2">
+                    <Meter value={Math.min(1, (logBuffer * 260) / 1048576 / logMemory)} label="Log buffer of one stream vs total" className="max-w-24" />
+                    <span>one full stream ≈ {Math.round((logBuffer * 260) / 1048576)} MB</span>
+                  </span>
+                  <span>Shared by open log tabs: each keeps at most its share (≈260 bytes a line), oldest lines first to go.</span>
                 </span>
               }
             >
-              <NumberField disabled label="Total log memory" value={logMemory} onChange={setLogMemory} min={64} max={4096} unit="MB" />
+              <NumberField label="Total log memory" value={logMemory} onChange={setLogMemory} min={64} max={4096} unit="MB" />
             </Setting>
           )}
           {show("terminal scrollback") && (

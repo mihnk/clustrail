@@ -701,3 +701,32 @@ func TestPollModeListsInsteadOfWatching(t *testing.T) {
 		}
 	}
 }
+
+func TestHelmReleasesInPollMode(t *testing.T) {
+	t.Setenv("HELM_REPOSITORY_CACHE", t.TempDir())
+	pollMode.Store(true)
+	t.Cleanup(func() { pollMode.Store(false) })
+	s := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "sh.helm.release.v1.api.v1", Namespace: "payments", Labels: map[string]string{"owner": "helm"}},
+		Type:       "helm.sh/release.v1",
+		Data: map[string][]byte{"release": encodeRelease(t, map[string]any{
+			"name": "api", "namespace": "payments", "version": 1,
+			"info":  map[string]any{"status": "deployed", "last_deployed": now.Format(time.RFC3339)},
+			"chart": map[string]any{"metadata": map[string]any{"name": "api", "version": "1.0.0"}},
+		})},
+	}
+	c, client, rec := newFakeConn(t, s)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.helm = newHelmWatcher(c, "me")
+	c.helm.start(ctx)
+	waitFor(t, "helm delta", func() bool { return len(rec.deltas("helm")) > 0 })
+	if rows := rec.deltas("helm")[0].Upserts; len(rows) != 1 || rows[0].(HelmRelease).Name != "api" {
+		t.Fatalf("rows = %+v", rows)
+	}
+	for _, a := range client.Actions() {
+		if a.GetVerb() == "watch" && a.GetResource().Resource == "secrets" {
+			t.Fatal("Helm secrets were watched in poll mode")
+		}
+	}
+}

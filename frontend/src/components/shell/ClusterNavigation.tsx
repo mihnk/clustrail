@@ -6,6 +6,7 @@ import {
   Copy,
   Database,
   FileText,
+  KeyRound,
   GitBranch,
   Globe,
   LayoutGrid,
@@ -98,6 +99,7 @@ export function ClusterNavigation() {
         {list("Service", <Network />, <NavCount>74</NavCount>)}
         {list("networking.k8s.io/Ingress", <Globe />, <NavCount>19</NavCount>)}
         {list("ConfigMap", <FileText />, <NavCount>203</NavCount>)}
+        {real && list("Secret", <KeyRound />)}
         {list("Event", <Activity />, <CountPill tone="warning" className="ml-auto">23</CountPill>)}
         <NavItem icon={<Server />} label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={real ? count(nodesAttention, nodeRows.length, "warning") : <><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
         <NavItem icon={<LayoutGrid />} label="All resource kinds" onClick={openKinds} trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />

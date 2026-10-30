@@ -328,7 +328,9 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 	poll := pollMode.Load()
 	source := func(inf func() cache.SharedIndexInformer, list func(context.Context) ([]any, error), indexers cache.Indexers, onChange func(obj any)) cache.Indexer {
 		if poll {
-			return c.pollSource(ctx, list, indexers, onChange)
+			idx, synced := c.pollSource(ctx, list, indexers, onChange)
+			c.syncFns = append(c.syncFns, synced)
+			return idx
 		}
 		i := inf()
 		if indexers != nil {
@@ -891,14 +893,13 @@ func items[T any, L any](l L, err error, get func() []T) ([]any, error) {
 // pollSource fills a cache by listing every pollEvery and calls onChange for
 // objects that were added, changed (new resourceVersion) or removed, like an
 // informer's handlers would.
-func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context) ([]any, error), indexers cache.Indexers, onChange func(obj any)) cache.Indexer {
+func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context) ([]any, error), indexers cache.Indexers, onChange func(obj any)) (cache.Indexer, func() bool) {
 	if indexers == nil {
 		indexers = cache.Indexers{}
 	}
 	idx := cache.NewIndexer(cache.MetaNamespaceKeyFunc, indexers)
 	every := pollEvery
 	var synced atomic.Bool
-	c.syncFns = append(c.syncFns, synced.Load)
 	go func() {
 		for {
 			lctx, cancel := context.WithTimeout(ctx, 60*time.Second)
@@ -945,7 +946,7 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 			}
 		}
 	}()
-	return idx
+	return idx, synced.Load
 }
 
 func resourceVersion(obj any) string {

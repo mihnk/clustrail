@@ -51,6 +51,10 @@ through one Wails service (`internal/app.Workspace`) and its events.
   (`clustrail:delta`), never as full lists. Informer indexes (pods by node,
   ReplicaSets by owner) keep a change to one object from rebuilding unrelated
   rows.
+- **Secrets** (`secrets.go`): like Lens, keys and sizes are shown and values
+  stay hidden until you reveal one key; the log records who revealed which
+  key, never the value. In YAML each value reads `(hidden, N bytes)`; an edit
+  that keeps the placeholder keeps the live value.
 - **Other kinds** (`generic.go`): any kind the cluster serves, CRDs included,
   is listed with the API server's own table columns (what `kubectl get`
   prints), deleted with background propagation, or created from YAML.

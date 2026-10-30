@@ -19,6 +19,7 @@ export const LISTED_KINDS: { key: string; label: string }[] = [
   { key: "Service", label: "Services" },
   { key: "networking.k8s.io/Ingress", label: "Ingresses" },
   { key: "ConfigMap", label: "ConfigMaps" },
+  { key: "Secret", label: "Secrets" },
   { key: "Event", label: "Events" },
 ];
 

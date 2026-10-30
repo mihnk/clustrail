@@ -259,22 +259,33 @@ func (h *helmWatcher) start(ctx context.Context) {
 	if !ok {
 		return
 	}
-	f := informers.NewSharedInformerFactoryWithOptions(h.c.client, 0, informers.WithNamespace(ns), informers.WithTweakListOptions(func(o *metav1.ListOptions) {
-		o.LabelSelector = "owner=helm"
-	}))
-	inf := f.Core().V1().Secrets()
-	h.lister = inf.Lister()
-	h.synced = inf.Informer().HasSynced
 	mark := func(any) { h.mu.Lock(); h.dirty = true; h.mu.Unlock() }
-	_, _ = inf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{AddFunc: mark, UpdateFunc: func(_, o any) { mark(o) }, DeleteFunc: mark})
-	f.Start(ctx.Done())
+	var stop func()
+	if pollMode.Load() {
+		// Poll mode: Helm's storage Secrets are listed like everything else.
+		idx, synced := h.c.pollSource(ctx, func(ctx context.Context) ([]any, error) {
+			l, err := h.c.client.CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{LabelSelector: "owner=helm"})
+			return items(l, err, func() []corev1.Secret { return l.Items })
+		}, nil, mark)
+		h.lister, h.synced, stop = listerscorev1.NewSecretLister(idx), synced, func() {}
+	} else {
+		f := informers.NewSharedInformerFactoryWithOptions(h.c.client, 0, informers.WithNamespace(ns), informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+			o.LabelSelector = "owner=helm"
+		}))
+		inf := f.Core().V1().Secrets()
+		h.lister = inf.Lister()
+		h.synced = inf.Informer().HasSynced
+		_, _ = inf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{AddFunc: mark, UpdateFunc: func(_, o any) { mark(o) }, DeleteFunc: mark})
+		f.Start(ctx.Done())
+		stop = f.Shutdown
+	}
 	go func() {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
-				f.Shutdown()
+				stop()
 				return
 			case <-t.C:
 				h.flush()

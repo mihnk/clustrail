@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
 import { backend, EVENTS, onEvent, type LogBatch } from "@/backend/client";
+import { useLogLineLimit } from "./budget";
 import { usePersistentState } from "@/app/preferences";
 import {
   checkoutSources,
@@ -61,7 +62,9 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const cluster = tab.cluster ? ws.clusterById(tab.cluster) : undefined;
   const workload = tab.params?.workload ?? "checkout-api";
   const namespace = tab.params?.namespace ?? "payments";
-  const [bufferLimit] = usePersistentState("logs.bufferLines", 100_000);
+  const [bufferSetting] = usePersistentState("logs.bufferLines", 100_000);
+  // The per-stream buffer, lowered when many log tabs share Settings › Total log memory.
+  const bufferLimit = useLogLineLimit(tab.id, bufferSetting);
 
   // Desktop: the workload's pods (attention first), at most four sources. Mock: the checkout-api design.
   const desktopPods = useMemo(() => {

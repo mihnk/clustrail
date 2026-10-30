@@ -30,6 +30,8 @@ type LiveObject struct {
 	GitOps          *GitOpsOwner      `json:"gitops,omitempty"`
 	Owners          map[string]string `json:"owners"`
 	APIVersion      string            `json:"apiVersion"`
+	// Secret: the keys of a Secret, whose values are hidden in YAML (see secrets.go).
+	Secret *SecretInfo `json:"secret,omitempty"`
 }
 
 // ApplyResult reports a server-side apply or its dry run.
@@ -130,6 +132,9 @@ func (m *Manager) GetObject(cluster, kind, ns, name string) (LiveObject, error) 
 	// managedFields are shown as ownership; the YAML stays readable without them.
 	clean := obj.DeepCopy()
 	unstructured.RemoveNestedField(clean.Object, "metadata", "managedFields")
+	if isSecret(gvr) {
+		live.Secret = maskSecret(clean)
+	}
 	b, err := yaml.Marshal(clean.Object)
 	if err != nil {
 		return LiveObject{}, err
@@ -254,6 +259,12 @@ func (m *Manager) ApplyYAML(cluster, text, openedVersion string, dryRun, force b
 	gvr, namespaced, err := c.resolve(obj.GroupVersionKind().Group + "/" + obj.GetKind())
 	if err != nil {
 		if gvr, namespaced, err = c.resolve(obj.GetKind()); err != nil {
+			return res, err
+		}
+	}
+	if isSecret(gvr) {
+		// Hidden values were never sent to the UI: put the live ones back.
+		if err := unmaskSecret(c, &obj); err != nil {
 			return res, err
 		}
 	}

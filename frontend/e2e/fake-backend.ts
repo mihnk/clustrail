@@ -53,6 +53,12 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
     case "PodDetail":
       return fx.podDetail;
     case "GetObject":
+      if (args[1] === "Secret")
+        return {
+          yaml: "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: payments\ntype: Opaque\ndata:\n  password: (hidden, 7 bytes)\n",
+          resourceVersion: "9", owners: {}, apiVersion: "v1",
+          secret: { type: "Opaque", keys: [{ key: "password", bytes: 7 }] },
+        };
       if (args[1] === "ConfigMap") return { yaml: 'apiVersion: v1\nkind: ConfigMap\ndata:\n  A: "1"\n', resourceVersion: "1", owners: {}, apiVersion: "v1" };
       return {
         ...fx.liveObject,
@@ -97,8 +103,16 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       ];
     case "CreateObjects":
       return [{ kind: "CronJob", name: "my-cronjob", namespace: "default", status: args[2] ? "valid" : "created" }];
+    case "RevealSecretKey":
+      return { value: "hunter2", binary: false };
     case "ListResources": {
       const [cluster, kind] = args as [string, string];
+      if (kind === "Secret")
+        return {
+          cluster, kind, namespaced: true,
+          columns: [{ name: "Type", type: "string", priority: 0 }, { name: "Data", type: "integer", priority: 0 }],
+          rows: [{ id: `${cluster}/payments/db`, cluster, namespace: "payments", name: "db", created: "2026-10-01T00:00:00Z", cells: ["Opaque", "1"] }],
+        };
       if (kind === "batch/CronJob")
         return {
           cluster, kind, namespaced: true,

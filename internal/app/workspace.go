@@ -152,6 +152,15 @@ func (w *Workspace) SetUpdateMethod(method string) {
 	slog.Info("update method", "method", method)
 }
 
+// RevealSecretKey shows one Secret value. Who revealed which key is logged; the value never is.
+func (w *Workspace) RevealSecretKey(cluster, ns, name, key string) (kube.SecretValue, error) {
+	v, err := w.m.RevealSecretKey(cluster, ns, name, key)
+	if err == nil {
+		slog.Info("secret value revealed", "cluster", cluster, "secret", target(ns, name), "key", key, "user", w.user)
+	}
+	return v, err
+}
+
 // Port forwards.
 
 func (w *Workspace) StartPortForward(req kube.PortForwardRequest) (kube.PortForward, error) {

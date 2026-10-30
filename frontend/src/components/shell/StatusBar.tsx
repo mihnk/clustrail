@@ -5,7 +5,7 @@ import { IS_MOCK, getAccessSummary } from "@/data/mock";
 import { ConnectionDot } from "@/components/status/EnvironmentBadge";
 
 export function StatusBar() {
-  const { clusters, selectedClusters, activeTab, clusterById, jobs } = useWorkspace();
+  const { clusters, selectedClusters, activeTab, clusterById, jobs, pins } = useWorkspace();
   const job = jobs[0];
   const jobItem = job ? (
     <span className="flex items-center gap-1.5 whitespace-nowrap text-status-progressing" role="status">
@@ -76,7 +76,9 @@ export function StatusBar() {
       </span>
       {investigating ? (
         // Investigations keep their own watches on the involved objects.
-        <span className="whitespace-nowrap">Watching 12 objects · live</span>
+        <span className="whitespace-nowrap">
+          {IS_MOCK ? "Watching 12 objects · live" : `${pins.length} pinned · saved locally`}
+        </span>
       ) : (
         <span className="truncate font-mono text-label max-[1360px]:hidden">
           {connected.map((c) => `${c.name} ${c.latencyMs}ms`).join(" · ")}

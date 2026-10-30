@@ -14,6 +14,7 @@ import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { applyClustrailTheme, monaco } from "./monaco";
+import { SecretKeys } from "@/features/resources/SecretKeys";
 
 type Mode = "view" | "edit";
 type DiffMode = "none" | "inline" | "side";
@@ -79,7 +80,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         .then((obj) => {
           if (cancelled) return;
           setLoadError(null);
-          const next: LiveObject = { yaml: obj.yaml, resourceVersion: obj.resourceVersion, owners: obj.owners, gitops: obj.gitops };
+          const next: LiveObject = { yaml: obj.yaml, resourceVersion: obj.resourceVersion, owners: obj.owners, gitops: obj.gitops, secret: obj.secret };
           if (first) {
             first = false;
             setLive(next);
@@ -416,6 +417,18 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           <b className="font-semibold">The live object changed</b> while you were editing (resourceVersion {openedVersion} → {live.resourceVersion}). The
           diff now compares against the new version.
         </Banner>
+      )}
+
+      {live.secret && tab.cluster && (
+        <details className="shrink-0 border-b border-line bg-surface-panel px-3.5 py-2 text-ui dark:bg-transparent">
+          <summary className="cursor-default select-none">
+            <b className="font-semibold">Secret values are hidden.</b>{" "}
+            <span className="text-fg-secondary">
+              Keep <span className="font-mono">(hidden, N bytes)</span> to keep a value; to change one, replace it with the new value in base64.
+            </span>
+          </summary>
+          <SecretKeys className="mt-2 max-w-[720px]" cluster={tab.cluster} namespace={params.namespace ?? ""} name={params.name ?? ""} keys={live.secret.keys} type={live.secret.type} />
+        </details>
       )}
 
       <div className="flex h-[46px] shrink-0 items-center gap-2 border-b border-line bg-surface-panel pl-3.5 pr-3 dark:bg-transparent">

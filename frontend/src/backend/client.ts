@@ -99,6 +99,8 @@ export interface LiveObjectInfo {
   gitops?: { tool: GitOpsTool; app: string; selfHeal: boolean; source: string };
   owners: Record<string, string>;
   apiVersion: string;
+  /** Secrets: keys and sizes; the YAML holds "(hidden, N bytes)" in place of each value. */
+  secret?: { type: string; keys: { key: string; bytes: number }[] };
 }
 
 export interface ApplyResult {
@@ -290,6 +292,8 @@ export const backendApi = {
   drainNode: (cluster: string, node: string, opts: DrainOptions) => call<string>("DrainNode", cluster, node, opts),
 
   getObject: (cluster: string, kind: string, ns: string, name: string) => call<LiveObjectInfo>("GetObject", cluster, kind, ns, name),
+  revealSecretKey: (cluster: string, ns: string, name: string, key: string) =>
+    call<{ value: string; binary: boolean }>("RevealSecretKey", cluster, ns, name, key),
   applyYaml: (cluster: string, text: string, openedVersion: string, dryRun: boolean, force: boolean) =>
     call<ApplyResult>("ApplyYAML", cluster, text, openedVersion, dryRun, force),
 

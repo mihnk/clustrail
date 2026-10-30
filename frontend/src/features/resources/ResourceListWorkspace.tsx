@@ -36,6 +36,7 @@ import { EventsPanel } from "@/features/pods/PodInspector";
 import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { kindName, kubectlResource, listLabel, resourceTab } from "./kinds";
+import { SecretKeys } from "./SecretKeys";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
 
@@ -520,6 +521,7 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
       <Tabs defaultValue="details" className="flex min-h-0 flex-1 flex-col">
         <TabsList aria-label="Sections" className="mt-1 gap-3 px-3.5 pt-1.5">
           <TabsTrigger value="details">Details</TabsTrigger>
+          {kind === "Secret" && <TabsTrigger value="data">Data</TabsTrigger>}
           {!isEvent && (
             <TabsTrigger value="events">
               Events {events !== null && <TabCount>{events.length}</TabCount>}
@@ -550,6 +552,11 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
             </div>
           )}
         </TabsContent>
+        {kind === "Secret" && (
+          <TabsContent value="data" className="min-h-0 flex-1 overflow-y-auto px-3.5 py-3">
+            <SecretKeys cluster={row.cluster} namespace={row.namespace ?? ""} name={row.name} />
+          </TabsContent>
+        )}
         {!isEvent && (
           <TabsContent value="events" className="min-h-0 flex-1 overflow-y-auto">
             {events === null ? (

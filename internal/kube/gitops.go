@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -135,6 +136,8 @@ func (g *gitopsWatcher) served(gvr schema.GroupVersionResource) bool {
 
 func (g *gitopsWatcher) start(ctx context.Context) {
 	f := dynamicinformer.NewDynamicSharedInformerFactory(g.c.dynamic, 0)
+	poll := pollMode.Load()
+	mark := func(any) { g.mu.Lock(); g.dirty = true; g.mu.Unlock() }
 	for _, gvr := range []schema.GroupVersionResource{argoApps, fluxKustomize, fluxHelmRelease} {
 		if !g.served(gvr) || !g.c.canList(ctx, gvr.Group, gvr.Resource) {
 			continue
@@ -144,10 +147,20 @@ func (g *gitopsWatcher) start(ctx context.Context) {
 		} else if g.tool == "" {
 			g.tool = "Flux"
 		}
+		if poll {
+			// Poll mode: Applications and Kustomizations/HelmReleases are listed every pollEvery.
+			gvr := gvr
+			idx, synced := g.c.pollSource(ctx, func(ctx context.Context) ([]any, error) {
+				l, err := g.c.dynamic.Resource(gvr).List(ctx, metav1.ListOptions{})
+				return items(l, err, func() []unstructured.Unstructured { return l.Items })
+			}, nil, mark)
+			g.listers[gvr] = cache.NewGenericLister(idx, gvr.GroupResource())
+			g.synced = append(g.synced, synced)
+			continue
+		}
 		inf := f.ForResource(gvr)
 		g.listers[gvr] = inf.Lister()
 		g.synced = append(g.synced, inf.Informer().HasSynced)
-		mark := func(any) { g.mu.Lock(); g.dirty = true; g.mu.Unlock() }
 		_, _ = inf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{AddFunc: mark, UpdateFunc: func(_, o any) { mark(o) }, DeleteFunc: mark})
 	}
 	if len(g.listers) == 0 {
