@@ -12,8 +12,8 @@ interface PodActionDeps {
   confirm: (r: ConfirmationRequest) => void;
   deletePod: (id: string) => void;
   restartDeployment: (id: string) => void;
-  openTab: (id: string) => boolean;
-  hasTab: (id: string) => boolean;
+  /** Opens a resource detail tab (created when missing). */
+  openResource: (cluster: string, kind: string, namespace: string, name: string) => void;
   openLogs: (pod: PodRow) => void;
   openShell: (pod: PodRow) => void;
   openYaml: (pod: PodRow) => void;
@@ -30,7 +30,6 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
   const deployment = deps.deployments.find(
     (d) => d.cluster === pod.cluster && d.namespace === pod.namespace && d.name === deploymentName,
   );
-  const ownerTab = deploymentName ? `deploy-${deploymentName}` : "";
 
   return [
     // Observe: nothing here changes the cluster.
@@ -60,8 +59,8 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       label: "Open owner",
       icon: <Layers />,
       shortcut: "O",
-      disabled: !deps.hasTab(ownerTab),
-      onSelect: () => deps.openTab(ownerTab),
+      disabled: !deploymentName,
+      onSelect: () => deploymentName && deps.openResource(pod.cluster, "Deployment", pod.namespace, deploymentName),
     },
     // Modify: always goes through the confirmation for the cluster's environment.
     {

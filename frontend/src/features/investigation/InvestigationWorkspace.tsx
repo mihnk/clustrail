@@ -18,9 +18,10 @@ import {
   Pin as PinIcon,
   Plus,
   RotateCcw,
+  Trash2,
   X,
 } from "lucide-react";
-import { useWorkspace } from "@/app/workspace";
+import { DEFAULT_INVESTIGATION, investigationKey, useWorkspace, type Pin, type WorkspaceTab } from "@/app/workspace";
 import { usePersistentState } from "@/app/preferences";
 import {
   checkoutInvestigation,
@@ -50,6 +51,7 @@ import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { restartDeploymentRequest } from "@/features/deployments/requests";
 import { cn } from "@/lib/cn";
 import { backend } from "@/backend/client";
+import { resourceTab } from "@/features/resources/kinds";
 
 type View = "evidence" | "timeline";
 type InvStatus = "Open" | "Monitoring" | "Resolved";
@@ -67,18 +69,23 @@ interface Evidence {
   open?: { label: string; run: () => void };
 }
 
-export function InvestigationWorkspace() {
-  // The checkout-api investigation is the design's sample; with real clusters the document starts from pinned evidence.
-  return backend ? <PinnedInvestigation /> : <SampleInvestigation />;
+export function InvestigationWorkspace({ tab }: { tab: WorkspaceTab }) {
+  // The checkout-api investigation is the design's sample; with real clusters, and for every
+  // investigation you start, the document starts from pinned evidence.
+  return !backend && tab.id === DEFAULT_INVESTIGATION ? <SampleInvestigation /> : <PinnedInvestigation id={tab.id} />;
 }
 
-/** Desktop: a local document of evidence pinned from Logs and shells, with hypotheses and notes. */
-function PinnedInvestigation() {
-  const { pins, clearPins } = useWorkspace();
-  const key = (k: string) => `investigation.desktop.${k}`;
-  const [hypotheses, setHypotheses] = usePersistentState<Hypothesis[]>(key("hypotheses"), []);
-  const [notes, setNotes] = usePersistentState<string>(key("notes-md"), "");
+/** A local document of evidence pinned from Logs and shells, with hypotheses and notes. */
+function PinnedInvestigation({ id }: { id: string }) {
+  const ws = useWorkspace();
+  const info = ws.investigations.find((i) => i.id === id);
+  const title = info?.title ?? "Investigation";
+  const [pins, setPins] = usePersistentState<Pin[]>(investigationKey(id, "pins"), []);
+  const [hypotheses, setHypotheses] = usePersistentState<Hypothesis[]>(investigationKey(id, "hypotheses"), []);
+  const [notes, setNotes] = usePersistentState<string>(investigationKey(id, "notes-md"), "");
   const [copied, setCopied] = useState(false);
+  const clearPins = () => setPins([]);
+  const isTarget = ws.currentInvestigation === id;
   const evidence: Evidence[] = pins.map((p, i) => ({
     id: `E${i + 1}`,
     source: p.source.split(" · ")[0] === "Shell" ? "Shell output" : "Log excerpt",
@@ -89,7 +96,7 @@ function PinnedInvestigation() {
   }));
   const markdown = () =>
     [
-      "# Investigation",
+      `# ${title}`,
       "",
       "## Evidence (captured from the cluster)",
       ...evidence.map((e) => `- **${e.id}** [${e.source}] ${e.title} (${e.at})\n\n  \`\`\`\n  ${e.plain}\n  \`\`\``),
@@ -104,8 +111,20 @@ function PinnedInvestigation() {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex shrink-0 items-end gap-4 border-b border-line px-4 pb-3 pt-3">
         <div className="flex min-w-0 flex-col gap-[5px]">
-          <h1 className="m-0 truncate text-heading font-semibold tracking-[-.01em]">Investigation</h1>
-          <span className="text-cell text-fg-secondary">Evidence you pin from Logs and shells, with your hypotheses and notes · saved locally</span>
+          <h1 className="m-0 min-w-0 text-heading font-semibold tracking-[-.01em]">
+            <input
+              aria-label="Investigation title"
+              defaultValue={title}
+              key={title}
+              onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== title && ws.renameInvestigation(id, e.target.value.trim())}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              className="w-[min(480px,60vw)] rounded-sm border-0 bg-transparent p-0 text-inherit outline-none focus:shadow-[0_0_0_2px_var(--accent-soft)]"
+            />
+          </h1>
+          <span className="text-cell text-fg-secondary">
+            Evidence you pin from Logs and shells, with your hypotheses and notes · saved locally
+            {isTarget ? " · new pins land here" : ""}
+          </span>
         </div>
         <div className="flex-1" />
         <Button
@@ -123,6 +142,12 @@ function PinnedInvestigation() {
           <X aria-hidden />
           Clear
         </Button>
+        {id !== DEFAULT_INVESTIGATION && (
+          <Button variant="ghost" onClick={() => ws.deleteInvestigation(id)}>
+            <Trash2 aria-hidden />
+            Delete
+          </Button>
+        )}
       </div>
       <div className="flex min-h-0 flex-1">
         <section aria-label="Observed facts" className="flex min-w-0 flex-1 flex-col">
@@ -177,7 +202,8 @@ function PinnedInvestigation() {
 function SampleInvestigation() {
   const inv = checkoutInvestigation;
   const ws = useWorkspace();
-  const { clusterById, deployments, restartDeployment, pins, openTab, openView, revealResource } = ws;
+  const { clusterById, deployments, restartDeployment, openTab, openView, revealResource } = ws;
+  const [pins] = usePersistentState<Pin[]>(investigationKey(DEFAULT_INVESTIGATION, "pins"), []);
   const { confirm } = useConfirm();
   const cluster = clusterById(inv.target.cluster);
   const deployment = deployments.find((d) => d.cluster === inv.target.cluster && d.name === inv.target.name);
@@ -308,7 +334,7 @@ function SampleInvestigation() {
             <Layers className="size-3.5" aria-hidden />
             <button
               type="button"
-              onClick={() => openTab("deploy-checkout-api")}
+              onClick={() => openView(resourceTab(inv.target.cluster, "Deployment", inv.target.namespace, inv.target.name))}
               className="focus-ring rounded-sm border-0 bg-transparent p-0 font-mono text-fg-secondary underline-offset-2 hover:text-fg hover:underline"
             >
               {inv.target.kind}/{inv.target.name}

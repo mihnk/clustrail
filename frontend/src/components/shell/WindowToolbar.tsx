@@ -66,9 +66,14 @@ export function WindowToolbar() {
   );
 }
 
-/** Rough width of a compact tab, for deciding what overflows. */
-function tabWidth(tab: WorkspaceTab, active: boolean) {
-  return 40 + tab.title.length * 7 + (tab.cluster ? 44 : 0) + (active ? 60 : 0);
+/**
+ * Estimated width of a tab, for deciding what overflows: icon and padding,
+ * title, environment badge, the secondary label (shown on the active tab, or
+ * on every tab while there are few) and the close button.
+ */
+function tabWidth(tab: WorkspaceTab, active: boolean, compact: boolean, pods: string) {
+  const secondary = tab.cluster ? tab.cluster.length * 6.6 + 8 : tab.kind === "pods" ? pods.length * 6.6 + 8 : tab.subtitle ? tab.subtitle.length * 6 + 8 : 0;
+  return 44 + tab.title.length * 6.6 + (tab.cluster ? 44 : 0) + (active || !compact ? secondary : 0) + (active ? 24 : 0);
 }
 
 function WorkspaceTabs() {
@@ -87,26 +92,31 @@ function WorkspaceTabs() {
   // Tabs shrink first (non-active tabs lose their secondary label), then
   // overflow into a list. The active tab is always shown; prod tabs keep their tag.
   const compact = tabs.length > 3;
-  const budget = width - 70;
+  const podsLabel = `${selectedClusterIds.length} ${selectedClusterIds.length === 1 ? "cluster" : "clusters"}`;
+  // Room for the "+N" overflow button and the new-tab button.
+  const budget = width - 96;
+  const widthOf = (t: WorkspaceTab) => tabWidth(t, t.id === activeTabId, compact, podsLabel) + 4;
   const visible: WorkspaceTab[] = [];
   let used = 0;
   for (const t of tabs) {
-    const w = tabWidth(t, t.id === activeTabId);
+    const w = widthOf(t);
     if (used + w <= budget || width === 0) {
       visible.push(t);
       used += w;
-    }
+    } else break;
   }
   const active = tabs.find((t) => t.id === activeTabId);
   if (active && !visible.includes(active)) {
-    visible.pop();
+    // Make room for the active tab by dropping tabs from the end.
+    used += widthOf(active);
+    while (visible.length && used > budget) used -= widthOf(visible.pop()!);
     visible.push(active);
   }
   const overflow = tabs.filter((t) => !visible.includes(t));
 
   return (
     <nav ref={navRef} aria-label="Workspace tabs" className="no-drag flex min-w-0 flex-1 items-center gap-1">
-      <div role="tablist" className="flex min-w-0 items-center gap-1">
+      <div role="tablist" className="flex min-w-0 items-center gap-1 overflow-hidden">
         {visible.map((tab) => {
           const isActive = tab.id === activeTabId;
           const secondary = tab.cluster ? (
@@ -126,7 +136,8 @@ function WorkspaceTabs() {
                 if (e.button === 1 && tabs.length > 1) closeTab(tab.id);
               }}
               className={cn(
-                "flex h-7 min-w-0 shrink-0 items-center rounded-md text-fg-secondary",
+                // Estimates can be off by a few pixels: tabs shrink (title truncates) rather than overlap "+N".
+                "flex h-7 min-w-[56px] shrink items-center rounded-md text-fg-secondary",
                 isActive && "bg-surface-panel text-fg shadow-[inset_0_0_0_1px_var(--line-strong)] dark:bg-surface-hover",
               )}
             >

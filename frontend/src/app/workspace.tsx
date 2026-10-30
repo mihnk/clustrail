@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/toast";
 import { readPreference, useMediaQuery, usePersistentState, writePreference, type Density, type Theme, type ThemePreference } from "./preferences";
 import { backend, type ClusterList } from "@/backend/client";
 import { useDesktopWorkspace } from "./desktop";
+import { resourceTab } from "@/features/resources/kinds";
 
 export type WorkspaceTabKind =
   | "clusters"
@@ -68,6 +69,23 @@ export interface MockScenarios {
   watchLost: boolean;
   /** metrics.k8s.io missing on staging-eu-1. */
   noMetrics: boolean;
+}
+
+export interface InvestigationInfo {
+  id: string;
+  title: string;
+}
+
+/** The first investigation keeps the storage keys it had before there could be several. */
+export const DEFAULT_INVESTIGATION = "inv-checkout-api";
+
+/** Storage key of one investigation's evidence, hypotheses or notes. */
+export function investigationKey(id: string, part: "pins" | "hypotheses" | "notes-md"): string {
+  if (id === DEFAULT_INVESTIGATION) {
+    if (!backend) return part === "pins" ? "investigation.checkout-api-restarts.pins" : `investigation.checkout-api-restarts.${part}`;
+    return `investigation.desktop.${part}`;
+  }
+  return `investigation.${id}.${part}`;
 }
 
 /** Evidence pinned from Logs, Events, Terminal or Metrics into the investigation. */
@@ -150,9 +168,18 @@ export interface WorkspaceState {
   syncGitOps: (id: string) => void;
   setGitOpsSuspended: (id: string, suspended: boolean) => void;
   jobs: BackgroundJob[];
+  /** Evidence of the current investigation: the one last opened. */
   pins: Pin[];
   pinToInvestigation: (pin: Omit<Pin, "id" | "at">) => void;
   clearPins: () => void;
+  investigations: InvestigationInfo[];
+  currentInvestigation: string;
+  /** Creates an investigation, opens its tab and makes it the pin target. */
+  newInvestigation: () => void;
+  openInvestigation: (id: string) => void;
+  renameInvestigation: (id: string, title: string) => void;
+  /** Removes an investigation and its saved evidence, hypotheses and notes. */
+  deleteInvestigation: (id: string) => void;
 
   scenarios: MockScenarios;
   setScenario: (key: keyof MockScenarios, on: boolean) => void;
@@ -184,7 +211,7 @@ const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
 const initialTabs: WorkspaceTab[] = [
   { id: "pods", kind: "pods", title: "Pods" },
-  { id: "deploy-checkout-api", kind: "resource", title: "checkout-api", subtitle: "Deployment" },
+  resourceTab("prod-eu-west-1", "Deployment", "payments", "checkout-api"),
   { id: "inv-checkout-api", kind: "investigation", title: "Investigation · checkout-api" },
   { id: "shell", kind: "shell", title: "Shell · 9rkzd", cluster: "prod-eu-west-1" },
   {
@@ -225,12 +252,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [helmReleases, setHelmReleases] = useState<HelmRelease[]>(desktop ? [] : initialReleases);
   const [gitops, setGitops] = useState<GitOpsObject[]>(desktop ? [] : initialGitOps);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
-  const [pins, setPins] = usePersistentState<Pin[]>(desktop ? "investigation.desktop.pins" : "investigation.checkout-api-restarts.pins", []);
+  const [investigations, setInvestigations] = usePersistentState<InvestigationInfo[]>(desktop ? "investigations.desktop" : "investigations.mock", [
+    { id: DEFAULT_INVESTIGATION, title: desktop ? "Investigation" : "checkout-api restarts" },
+  ]);
+  const [currentInvestigation, setCurrentInvestigation] = usePersistentState<string>("investigations.current", DEFAULT_INVESTIGATION);
+  const current = investigations.some((i) => i.id === currentInvestigation) ? currentInvestigation : DEFAULT_INVESTIGATION;
+  const [pins, setPins] = usePersistentState<Pin[]>(investigationKey(current, "pins"), []);
   // Desktop opens the last workspace (Settings › On launch) or the clusters overview; the mock opens the design's tab set.
   const [launch] = useState(() => (desktop ? launchTabs() : { tabs: initialTabs, active: "pods" }));
   const [tabs, setTabs] = useState<WorkspaceTab[]>(launch.tabs);
   const [closedTabs, setClosedTabs] = useState<WorkspaceTab[]>([]);
   const [activeTabId, setActiveTabId] = useState(launch.active);
+  // The investigation you look at last receives new pins.
+  useEffect(() => {
+    const t = tabs.find((x) => x.id === activeTabId);
+    if (t?.kind === "investigation" && t.id !== currentInvestigation) setCurrentInvestigation(t.id);
+  }, [activeTabId]);
   useEffect(() => {
     if (desktop) writePreference(SAVED_TABS, { tabs: tabs.filter((t) => RESTORABLE.includes(t.kind)), active: activeTabId });
   }, [tabs, activeTabId]);
@@ -714,6 +751,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setActiveTabId(id);
       return id;
     };
+    const openInvestigation = (id: string) => {
+      const info = investigations.find((i) => i.id === id);
+      if (info) openView({ id, kind: "investigation", title: info.title });
+    };
     return {
       theme,
       themePreference,
@@ -748,7 +789,33 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       clearPins: () => setPins([]),
       pinToInvestigation: (pin) => {
         setPins([...pins, { ...pin, id: `${Date.now()}`, at: new Date().toISOString() }]);
-        toast.show({ kind: "success", title: "Pinned to investigation", target: "checkout-api restarts", action: { label: "Open investigation", onClick: () => setActiveTabId("inv-checkout-api") } });
+        const info = investigations.find((i) => i.id === current) ?? investigations[0]!;
+        toast.show({ kind: "success", title: "Pinned to investigation", target: info.title, action: { label: "Open investigation", onClick: () => openInvestigation(info.id) } });
+      },
+      investigations,
+      currentInvestigation: current,
+      newInvestigation: () => {
+        const id = `inv-${Date.now().toString(36)}`;
+        const n = investigations.length + 1;
+        const title = `Investigation ${n}`;
+        setInvestigations([...investigations, { id, title }]);
+        setCurrentInvestigation(id);
+        setTabs([...tabs, { id, kind: "investigation", title }]);
+        setActiveTabId(id);
+      },
+      openInvestigation,
+      renameInvestigation: (id, title) => {
+        setInvestigations(investigations.map((i) => (i.id === id ? { ...i, title } : i)));
+        setTabs(tabs.map((t) => (t.id === id ? { ...t, title } : t)));
+      },
+      deleteInvestigation: (id) => {
+        if (id === DEFAULT_INVESTIGATION) return;
+        for (const part of ["pins", "hypotheses", "notes-md"] as const) writePreference(investigationKey(id, part), null);
+        setInvestigations(investigations.filter((i) => i.id !== id));
+        if (current === id) setCurrentInvestigation(DEFAULT_INVESTIGATION);
+        const rest = tabs.filter((t) => t.id !== id);
+        setTabs(rest.length ? rest : DEFAULT_TABS);
+        if (activeTabId === id) setActiveTabId((rest[0] ?? DEFAULT_TABS[0]!).id);
       },
       connectCluster,
       disconnectCluster,
@@ -829,6 +896,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     jobs,
     pins,
     setPins,
+    investigations,
+    setInvestigations,
+    current,
+    setCurrentInvestigation,
     connectCluster,
     disconnectCluster,
     patchCluster,

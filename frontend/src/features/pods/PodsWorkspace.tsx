@@ -43,6 +43,7 @@ import { cn } from "@/lib/cn";
 import { podColumns } from "./columns";
 import { matchesFilter, matchesLabel, parseFilter } from "./filter";
 import { PodInspector, type InspectorTab } from "./PodInspector";
+import { resourceTab } from "@/features/resources/kinds";
 import { deploymentNameOf, podActions } from "./actions";
 
 type HealthFilter = "all" | "attention";
@@ -180,8 +181,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           confirm,
           deletePod,
           restartDeployment,
-          openTab,
-          hasTab: (tabId) => tabs.some((t) => t.id === tabId),
+          openResource: (cluster, kind, namespace, name) => openView(resourceTab(cluster, kind, namespace, name)),
           openYaml: (p) =>
             openView({
               kind: "yaml",

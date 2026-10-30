@@ -19,7 +19,7 @@ import {
   Route,
   Server,
 } from "lucide-react";
-import { useWorkspace } from "@/app/workspace";
+import { DEFAULT_INVESTIGATION, useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
 import { LISTED_KINDS } from "@/features/resources/kinds";
 import type { Environment } from "@/data/types";
@@ -40,7 +40,8 @@ const envGroups: { env: Environment; label: string }[] = [
 ];
 
 export function ClusterNavigation() {
-  const { pods, activeTab, openTab, openView, clusters, pins, deployments, nodes, helmReleases, gitops, selectedClusterIds } = useWorkspace();
+  const { pods, activeTab, openTab, openView, clusters, pins, deployments, nodes, helmReleases, gitops, selectedClusterIds, investigations, currentInvestigation, openInvestigation, newInvestigation } =
+    useWorkspace();
   const kind = activeTab?.kind;
   const { openKinds } = useOverlays();
   const listKind = kind === "list" ? activeTab?.params?.kind : undefined;
@@ -103,12 +104,21 @@ export function ClusterNavigation() {
       </NavSection>
 
       <NavSection title={<span className="section-label">Investigations</span>}>
-        {IS_MOCK ? (
-          <NavItem icon={<StatusGlyph health="failed" />} label="checkout-api restarts" active={kind === "investigation"} onClick={() => openTab("inv-checkout-api")} trailing={<NavCount>12m</NavCount>} />
-        ) : (
-          <NavItem icon={<Route />} label="Pinned evidence" active={kind === "investigation"} onClick={() => openView({ id: "inv-checkout-api", kind: "investigation", title: "Investigation" })} trailing={<NavCount>{pins.length}</NavCount>} />
+        {investigations.map((inv) =>
+          IS_MOCK && inv.id === DEFAULT_INVESTIGATION ? (
+            <NavItem key={inv.id} icon={<StatusGlyph health="failed" />} label={inv.title} active={activeTab?.id === inv.id} onClick={() => openTab(inv.id) || openInvestigation(inv.id)} trailing={<NavCount>12m</NavCount>} />
+          ) : (
+            <NavItem
+              key={inv.id}
+              icon={<Route />}
+              label={inv.title}
+              active={activeTab?.id === inv.id}
+              onClick={() => openInvestigation(inv.id)}
+              trailing={inv.id === currentInvestigation ? <NavCount className="flex items-center gap-0.5">{pins.length} <Pin className="size-3" aria-label="New pins land here" /></NavCount> : undefined}
+            />
+          ),
         )}
-        <NavItem icon={<Plus />} label="New investigation" muted />
+        <NavItem icon={<Plus />} label="New investigation" onClick={newInvestigation} />
       </NavSection>
 
       <NavSection title={<span className="section-label">Delivery</span>}>

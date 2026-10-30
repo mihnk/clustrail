@@ -57,3 +57,15 @@ export function templateFor(key: string, namespace: string): string {
       return `apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: my-app\n  namespace: ${ns}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: my-app\n  template:\n    metadata:\n      labels:\n        app: my-app\n    spec:\n      containers:\n        - name: app\n          image: nginx:1.27-alpine\n`;
   }
 }
+
+/** The detail tab of one object; opening it again focuses the same tab. */
+export function resourceTab(cluster: string, kind: string, namespace: string, name: string) {
+  return {
+    id: `res:${cluster}/${kind}/${namespace}/${name}`,
+    kind: "resource" as const,
+    title: name,
+    subtitle: kindName(kind),
+    cluster,
+    params: { kind, namespace, name },
+  };
+}

@@ -1,5 +1,4 @@
 import { Suspense, lazy, useEffect } from "react";
-import { Layers } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmationProvider } from "@/components/safety/ConfirmationDialog";
@@ -20,6 +19,7 @@ import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
 import { LogsWorkspace } from "@/features/logs/LogsWorkspace";
 import { ResourceListWorkspace } from "@/features/resources/ResourceListWorkspace";
+import { ResourceDetailWorkspace } from "@/features/resources/ResourceDetailWorkspace";
 import { PortForwardHost } from "@/features/portforward/PortForward";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
@@ -113,11 +113,7 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
         </Suspense>
       );
     case "resource":
-      return (
-        <EmptyState className="flex-1" icon={<Layers />} title={`${tab.title} · ${tab.subtitle}`}>
-          Resource detail views are not implemented in this build.
-        </EmptyState>
-      );
+      return <ResourceDetailWorkspace tab={tab} active={active} />;
     case "list":
       return <ResourceListWorkspace tab={tab} active={active} />;
     case "create":
@@ -127,7 +123,7 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
         </Suspense>
       );
     case "investigation":
-      return <InvestigationWorkspace />;
+      return <InvestigationWorkspace tab={tab} />;
     case "compare":
       return <CompareWorkspace tab={tab} active={active} />;
     case "helm":

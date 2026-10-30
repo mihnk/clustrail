@@ -41,14 +41,14 @@ import { DeploymentInspector, type DeploymentTab } from "./DeploymentInspector";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
 
-interface DeploymentNav {
+export interface DeploymentNav {
   select?: (id: string) => void;
   showHistory?: () => void;
   focusScale?: () => void;
 }
 
 /** Builds the shared action dependencies for a Deployment row. */
-function useDeploymentDeps(nav: DeploymentNav) {
+export function useDeploymentDeps(nav: DeploymentNav) {
   const ws = useWorkspace();
   const { confirm } = useConfirm();
   return useCallback(

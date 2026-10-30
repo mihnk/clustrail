@@ -128,7 +128,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       [
         IS_MOCK ? "Investigation · checkout-api" : "Investigation · pinned evidence",
         <Route key="i" />,
-        () => ws.openTab("inv-checkout-api") || ws.openView({ id: "inv-checkout-api", kind: "investigation", title: "Investigation" }),
+        () => ws.openInvestigation(ws.currentInvestigation),
       ],
       ["Helm releases", <LifeBuoy key="h" />, () => ws.openView({ kind: "helm", title: "Helm releases" })],
       ["GitOps", <GitBranch key="g" />, () => ws.openView({ kind: "gitops", title: "GitOps" })],

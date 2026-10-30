@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
  * narrow windows). Same destinations as the sidebar, icon-only with tooltips.
  */
 export function NavigationRail() {
-  const { selectedClusterIds, activeTab, openTab, openView } = useWorkspace();
+  const { selectedClusterIds, activeTab, openTab, openView, openInvestigation, currentInvestigation } = useWorkspace();
   const { openKinds } = useOverlays();
   const listKind = activeTab?.kind === "list" ? activeTab.params?.kind : undefined;
   const kind = activeTab?.kind;
@@ -46,7 +46,7 @@ export function NavigationRail() {
         <LayoutGrid />
       </RailButton>
       <Divider />
-      <RailButton label="Investigations" active={kind === "investigation"} onClick={() => openTab("inv-checkout-api") || openView({ id: "inv-checkout-api", kind: "investigation", title: "Investigation" })}>
+      <RailButton label="Investigations" active={kind === "investigation"} onClick={() => openInvestigation(currentInvestigation)}>
         <Route />
       </RailButton>
       <RailButton label="Helm releases" active={kind === "helm"} onClick={() => openView({ kind: "helm", title: "Helm releases" })}>
