@@ -7,6 +7,7 @@ import {
 } from "@/data/mock";
 import type { Cluster, DeploymentRow, PodRow } from "@/data/types";
 import { nodes as initialNodes, type NodeRow } from "@/data/nodes";
+import { helmReleases as initialReleases, helmHealth, type HelmRelease } from "@/data/helm";
 import { useToast } from "@/components/ui/toast";
 import { usePersistentState, type Density, type Theme } from "./preferences";
 
@@ -107,6 +108,9 @@ interface WorkspaceState {
   setNodeCordoned: (id: string, cordoned: boolean) => void;
   /** Cordons the node and evicts its pods in the background. */
   drainNode: (id: string, opts: { force: boolean; deleteEmptyDir: boolean; timeoutSec: number }) => void;
+  helmReleases: HelmRelease[];
+  /** helm rollback <release> <rev> --wait: a new revision with the target's manifest. */
+  rollbackRelease: (id: string, rev: number) => void;
   jobs: BackgroundJob[];
   pins: Pin[];
   pinToInvestigation: (pin: Omit<Pin, "id" | "at">) => void;
@@ -169,6 +173,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [allPods, setAllPods] = useState(initialPods);
   const [deployments, setDeployments] = useState(initialDeployments);
   const [nodes, setNodes] = useState(initialNodes);
+  const [helmReleases, setHelmReleases] = useState(initialReleases);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [pins, setPins] = usePersistentState<Pin[]>("investigation.checkout-api-restarts.pins", []);
   const [tabs, setTabs] = useState(initialTabs);
@@ -370,6 +375,47 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [deployments, later, patchDeployment, toast],
   );
 
+  const rollbackRelease = useCallback(
+    (id: string, rev: number) => {
+      const r = helmReleases.find((x) => x.id === id);
+      const target = r?.history.find((h) => h.rev === rev);
+      if (!r || !target) return;
+      const next = r.revision + 1;
+      const patch = (p: Partial<HelmRelease>) => setHelmReleases((rs) => rs.map((x) => (x.id === id ? { ...x, ...p } : x)));
+      patch({
+        status: "pending-rollback",
+        health: helmHealth("pending-rollback"),
+        revision: next,
+        updatedSeconds: 0,
+        history: [
+          { ...target, rev: next, status: "pending-rollback", updatedSeconds: 0, description: `Rollback to ${rev}` },
+          ...r.history.map((h) => (h.status === "deployed" ? { ...h, status: "superseded" as const } : h)),
+        ],
+      });
+      const jobId = `helm-${id}-${next}`;
+      setJobs((js) => [...js, { id: jobId, title: `Rolling back ${r.name}`, progress: 0.3, detail: `waiting for resources · ${r.cluster}` }]);
+      later(3500, () => {
+        setJobs((js) => js.filter((j) => j.id !== jobId));
+        setHelmReleases((rs) =>
+          rs.map((x) =>
+            x.id !== id
+              ? x
+              : {
+                  ...x,
+                  status: "deployed",
+                  health: "healthy",
+                  chartVersion: target.chartVersion,
+                  appVersion: target.appVersion,
+                  history: x.history.map((h) => (h.rev === next ? { ...h, status: "deployed", description: `Rollback to ${rev}` } : h)),
+                },
+          ),
+        );
+        toast.show({ kind: "success", title: `Rolled back to revision ${rev}`, target: `${r.name} · ${r.cluster}`, env: r.env, detail: `now revision ${next}` });
+      });
+    },
+    [helmReleases, later, toast],
+  );
+
   const setNodeCordoned = useCallback(
     (id: string, cordoned: boolean) => {
       setNodes((ns) =>
@@ -536,6 +582,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       nodes,
       setNodeCordoned,
       drainNode,
+      helmReleases,
+      rollbackRelease,
       jobs,
       pins,
       pinToInvestigation: (pin) => {
@@ -602,6 +650,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     nodes,
     setNodeCordoned,
     drainNode,
+    helmReleases,
+    rollbackRelease,
     jobs,
     pins,
     setPins,
