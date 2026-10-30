@@ -28,7 +28,8 @@ func TestLoginShellPath(t *testing.T) {
 	// A fake shell standing in for the user's: its PATH must come back.
 	dir := t.TempDir()
 	shell := filepath.Join(dir, "fakesh")
-	if err := os.WriteFile(shell, []byte("#!/bin/sh\necho banner\nPATH=/from/login/shell:/usr/bin\nexport PATH\nshift 3\nsh -c \"$1\"\n"), 0o755); err != nil {
+	// sh by full path: the PATH set here has no /bin, and macOS has no /usr/bin/sh.
+	if err := os.WriteFile(shell, []byte("#!/bin/sh\necho banner\nPATH=/from/login/shell:/usr/bin\nexport PATH\nshift 3\nexec /bin/sh -c \"$1\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("SHELL", shell)
