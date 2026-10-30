@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strings"
@@ -239,6 +240,10 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 
 	watchErr := func(_ *cache.Reflector, err error) {
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return
+		}
+		// Expired resourceVersions and closed watches are routine: the reflector re-lists on its own.
+		if apierrors.IsResourceExpired(err) || apierrors.IsGone(err) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 			return
 		}
 		c.onState(Reconnecting, err)
@@ -595,6 +600,13 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 				}
 				podUsage[m.Namespace+"/"+m.Name] = u
 			}
+			// Samples of pods that are gone are dropped.
+			c.samples.forget(func(key string) bool {
+				ns, rest, _ := strings.Cut(key, "/")
+				pod, _, _ := strings.Cut(rest, "/")
+				_, ok := podUsage[ns+"/"+pod]
+				return ok
+			})
 			c.mu.Lock()
 			c.podUsage = podUsage
 			for k := range podUsage {

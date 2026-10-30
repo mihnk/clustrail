@@ -264,6 +264,10 @@ func (m *Manager) connect(id string) {
 	m.conns[id] = conn
 	m.mu.Unlock()
 	if err := conn.start(m.ctx, info.Identity, info.Metrics); err != nil {
+		conn.stop()
+		m.mu.Lock()
+		delete(m.conns, id)
+		m.mu.Unlock()
 		fail(err)
 		return
 	}
