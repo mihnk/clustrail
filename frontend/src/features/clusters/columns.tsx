@@ -43,7 +43,7 @@ export function clusterColumns(onFix: (c: Cluster) => void) {
             {r.cluster.protected && <Lock className="size-3.5 shrink-0 text-env-prod-ink" aria-label="Protected" />}
           </span>
           <span className="truncate text-meta text-fg-muted">
-            {r.ov.provider} · {r.ov.region} · {r.ov.contextHint}
+            {[r.ov.provider, r.ov.region, r.ov.contextHint].filter(Boolean).join(" · ")}
           </span>
         </div>
       ),

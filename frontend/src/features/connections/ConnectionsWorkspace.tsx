@@ -5,6 +5,7 @@ import { connectionTest, discoveredContexts, kubeconfigSources, type TestStep } 
 import type { Cluster, ConnectionState, Environment } from "@/data/types";
 import { Banner } from "@/components/ui/banner";
 import { useToast } from "@/components/ui/toast";
+import { backend, errorText } from "@/backend/client";
 import { Button, IconButton } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -42,7 +43,8 @@ function statusDetail(c: Cluster): string {
     case "unreachable":
       return c.error?.split(": ").pop() ?? "dial failed";
     case "disconnected":
-      return c.auth === "client cert" ? "cert expires in 41d" : `last connected ${c.lastConnected ?? "never"}`;
+      // The mock shows the design's certificate note; real contexts say when they were last connected.
+      return !backend && c.auth === "client cert" ? "cert expires in 41d" : c.lastConnected ? `last connected ${c.lastConnected}` : "never connected";
     default:
       return "";
   }
@@ -55,7 +57,10 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
   const { confirm } = useConfirm();
   const toast = useToast();
   const [selectedId, setSelectedId] = useState<string | null>("staging-perf");
-  const [discovered, setDiscovered] = useState(discoveredContexts);
+  const [mockDiscovered, setDiscovered] = useState(discoveredContexts);
+  // Desktop: kubeconfig files and new contexts as the backend reads them.
+  const discovered = backend ? (ws.backendMeta?.discovered ?? []) : mockDiscovered;
+  const sources = backend ? (ws.backendMeta?.sources ?? []) : kubeconfigSources;
   const [newGroup, setNewGroup] = useState<Environment | null>(null);
   const [newProtection, setNewProtection] = useState<Protection>("standard");
   const [tests, setTests] = useState<Record<string, { steps: TestStep[]; at: string; shown: number }>>({});
@@ -63,8 +68,18 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const runTest = (c: Cluster) => {
-    const steps = connectionTest(c);
     const at = new Date().toLocaleTimeString([], { hour12: false });
+    if (backend) {
+      // Real steps, run by the backend; nothing on the cluster changes.
+      const pending: TestStep[] = ["DNS", "TCP", "TLS", "Authentication", "API discovery", "Permissions"].map((name) => ({ name, result: "skipped" }));
+      setTests((t) => ({ ...t, [c.id]: { steps: pending, at, shown: 0 } }));
+      void backend
+        .testConnection(c.id)
+        .then((steps) => setTests((t) => ({ ...t, [c.id]: { steps, at, shown: steps.length } })))
+        .catch((e) => setTests((t) => ({ ...t, [c.id]: { steps: [{ name: "Configuration", result: "failed", detail: errorText(e) }], at, shown: 1 } })));
+      return;
+    }
+    const steps = connectionTest(c);
     setTests((t) => ({ ...t, [c.id]: { steps, at, shown: 0 } }));
     steps.forEach((_, i) =>
       timers.current.push(window.setTimeout(() => setTests((t) => (t[c.id] ? { ...t, [c.id]: { ...t[c.id]!, shown: i + 1 } } : t)), 180 * (i + 1))),
@@ -111,7 +126,7 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
             <RefreshCw />
           </IconButton>
         </div>
-        {kubeconfigSources.map((s) => (
+        {sources.map((s) => (
           <div key={s.path} className="flex flex-col gap-[3px] rounded-lg border border-line px-2.5 py-2 text-ui">
             <span className="flex min-w-0 items-center gap-1.5">
               <FileText className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
@@ -123,6 +138,7 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
               {!s.resolved && s.watched && " · watched"}
               {s.changed && ` · changed ${s.changed}`}
             </span>
+            {s.error && <span className="selectable text-meta text-status-critical">{s.error}</span>}
           </div>
         ))}
         <Button disabled title="Opens a file picker in the desktop app">
@@ -177,7 +193,7 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
                 title={newGroup ? undefined : "Pick a group first: it decides the environment color and default protection"}
                 onClick={() => {
                   addCluster({ ...c, env: newGroup!, protected: newProtection === "protected", readOnly: newProtection === "readonly" });
-                  setDiscovered(discovered.filter((d) => d.id !== c.id));
+                  if (!backend) setDiscovered(mockDiscovered.filter((d) => d.id !== c.id));
                   setSelectedId(c.id);
                 }}
               >

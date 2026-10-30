@@ -18,6 +18,7 @@ import {
   WrapText,
 } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
+import { backend, EVENTS, onEvent, type LogBatch } from "@/backend/client";
 import { usePersistentState } from "@/app/preferences";
 import {
   checkoutSources,
@@ -48,6 +49,8 @@ import { cn } from "@/lib/cn";
 import { LogView, TagChip } from "./LogView";
 
 const RANGES = ["5m", "15m", "1h", "6h", "all"] as const;
+const RANGE_SECONDS: Record<(typeof RANGES)[number], number> = { "5m": 300, "15m": 900, "1h": 3600, "6h": 21600, all: 0 };
+const TAGS: SourceTag[] = ["A", "B", "C", "D"];
 
 /**
  * Logs of a workload's pods: merged by timestamp or split per pod, follow
@@ -60,9 +63,22 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const namespace = tab.params?.namespace ?? "payments";
   const [bufferLimit] = usePersistentState("logs.bufferLines", 100_000);
 
-  const [sources, setSources] = useState<LogSource[]>(checkoutSources);
-  const [enabled, setEnabled] = useState<Set<SourceTag>>(new Set(["A", "B", "C"]));
-  const [containers, setContainers] = useState<Record<string, Set<string>>>({ A: new Set(["api"]), B: new Set(["api"]), C: new Set(["api"]), D: new Set(["api"]) });
+  // Desktop: the workload's pods (attention first), at most four sources. Mock: the checkout-api design.
+  const desktopPods = useMemo(() => {
+    if (!backend) return [];
+    return ws.allPods
+      .filter((p) => p.cluster === tab.cluster && p.namespace === namespace && (p.owner?.name === workload || p.name === workload || p.name === tab.params?.pod))
+      .sort((a, b) => Number(b.health !== "healthy") - Number(a.health !== "healthy") || a.name.localeCompare(b.name))
+      .slice(0, TAGS.length);
+  }, [backend ? ws.allPods.length : 0, tab.cluster, namespace, workload]);
+  const podsKey = desktopPods.map((p) => p.name).join(",");
+  const [sources, setSources] = useState<LogSource[]>(() =>
+    backend ? desktopPods.map((p, i) => ({ tag: TAGS[i]!, pod: p.name, containers: [], state: "live" })) : checkoutSources,
+  );
+  const [enabled, setEnabled] = useState<Set<SourceTag>>(() => (backend ? new Set(TAGS) : new Set(["A", "B", "C"])));
+  const [containers, setContainers] = useState<Record<string, Set<string>>>(
+    (): Record<string, Set<string>> => (backend ? {} : { A: new Set(["api"]), B: new Set(["api"]), C: new Set(["api"]), D: new Set(["api"]) }),
+  );
   const [instance, setInstance] = useState<"current" | "previous">(tab.params?.previous ? "previous" : "current");
   const [range, setRange] = useState<(typeof RANGES)[number]>("15m");
   const [layout, setLayout] = useState<"merged" | "split">("merged");
@@ -78,14 +94,96 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
 
   // Buffer: ingestion never stops; "paused" freezes what is displayed.
-  const buffer = useRef<LogLine[]>(initialBuffer());
+  const buffer = useRef<LogLine[]>(backend ? [] : initialBuffer());
   const [version, setVersion] = useState(0);
   const [dropped, setDropped] = useState(0);
-  const [paused, setPaused] = useState(true);
-  const [pausedAt, setPausedAt] = useState<{ count: number; time: string } | null>({ count: buffer.current.length, time: "12:01:17" });
+  const [paused, setPaused] = useState(!backend);
+  const [pausedAt, setPausedAt] = useState<{ count: number; time: string } | null>(backend ? null : { count: buffer.current.length, time: "12:01:17" });
   const nextId = useRef(buffer.current.length);
 
+  // Desktop: one backend stream for all sources; restarted when the instance or range changes.
   useEffect(() => {
+    if (!backend || !tab.cluster || !desktopPods.length) return;
+    const api = backend;
+    const tagOf = new Map(desktopPods.map((p, i) => [p.name, TAGS[i]!]));
+    setSources(desktopPods.map((p, i) => ({ tag: TAGS[i]!, pod: p.name, containers: [], state: "live" })));
+    buffer.current = [];
+    nextId.current = 0;
+    setDropped(0);
+    setVersion((v) => v + 1);
+    let streamId: string | null = null;
+    let stopped = false;
+    const early: LogBatch[] = [];
+    const ingest = (b: LogBatch) => {
+      const seen: Record<string, Set<string>> = {};
+      const lines = b.lines.flatMap<LogLine>((l) => {
+        const tag = tagOf.get(l.pod);
+        if (!tag) return [];
+        (seen[tag] ??= new Set()).add(l.container);
+        return [{ id: nextId.current++, ts: l.ts, tag, container: l.container, level: l.level, msg: l.msg, event: l.event ? { health: l.event } : undefined }];
+      });
+      const buf = buffer.current;
+      buf.push(...lines);
+      if (buf.length > bufferLimit) {
+        const over = buf.length - bufferLimit;
+        buf.splice(0, over);
+        setDropped((d) => d + over);
+      }
+      // New containers show up as they first log; they are on by default.
+      if (Object.keys(seen).length) {
+        setContainers((cur) => {
+          let changed = false;
+          const next = { ...cur };
+          for (const [tag, set] of Object.entries(seen)) {
+            for (const c of set) {
+              if (!next[tag]?.has(c)) {
+                next[tag] = new Set([...(next[tag] ?? []), c]);
+                changed = true;
+              }
+            }
+          }
+          return changed ? next : cur;
+        });
+      }
+      setSources((ss) =>
+        ss.map((src) => {
+          const states = (b.states ?? []).filter((st) => st.pod === src.pod);
+          const names = [...new Set([...src.containers, ...states.map((st) => st.container), ...(seen[src.tag] ?? [])])];
+          if (!states.length) return names.length === src.containers.length ? src : { ...src, containers: names };
+          const state = states.some((st) => st.state === "live") ? "live" : states.some((st) => st.state === "reconnecting") ? "reconnecting" : "ended";
+          return { ...src, containers: names, state, note: states.find((st) => st.note)?.note };
+        }),
+      );
+      setVersion((v) => v + 1);
+    };
+    const off = onEvent<LogBatch>(EVENTS.logs, (b) => {
+      if (streamId === null) early.push(b);
+      else if (b.id === streamId) ingest(b);
+    });
+    void api
+      .startLogs({
+        cluster: tab.cluster,
+        namespace,
+        pods: desktopPods.map((p) => p.name),
+        containers: [],
+        previous: instance === "previous",
+        sinceSeconds: RANGE_SECONDS[range],
+        tailLines: range === "all" ? 10_000 : 0,
+      })
+      .then((id) => {
+        if (stopped) return void api.stopLogs(id);
+        streamId = id;
+        early.filter((b) => b.id === id).forEach(ingest);
+      });
+    return () => {
+      stopped = true;
+      off();
+      if (streamId) void api.stopLogs(streamId);
+    };
+  }, [podsKey, instance, range, tab.cluster]);
+
+  useEffect(() => {
+    if (backend) return;
     // Source x2kqp comes back as a new instance after a few seconds.
     const reconnect = setTimeout(
       () => setSources((ss) => ss.map((s) => (s.tag === "A" ? { ...s, state: "live", note: undefined } : s))),
@@ -95,6 +193,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   }, []);
 
   useEffect(() => {
+    if (backend) return;
     const live = sources.filter((s) => s.state === "live").map((s) => s.tag);
     if (!live.length) return;
     const t = setInterval(() => {
@@ -125,7 +224,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const visibleCount = paused && pausedAt ? Math.min(pausedAt.count, buffer.current.length) : buffer.current.length;
   const lines = useMemo(() => {
     const src =
-      instance === "previous" ? [...enabled].flatMap((t) => previousInstance(t)) : buffer.current.slice(0, visibleCount);
+      instance === "previous" && !backend ? [...enabled].flatMap((t) => previousInstance(t)) : buffer.current.slice(0, visibleCount);
     return src.filter(
       (l) =>
         enabled.has(l.tag) &&

@@ -12,11 +12,13 @@ import {
   Network,
   Pin,
   Plus,
+  Route,
   Server,
 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import type { Environment } from "@/data/types";
 import { isAttention } from "@/data/health";
+import { IS_MOCK } from "@/data/mock";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Kbd } from "@/components/ui/kbd";
 import { ConnectionDot, EnvironmentBadge } from "@/components/status/EnvironmentBadge";
@@ -32,9 +34,25 @@ const envGroups: { env: Environment; label: string }[] = [
 ];
 
 export function ClusterNavigation() {
-  const { pods, activeTab, openTab, openView, clusters } = useWorkspace();
+  const { pods, activeTab, openTab, openView, clusters, pins, deployments, nodes, helmReleases, gitops, selectedClusterIds } = useWorkspace();
   const kind = activeTab?.kind;
   const attention = pods.filter((p) => isAttention(p.health)).length;
+  // Mock: the design's numbers. Desktop: counts over the selected clusters; kinds Clustrail does not list yet show none.
+  const inSel = <T extends { cluster: string }>(rows: T[]) => rows.filter((r) => selectedClusterIds.includes(r.cluster));
+  const real = !IS_MOCK;
+  const deps = inSel(deployments);
+  const depsAttention = deps.filter((d) => isAttention(d.health)).length;
+  const nodeRows = inSel(nodes);
+  const nodesAttention = nodeRows.filter((n) => n.health === "failed" || n.health === "warning").length;
+  const releases = inSel(helmReleases);
+  const releasesFailed = releases.filter((r) => r.health === "failed").length;
+  const drift = inSel(gitops).filter((g) => g.sync === "OutOfSync").length;
+  const count = (attentionN: number, total: number, tone: "critical" | "warning") => (
+    <>
+      {attentionN > 0 && <CountPill tone={tone} className="ml-auto">{attentionN}</CountPill>}
+      <NavCount className={attentionN > 0 ? "ml-1.5" : ""}>{total}</NavCount>
+    </>
+  );
 
   return (
     <aside
@@ -46,23 +64,27 @@ export function ClusterNavigation() {
       <NavSection title={<><span className="section-label">Resources</span><Pin className="size-3.5 text-fg-muted" aria-label="Pinned" /></>}>
         <NavItem icon={<Network />} label="Overview" active={kind === "clusters"} onClick={() => openView({ kind: "clusters", title: "Clusters" })} trailing={<NavCount>{clusters.length}</NavCount>} />
         <NavItem icon={<Box />} label="Pods" active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{pods.length}</NavCount></>} />
-        <NavItem icon={<Layers />} label="Deployments" active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })} trailing={<><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
-        <NavItem icon={<Network />} label="Services" trailing={<NavCount>74</NavCount>} />
-        <NavItem icon={<Globe />} label="Ingresses" trailing={<NavCount>19</NavCount>} />
-        <NavItem icon={<FileText />} label="ConfigMaps" trailing={<NavCount>203</NavCount>} />
-        <NavItem icon={<Activity />} label="Events" trailing={<CountPill tone="warning" className="ml-auto">23</CountPill>} />
-        <NavItem icon={<Server />} label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={<><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
+        <NavItem icon={<Layers />} label="Deployments" active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })} trailing={real ? count(depsAttention, deps.length, "warning") : <><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
+        <NavItem icon={<Network />} label="Services" muted={real} trailing={real ? undefined : <NavCount>74</NavCount>} />
+        <NavItem icon={<Globe />} label="Ingresses" muted={real} trailing={real ? undefined : <NavCount>19</NavCount>} />
+        <NavItem icon={<FileText />} label="ConfigMaps" muted={real} trailing={real ? undefined : <NavCount>203</NavCount>} />
+        <NavItem icon={<Activity />} label="Events" muted={real} trailing={real ? undefined : <CountPill tone="warning" className="ml-auto">23</CountPill>} />
+        <NavItem icon={<Server />} label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={real ? count(nodesAttention, nodeRows.length, "warning") : <><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
         <NavItem icon={<LayoutGrid />} label="All resource kinds" muted trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />
       </NavSection>
 
       <NavSection title={<span className="section-label">Investigations</span>}>
-        <NavItem icon={<StatusGlyph health="failed" />} label="checkout-api restarts" active={kind === "investigation"} onClick={() => openTab("inv-checkout-api")} trailing={<NavCount>12m</NavCount>} />
+        {IS_MOCK ? (
+          <NavItem icon={<StatusGlyph health="failed" />} label="checkout-api restarts" active={kind === "investigation"} onClick={() => openTab("inv-checkout-api")} trailing={<NavCount>12m</NavCount>} />
+        ) : (
+          <NavItem icon={<Route />} label="Pinned evidence" active={kind === "investigation"} onClick={() => openView({ id: "inv-checkout-api", kind: "investigation", title: "Investigation" })} trailing={<NavCount>{pins.length}</NavCount>} />
+        )}
         <NavItem icon={<Plus />} label="New investigation" muted />
       </NavSection>
 
       <NavSection title={<span className="section-label">Delivery</span>}>
-        <NavItem icon={<LifeBuoy />} label="Helm releases" active={kind === "helm"} onClick={() => openView({ kind: "helm", title: "Helm releases" })} trailing={<><CountPill tone="critical" className="ml-auto">1</CountPill><NavCount className="ml-1.5">31</NavCount></>} />
-        <NavItem icon={<GitBranch />} label="GitOps" active={kind === "gitops"} onClick={() => openView({ kind: "gitops", title: "GitOps" })} trailing={<CountPill tone="warning" className="ml-auto">2 drift</CountPill>} />
+        <NavItem icon={<LifeBuoy />} label="Helm releases" active={kind === "helm"} onClick={() => openView({ kind: "helm", title: "Helm releases" })} trailing={real ? count(releasesFailed, releases.length, "critical") : <><CountPill tone="critical" className="ml-auto">1</CountPill><NavCount className="ml-1.5">31</NavCount></>} />
+        <NavItem icon={<GitBranch />} label="GitOps" active={kind === "gitops"} onClick={() => openView({ kind: "gitops", title: "GitOps" })} trailing={real ? (drift > 0 ? <CountPill tone="warning" className="ml-auto">{drift} drift</CountPill> : undefined) : <CountPill tone="warning" className="ml-auto">2 drift</CountPill>} />
       </NavSection>
     </aside>
   );

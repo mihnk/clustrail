@@ -49,6 +49,7 @@ import { ModifyMenuButton } from "@/components/resource-actions/ResourceActions"
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { restartDeploymentRequest } from "@/features/deployments/requests";
 import { cn } from "@/lib/cn";
+import { backend } from "@/backend/client";
 
 type View = "evidence" | "timeline";
 type InvStatus = "Open" | "Monitoring" | "Resolved";
@@ -67,6 +68,113 @@ interface Evidence {
 }
 
 export function InvestigationWorkspace() {
+  // The checkout-api investigation is the design's sample; with real clusters the document starts from pinned evidence.
+  return backend ? <PinnedInvestigation /> : <SampleInvestigation />;
+}
+
+/** Desktop: a local document of evidence pinned from Logs and shells, with hypotheses and notes. */
+function PinnedInvestigation() {
+  const { pins, clearPins } = useWorkspace();
+  const key = (k: string) => `investigation.desktop.${k}`;
+  const [hypotheses, setHypotheses] = usePersistentState<Hypothesis[]>(key("hypotheses"), []);
+  const [notes, setNotes] = usePersistentState<string>(key("notes-md"), "");
+  const [copied, setCopied] = useState(false);
+  const evidence: Evidence[] = pins.map((p, i) => ({
+    id: `E${i + 1}`,
+    source: p.source.split(" · ")[0] === "Shell" ? "Shell output" : "Log excerpt",
+    title: p.source,
+    at: new Date(p.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    plain: p.text,
+    body: <Excerpt>{p.text}</Excerpt>,
+  }));
+  const markdown = () =>
+    [
+      "# Investigation",
+      "",
+      "## Evidence (captured from the cluster)",
+      ...evidence.map((e) => `- **${e.id}** [${e.source}] ${e.title} (${e.at})\n\n  \`\`\`\n  ${e.plain}\n  \`\`\``),
+      "",
+      "## Hypotheses",
+      ...hypotheses.map((h) => `- **${h.id}** (${h.status}) ${h.text}${h.evidence.length ? ` — evidence: ${h.evidence.join(", ")}` : ""}`),
+      "",
+      "## Notes",
+      notes,
+    ].join("\n");
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-end gap-4 border-b border-line px-4 pb-3 pt-3">
+        <div className="flex min-w-0 flex-col gap-[5px]">
+          <h1 className="m-0 truncate text-heading font-semibold tracking-[-.01em]">Investigation</h1>
+          <span className="text-cell text-fg-secondary">Evidence you pin from Logs and shells, with your hypotheses and notes · saved locally</span>
+        </div>
+        <div className="flex-1" />
+        <Button
+          onClick={() =>
+            void navigator.clipboard?.writeText(markdown()).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1200);
+            })
+          }
+        >
+          {copied ? <Check className="text-status-healthy" aria-hidden /> : <Copy aria-hidden />}
+          {copied ? "Copied" : "Copy summary"}
+        </Button>
+        <Button variant="ghost" disabled={!pins.length && !hypotheses.length && !notes} onClick={() => (clearPins(), setHypotheses([]), setNotes(""))}>
+          <X aria-hidden />
+          Clear
+        </Button>
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <section aria-label="Observed facts" className="flex min-w-0 flex-1 flex-col">
+          <ColumnHeader title="Observed facts" note="captured from the cluster" trailing={<span className="font-mono text-label text-fg-muted">{evidence.length}</span>} />
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 py-3">
+            {evidence.map((e) => (
+              <EvidenceCard key={e.id} evidence={e} />
+            ))}
+            {!evidence.length && (
+              <p className="m-0 flex items-center gap-1.5 text-cell text-fg-muted">
+                <PinIcon className="size-3.5" aria-hidden />
+                Select lines in Logs or a shell and pin them; they appear here as evidence with their source and capture time.
+              </p>
+            )}
+          </div>
+        </section>
+        <section aria-label="Hypotheses and notes" className="flex w-[372px] shrink-0 flex-col border-l border-line bg-surface-panel max-[1360px]:w-[340px]">
+          <ColumnHeader title="Hypotheses & notes" trailing={<span className="text-meta text-fg-muted">written by people</span>} />
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 py-3">
+            {hypotheses.map((h) => (
+              <HypothesisCard
+                key={h.id}
+                hypothesis={h}
+                evidenceIds={evidence.map((e) => e.id)}
+                onChange={(next) => setHypotheses(hypotheses.map((x) => (x.id === h.id ? next : x)))}
+                onRemove={() => setHypotheses(hypotheses.filter((x) => x.id !== h.id))}
+              />
+            ))}
+            <AddHypothesis
+              onAdd={(text) =>
+                setHypotheses([
+                  ...hypotheses,
+                  {
+                    id: `H${Math.max(0, ...hypotheses.map((h) => Number(h.id.slice(1)))) + 1}`,
+                    text,
+                    status: "Open",
+                    evidence: [],
+                    author: "you",
+                    at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  },
+                ])
+              }
+            />
+            <Notes value={notes} onChange={setNotes} />
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function SampleInvestigation() {
   const inv = checkoutInvestigation;
   const ws = useWorkspace();
   const { clusterById, deployments, restartDeployment, pins, openTab, openView, revealResource } = ws;

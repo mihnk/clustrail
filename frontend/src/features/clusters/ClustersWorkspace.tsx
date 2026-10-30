@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { ArrowLeftRight, Box, KeyRound, Layers, Lock, Network, Search } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
-import { clusterOverviews } from "@/data/clusterOverview";
+import { clusterOverviews, overviewFromRows } from "@/data/clusterOverview";
+import { backend } from "@/backend/client";
 import { isAttention } from "@/data/health";
 import type { Cluster, Environment } from "@/data/types";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
@@ -61,12 +62,18 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
         return {
           id: c.id,
           cluster: c,
-          ov: clusterOverviews[c.id]!,
+          ov: backend
+            ? overviewFromRows(
+                c,
+                { pods: allPods, deployments: ws.deployments, nodes: ws.nodes, helm: ws.helmReleases, gitops: ws.gitops },
+                ws.backendMeta?.controllers.find((x) => x.cluster === c.id),
+              )
+            : clusterOverviews[c.id]!,
           pods: pods.length,
           podsAttention: pods.filter((p) => isAttention(p.health)).length,
         };
       }),
-    [clusters, allPods],
+    [clusters, allPods, ws.deployments, ws.nodes, ws.helmReleases, ws.gitops, ws.backendMeta],
   );
 
   const rows = useMemo(() => {

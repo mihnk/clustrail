@@ -27,6 +27,7 @@ import { EmptyState } from "@/components/EmptyState";
 import type { Cluster } from "@/data/types";
 import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { backend } from "@/backend/client";
 import { helmColumns } from "./columns";
 import { HelmInspector } from "./HelmInspector";
 
@@ -151,6 +152,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
   }, [active]);
 
   const selected = helmReleases.find((r) => r.id === selectedId) ?? null;
+  const unreadable = (ws.backendMeta?.forbidden ?? []).filter((f) => f.resource.startsWith("secrets") && selectedClusterIds.includes(f.cluster));
   const failed = inClusters.filter((r) => r.status === "failed").length;
   const stuck = inClusters.filter((r) => r.status === "pending-upgrade" && r.updatedSeconds > 3600);
   const counts = useMemo(() => {
@@ -280,9 +282,17 @@ export function HelmWorkspace({ active }: { active: boolean }) {
           ))}
           <div className="flex-1" />
           {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
-          <span className="truncate max-[1360px]:hidden" title={UNREADABLE_NAMESPACES.join(", ")}>
-            Secrets in {UNREADABLE_NAMESPACES.length} namespaces not readable → those releases are not listed
-          </span>
+          {backend ? (
+            unreadable.length > 0 && (
+              <span className="truncate max-[1360px]:hidden">
+                Secrets not readable on {unreadable.map((f) => f.cluster).join(", ")} → releases there are not listed
+              </span>
+            )
+          ) : (
+            <span className="truncate max-[1360px]:hidden" title={UNREADABLE_NAMESPACES.join(", ")}>
+              Secrets in {UNREADABLE_NAMESPACES.length} namespaces not readable → those releases are not listed
+            </span>
+          )}
         </div>
       </main>
 

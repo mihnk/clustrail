@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { AlertDialog } from "radix-ui";
 import { Check, ChevronDown, Copy, Filter, X } from "lucide-react";
 import type { Cluster } from "@/data/types";
-import { drainPreflight, type NodeRow } from "@/data/nodes";
+import type { DrainPreflight, NodeRow } from "@/data/nodes";
+import { useDrainPreflight } from "@/backend/hooks";
 import { Button, IconButton } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TextField } from "@/components/ui/text-field";
@@ -25,7 +26,17 @@ export function DrainDialog({
   onCancel: () => void;
   onDrain: (opts: { force: boolean; deleteEmptyDir: boolean; timeoutSec: number }) => void;
 }) {
-  const pf = drainPreflight(node);
+  const loaded = useDrainPreflight(node);
+  // While the backend checks the node's pods, the dialog shows zeros and cannot drain.
+  const pf: DrainPreflight = loaded ?? {
+    evict: 0,
+    pdbBlocked: { pods: [], pdb: "" },
+    emptyDir: [],
+    unmanaged: [],
+    daemonSets: [],
+    freeAfter: { cpu: 0, memGiB: 0, nodes: 0 },
+    evictedRequests: { cpu: 0, memGiB: 0 },
+  };
   const short = node.name.split(".")[0]!;
   const typed = cluster?.protected || node.env === "prod";
   const [deleteEmptyDir, setDeleteEmptyDir] = useState(false);
@@ -47,7 +58,7 @@ export function DrainDialog({
   ]
     .filter(Boolean)
     .join(" ");
-  const ready = blockers.length === 0 && timeoutSec !== null && (!typed || phrase.trim() === short);
+  const ready = loaded !== null && blockers.length === 0 && timeoutSec !== null && (!typed || phrase.trim() === short);
   const decisions = [
     ...pf.pdbBlocked.pods.map((p) => ({ pod: p, owner: "ReplicaSet", result: "Blocked · PDB", tone: "warning" as const })),
     ...pf.emptyDir.map((e) => ({ pod: e.pod, owner: "ReplicaSet", result: deleteEmptyDir ? "Evicted · data lost" : "Needs emptyDir option", tone: "warning" as const })),

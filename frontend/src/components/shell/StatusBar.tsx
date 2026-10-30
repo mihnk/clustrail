@@ -36,12 +36,16 @@ export function StatusBar() {
         </span>
         {note ? (
           <span className="truncate">{note}</span>
-        ) : (
+        ) : IS_MOCK ? (
           <span className="truncate">
             RBAC: <span className="font-mono">{access.user}</span> {access.allowed ? "can" : "cannot"} {access.verb}{" "}
             {access.resource} in {access.namespace}
           </span>
-        )}
+        ) : scoped.identity ? (
+          <span className="truncate">
+            RBAC identity <span className="font-mono">{scoped.identity}</span>
+          </span>
+        ) : null}
         <div className="flex-1" />
         {scoped.protected && (
           <span className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">

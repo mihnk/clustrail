@@ -307,3 +307,84 @@ export function hunks(lines: DiffLine[], context = 2): DiffLine[][] {
   if (cur) out.push(cur);
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Desktop mode: snapshots from the live objects the backend returns.
+
+interface K8sContainer {
+  name: string;
+  image?: string;
+  env?: { name: string; value?: string; valueFrom?: Record<string, { name?: string; key?: string; fieldPath?: string; resource?: string }> }[];
+  envFrom?: { configMapRef?: { name: string }; secretRef?: { name: string } }[];
+  resources?: { requests?: Record<string, string>; limits?: Record<string, string> };
+}
+
+interface K8sDeployment {
+  metadata?: { annotations?: Record<string, string> };
+  spec?: { replicas?: number; template?: { spec?: { containers?: K8sContainer[]; volumes?: { configMap?: { name: string } }[] } } };
+}
+
+/** ConfigMap names a Deployment's pod template references (volumes, envFrom, env). */
+export function configMapRefs(obj: K8sDeployment): string[] {
+  const spec = obj.spec?.template?.spec;
+  const names = new Set<string>();
+  for (const v of spec?.volumes ?? []) if (v.configMap?.name) names.add(v.configMap.name);
+  for (const c of spec?.containers ?? []) {
+    for (const ef of c.envFrom ?? []) if (ef.configMapRef?.name) names.add(ef.configMapRef.name);
+    for (const e of c.env ?? []) if (e.valueFrom?.configMapKeyRef?.name) names.add(e.valueFrom.configMapKeyRef.name);
+  }
+  return [...names];
+}
+
+/** Content hash of a ConfigMap's data, so equal content compares equal across clusters. */
+export async function configHash(data: Record<string, string>): Promise<string> {
+  const text = JSON.stringify(Object.keys(data).sort().map((k) => [k, data[k]]));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].slice(0, 3).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function snapshotFromObject(
+  row: DeploymentRow,
+  obj: K8sDeployment,
+  configs: Record<string, { keys: number; sha: string; data: Record<string, string> }>,
+): Snapshot & { configData: Record<string, Record<string, string>> } {
+  const containers = obj.spec?.template?.spec?.containers ?? [];
+  const images: Record<string, string> = {};
+  const resources: Snapshot["resources"] = {};
+  const env: Snapshot["env"] = {};
+  for (const c of containers) {
+    images[c.name] = c.image ?? "";
+    const r: Record<string, string> = {};
+    for (const [k, v] of Object.entries(c.resources?.requests ?? {})) r[`requests.${k}`] = String(v);
+    for (const [k, v] of Object.entries(c.resources?.limits ?? {})) r[`limits.${k}`] = String(v);
+    resources[c.name] = r;
+    if (c.env?.length) {
+      env[c.name] = {};
+      for (const e of c.env) {
+        const from = e.valueFrom && Object.entries(e.valueFrom)[0];
+        // Secret values are never read; references are compared by name and key.
+        env[c.name]![e.name] = from
+          ? { ref: `${from[0]} ${from[1].name ?? from[1].fieldPath ?? from[1].resource ?? ""}${from[1].key ? `/${from[1].key}` : ""}` }
+          : { value: e.value ?? "" };
+      }
+    }
+  }
+  const metadata: Record<string, string> = {};
+  const rev = obj.metadata?.annotations?.["deployment.kubernetes.io/revision"];
+  if (rev) metadata["deployment.kubernetes.io/revision"] = rev;
+  const refs = configMapRefs(obj);
+  return {
+    cluster: row.cluster,
+    ready: `${row.readyReplicas}/${row.replicas}`,
+    health: row.health,
+    images,
+    replicas: obj.spec?.replicas ?? row.replicas,
+    hpa: row.hpa ? `min ${row.hpa.min} · max ${row.hpa.max}` : null,
+    resources,
+    env,
+    configRefs: Object.fromEntries(refs.filter((n) => configs[n]).map((n) => [n, { keys: configs[n]!.keys, sha: configs[n]!.sha }])),
+    podHealth: `${row.readyReplicas}/${row.replicas} · ${row.health === "healthy" ? "healthy" : row.reason}`,
+    metadata,
+    configData: Object.fromEntries(refs.filter((n) => configs[n]).map((n) => [n, configs[n]!.data])),
+  };
+}

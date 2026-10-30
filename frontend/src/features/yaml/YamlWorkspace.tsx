@@ -3,6 +3,7 @@ import { parseDocument, parse } from "yaml";
 import { Code, Copy, Download, FoldVertical, GitBranch, Lock, Play, Search, Upload } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
 import { liveObject, suggestedEdit, type LiveObject } from "@/data/yaml";
+import { backend, errorText } from "@/backend/client";
 import { Banner } from "@/components/ui/banner";
 import { Button, IconButton } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -51,14 +52,55 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const toast = useToast();
   const params = tab.params ?? {};
   const cluster = tab.cluster ? ws.clusterById(tab.cluster) : undefined;
-  const initial = useMemo(() => liveObject(params, tab.cluster ?? ""), [tab.id]);
+  // Mock: a fixed object (with the investigation's suggested edit). Desktop: loaded from the API server below.
+  const initial = useMemo<LiveObject>(
+    () => (backend ? { yaml: "", resourceVersion: "", owners: {} } : liveObject(params, tab.cluster ?? "")),
+    [tab.id],
+  );
 
   const [live, setLive] = useState<LiveObject>(initial);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [openedVersion, setOpenedVersion] = useState(initial.resourceVersion);
   const [liveChanges, setLiveChanges] = useState(0);
   const [mode, setMode] = useState<Mode>(params.mode === "edit" || initial.gitops ? "edit" : "view");
   const [diff, setDiff] = useState<DiffMode>("side");
   const [edited, setEdited] = useState(() => (initial.gitops ? suggestedEdit(initial.yaml) : initial.yaml));
+
+  // Desktop: load the live object, then poll so concurrent changes show up as a conflict.
+  useEffect(() => {
+    if (!backend || !tab.cluster) return;
+    const api = backend;
+    let first = true;
+    let cancelled = false;
+    const load = () =>
+      api
+        .getObject(tab.cluster!, params.kind ?? "Deployment", params.namespace ?? "", params.name ?? "")
+        .then((obj) => {
+          if (cancelled) return;
+          setLoadError(null);
+          const next: LiveObject = { yaml: obj.yaml, resourceVersion: obj.resourceVersion, owners: obj.owners, gitops: obj.gitops };
+          if (first) {
+            first = false;
+            setLive(next);
+            setOpenedVersion(obj.resourceVersion);
+            setEdited(obj.yaml);
+            if (obj.gitops) setMode("edit");
+            return;
+          }
+          setLive((cur) => {
+            if (cur.resourceVersion === obj.resourceVersion) return cur;
+            setLiveChanges((n) => n + 1);
+            return next;
+          });
+        })
+        .catch((e) => !cancelled && setLoadError(errorText(e)));
+    void load();
+    const t = setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [tab.id]);
   const [cursor, setCursor] = useState({ line: 1, col: 1 });
   const [dryRun, setDryRun] = useState<{ at: string; ms: number; checks: Check[] } | null>(null);
   const [panel, setPanel] = useState("dryrun");
@@ -171,6 +213,22 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
 
   const runDryRun = () => {
     const started = performance.now();
+    if (backend && tab.cluster) {
+      // Server-side dry run: the API server runs validation and admission without persisting.
+      void backend
+        .applyYaml(tab.cluster, edited, openedVersion, true, ownership.length > 0)
+        .then((r) => {
+          const checks: Check[] = r.conflict
+            ? [{ health: "failed", text: <>The API server reported a conflict: <span className="font-mono">{r.conflict}</span></> }]
+            : [{ health: "completed", text: "API server accepted the change in dry-run mode (validation and admission ran)." }, ...r.warnings.map((w) => ({ health: "warning" as const, text: w }))];
+          setDryRun({ at: new Date().toTimeString().slice(0, 8), ms: Math.round(performance.now() - started), checks });
+        })
+        .catch((e) =>
+          setDryRun({ at: new Date().toTimeString().slice(0, 8), ms: Math.round(performance.now() - started), checks: [{ health: "failed", text: <span className="selectable font-mono">{errorText(e)}</span> }] }),
+        );
+      setPanel("dryrun");
+      return;
+    }
     const doc = parse(edited) as { apiVersion?: string; kind?: string; metadata?: { name?: string } } | null;
     const checks: Check[] = [];
     if (!doc || doc.kind !== params.kind || doc.metadata?.name !== params.name) {
@@ -266,7 +324,25 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       command: `kubectl --context ${tab.cluster} apply --server-side --field-manager=clustrail${ownership.length ? " --force-conflicts" : ""} -f ${params.name}.yaml`,
       confirmLabel: live.gitops ? "Apply anyway" : "Apply",
       onConfirm: () => {
-        const nextVersion = live.resourceVersion + 1;
+        if (backend && tab.cluster) {
+          const api = backend;
+          void api
+            .applyYaml(tab.cluster, edited, openedVersion, false, ownership.length > 0)
+            .then(async (r) => {
+              if (r.conflict) {
+                toast.show({ kind: "error", title: "Not applied: conflict", target: `${params.name} · ${tab.cluster}`, detail: r.conflict, copyText: r.conflict });
+                return;
+              }
+              const obj = await api.getObject(tab.cluster!, params.kind ?? "Deployment", params.namespace ?? "", params.name ?? "");
+              setLive({ yaml: obj.yaml, resourceVersion: obj.resourceVersion, owners: obj.owners, gitops: obj.gitops });
+              setOpenedVersion(obj.resourceVersion);
+              setEdited(obj.yaml);
+              toast.show({ kind: "success", title: "Applied", target: `${params.name} · ${tab.cluster}`, env: cluster?.env, detail: `server-side apply · resourceVersion ${r.resourceVersion}` });
+            })
+            .catch((e) => toast.show({ kind: "error", title: "Apply failed", target: `${params.name} · ${tab.cluster}`, detail: errorText(e), copyText: errorText(e) }));
+          return;
+        }
+        const nextVersion = String(Number(live.resourceVersion) + 1);
         const before = live.yaml;
         setLive({ ...live, yaml: edited, resourceVersion: nextVersion });
         setOpenedVersion(nextVersion);
@@ -274,7 +350,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         if (live.gitops?.selfHeal) {
           // Self-heal puts Git's version back; the editor reports the change.
           setTimeout(() => {
-            setLive((l) => ({ ...l, yaml: before, resourceVersion: l.resourceVersion + 1 }));
+            setLive((l) => ({ ...l, yaml: before, resourceVersion: String(Number(l.resourceVersion) + 1) }));
             setLiveChanges((n) => n + 1);
             toast.show({ kind: "error", title: `${live.gitops!.tool} reverted ${params.name}`, detail: "Self-heal synced the object back to Git. Change the source to keep the edit." });
           }, 5000);
@@ -291,6 +367,16 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-app">
+      {loadError && (
+        <Banner tone="critical" className="shrink-0 rounded-none border-b border-line">
+          Could not read {params.kind}/{params.name}: <span className="selectable font-mono">{loadError}</span>
+        </Banner>
+      )}
+      {backend && !loadError && live.resourceVersion === "" && (
+        <Banner tone="info" className="shrink-0 rounded-none border-b border-line">
+          Reading {params.kind}/{params.name} from {tab.cluster}…
+        </Banner>
+      )}
       {live.gitops && (
         <Banner
           tone="warning"

@@ -4,7 +4,7 @@ import { Check, Copy, GitBranch, RefreshCw, RotateCw, Search, SearchX } from "lu
 import { useWorkspace } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { isAttention } from "@/data/health";
-import { controllers, type AppHealth, type GitOpsObject, type SyncState } from "@/data/gitops";
+import { controllers as mockControllers, type AppHealth, type GitOpsObject, type SyncState } from "@/data/gitops";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
 import type { ResourceAction } from "@/components/resource-actions/ResourceActions";
 import { useConfirm, type ConfirmationRequest } from "@/components/safety/ConfirmationDialog";
@@ -26,6 +26,7 @@ import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { EmptyState } from "@/components/EmptyState";
 import type { Cluster } from "@/data/types";
 import { cn } from "@/lib/cn";
+import { backend } from "@/backend/client";
 import { gitopsColumns } from "./columns";
 import { GitOpsInspector } from "./GitOpsInspector";
 
@@ -86,6 +87,8 @@ function refreshRequest(o: GitOpsObject, cluster: Cluster | undefined, onConfirm
 export function GitOpsWorkspace({ active }: { active: boolean }) {
   const ws = useWorkspace();
   const { gitops, selectedClusterIds, clusterById, density, refreshGitOps, syncGitOps, setGitOpsSuspended } = ws;
+  // Desktop: detected from served CRDs on each connected cluster.
+  const controllers = backend ? (ws.backendMeta?.controllers ?? []) : mockControllers;
   const { confirm } = useConfirm();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);

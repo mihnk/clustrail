@@ -5,6 +5,7 @@ import { useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { deploymentTotal, forbiddenNamespaces } from "@/data/mock";
+import { backend } from "@/backend/client";
 import { isAttention } from "@/data/health";
 import type { DeploymentRow } from "@/data/types";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
@@ -137,7 +138,7 @@ function ScopedDeployments({ cluster: clusterId, namespace }: { cluster: string;
         <Layers className="size-4" aria-hidden />
         <span className="text-title font-semibold">Deployments</span>
         <span className="text-cell text-fg-muted">
-          {namespace || "all namespaces"} · {rows.length} of {deploymentTotal}
+          {namespace || "all namespaces"} · {rows.length} of {backend ? deployments.filter((d) => d.cluster === clusterId).length : deploymentTotal}
         </span>
         <div className="flex-1" />
         {cluster && selected && (
@@ -276,7 +277,9 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
   }, [active]);
 
   const selected = deployments.find((d) => d.id === selectedId) ?? null;
-  const forbidden = forbiddenNamespaces.filter((f) => selectedClusterIds.includes(f.cluster) && f.resource === "deployments");
+  const forbidden = (backend ? (ws.backendMeta?.forbidden ?? []) : forbiddenNamespaces).filter(
+    (f) => selectedClusterIds.includes(f.cluster) && f.resource === "deployments",
+  );
   const allConnected = selectedClusters.every((c) => c.connection === "connected");
   const counts = useMemo(() => {
     const m: Record<string, number> = {};

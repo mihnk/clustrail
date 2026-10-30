@@ -11,6 +11,8 @@ export interface KubeconfigSource {
   contexts: number;
   watched: boolean;
   changed?: string;
+  /** Unreadable or invalid file, verbatim. */
+  error?: string;
 }
 
 export const kubeconfigSources: KubeconfigSource[] = [

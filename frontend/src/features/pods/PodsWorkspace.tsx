@@ -17,7 +17,8 @@ import { FilterToken, RemovableFilterToken } from "@/components/ui/filter-token"
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { useWorkspace } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
-import { getPodDetail } from "@/data/mock";
+import { usePodDetail } from "@/backend/hooks";
+import { backend } from "@/backend/client";
 import { isAttention } from "@/data/health";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
 import { Button, IconButton } from "@/components/ui/button";
@@ -101,7 +102,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   const [health, setHealth] = useState<HealthFilter>("all");
   const [sorting, setSorting] = useState<SortingState>([{ id: "status", desc: false }]);
   const [userColumns, setUserColumns] = useState<VisibilityState>({});
-  const [selectedId, setSelectedId] = useState<string | null>("prod-eu-west-1/payments/checkout-api-7d9f8b6c4-x2kqp");
+  const [selectedId, setSelectedId] = useState<string | null>(backend ? null : "prod-eu-west-1/payments/checkout-api-7d9f8b6c4-x2kqp");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("overview");
   const [autoHidden, setAutoHidden] = useState<string[]>([]);
@@ -166,7 +167,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   const selectedPod = useMemo(() => pods.find((p) => p.id === selectedId) ?? null, [pods, selectedId]);
   // Only filters can hide a pod that is in the selected clusters.
   const selectedHiddenByFilters = selectedPod !== null && !rows.some((p) => p.id === selectedId);
-  const detail = useMemo(() => (selectedPod ? getPodDetail(selectedPod) : null), [selectedPod]);
+  const detail = usePodDetail(selectedPod ?? null);
 
   const actionsFor = useCallback(
     (id: string) => {
@@ -190,7 +191,8 @@ export function PodsWorkspace({ active }: { active: boolean }) {
             }),
           openShell: (p) => {
             openView({ id: "shell", kind: "shell", title: "Shell", cluster: p.cluster });
-            revealResource("session", `${p.cluster}/${p.namespace}/${p.name}/${p.owner ? "api" : "app"}`);
+            // Desktop: an empty container means the pod's default container.
+            revealResource("session", `${p.cluster}/${p.namespace}/${p.name}/${backend ? "" : p.owner ? "api" : "app"}`);
           },
           openLogs: (p) =>
             openView({

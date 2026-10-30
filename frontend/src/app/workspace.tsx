@@ -11,6 +11,8 @@ import { helmReleases as initialReleases, helmHealth, type HelmRelease } from "@
 import { gitopsObjects as initialGitOps, gitopsHealth, type GitOpsObject } from "@/data/gitops";
 import { useToast } from "@/components/ui/toast";
 import { useMediaQuery, usePersistentState, type Density, type Theme, type ThemePreference } from "./preferences";
+import { backend, type ClusterList } from "@/backend/client";
+import { useDesktopWorkspace } from "./desktop";
 
 export type WorkspaceTabKind =
   | "clusters"
@@ -76,7 +78,7 @@ export interface RevealRequest {
   seq: number;
 }
 
-interface WorkspaceState {
+export interface WorkspaceState {
   theme: Theme;
   /** The stored choice; `theme` is what it resolves to. */
   themePreference: ThemePreference;
@@ -131,6 +133,7 @@ interface WorkspaceState {
   jobs: BackgroundJob[];
   pins: Pin[];
   pinToInvestigation: (pin: Omit<Pin, "id" | "at">) => void;
+  clearPins: () => void;
 
   scenarios: MockScenarios;
   setScenario: (key: keyof MockScenarios, on: boolean) => void;
@@ -151,6 +154,9 @@ interface WorkspaceState {
 
   reveal: RevealRequest | null;
   revealResource: (kind: RevealRequest["kind"], id: string) => void;
+
+  /** Desktop mode: kubeconfig sources, new contexts, RBAC gaps and GitOps controllers from the backend. */
+  backendMeta: ClusterList | null;
 }
 
 const SYSTEM_NAMESPACES = ["kube-system", "kube-public", "kube-node-lease"];
@@ -187,21 +193,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const theme: Theme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
   const [hideSystemNamespaces] = usePersistentState("settings.hideSystemNamespaces", true);
   const [density, setDensity] = usePersistentState<Density>("density", "default");
+  // Desktop mode starts empty and fills from the backend; the selection there is the backend's.
+  const desktop = backend !== null;
   const [selectedClusterIds, setSelectedClusterIds] = usePersistentState<string[]>(
-    "selectedClusters",
-    initialSelectedClusters,
+    desktop ? "desktop.selectedClusters" : "selectedClusters",
+    desktop ? [] : initialSelectedClusters,
   );
-  const [clusters, setClusters] = useState(initialClusters);
-  const [allPods, setAllPods] = useState(initialPods);
-  const [deployments, setDeployments] = useState(initialDeployments);
-  const [nodes, setNodes] = useState(initialNodes);
-  const [helmReleases, setHelmReleases] = useState(initialReleases);
-  const [gitops, setGitops] = useState(initialGitOps);
+  const [clusters, setClusters] = useState<Cluster[]>(desktop ? [] : initialClusters);
+  const [allPods, setAllPods] = useState<PodRow[]>(desktop ? [] : initialPods);
+  const [deployments, setDeployments] = useState<DeploymentRow[]>(desktop ? [] : initialDeployments);
+  const [nodes, setNodes] = useState<NodeRow[]>(desktop ? [] : initialNodes);
+  const [helmReleases, setHelmReleases] = useState<HelmRelease[]>(desktop ? [] : initialReleases);
+  const [gitops, setGitops] = useState<GitOpsObject[]>(desktop ? [] : initialGitOps);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
-  const [pins, setPins] = usePersistentState<Pin[]>("investigation.checkout-api-restarts.pins", []);
-  const [tabs, setTabs] = useState(initialTabs);
+  const [pins, setPins] = usePersistentState<Pin[]>(desktop ? "investigation.desktop.pins" : "investigation.checkout-api-restarts.pins", []);
+  // Desktop opens on the clusters overview; the mock opens the design's tab set.
+  const [tabs, setTabs] = useState<WorkspaceTab[]>(
+    desktop ? [{ id: "clusters", kind: "clusters", title: "Clusters" }, { id: "pods", kind: "pods", title: "Pods" }] : initialTabs,
+  );
   const [closedTabs, setClosedTabs] = useState<WorkspaceTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState("pods");
+  const [activeTabId, setActiveTabId] = useState(desktop ? "clusters" : "pods");
   const [scenarios, setScenarios] = useState<MockScenarios>({ watchLost: false, noMetrics: false });
   const [reveal, setReveal] = useState<RevealRequest | null>(null);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
@@ -638,6 +649,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const desktopState = useDesktopWorkspace({
+    toast,
+    clusters,
+    allPods,
+    deployments,
+    nodes,
+    helmReleases,
+    gitops,
+    setClusters,
+    setAllPods,
+    setDeployments,
+    setNodes,
+    setHelmReleases,
+    setGitops,
+    setJobs,
+    selectedClusterIds,
+    setSelectedClusterIds,
+  });
+
   const value = useMemo<WorkspaceState>(() => {
     const selected = new Set(selectedClusterIds);
     const clusterById = (id: string) => clusters.find((c) => c.id === id);
@@ -694,6 +724,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setGitOpsSuspended,
       jobs,
       pins,
+      clearPins: () => setPins([]),
       pinToInvestigation: (pin) => {
         setPins([...pins, { ...pin, id: `${Date.now()}`, at: new Date().toISOString() }]);
         toast.show({ kind: "success", title: "Pinned to investigation", target: "checkout-api restarts", action: { label: "Open investigation", onClick: () => setActiveTabId("inv-checkout-api") } });
@@ -748,8 +779,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       },
       reveal,
       revealResource: (kind, id) => setReveal({ kind, id, seq: Date.now() }),
+      backendMeta: desktopState.meta,
+      // Desktop mode: every change goes to the Go backend; the mock implementations above stay for browser dev.
+      ...desktopState.actions,
     };
   }, [
+    desktopState,
     theme,
     themePreference,
     setTheme,

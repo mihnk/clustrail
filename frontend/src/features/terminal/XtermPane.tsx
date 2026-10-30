@@ -4,7 +4,24 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { usePersistentState } from "@/app/preferences";
+import { backend, errorText, EVENTS, onEvent, type ExecOutput } from "@/backend/client";
 import { MockShell, SCROLLBACK } from "./mockShell";
+
+/** The container a desktop session executes in. */
+export interface ExecTarget {
+  cluster: string;
+  namespace: string;
+  pod: string;
+  /** Empty: the pod's default container. */
+  container: string;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
 
 export interface XtermHandle {
   copySelection: () => void;
@@ -48,11 +65,13 @@ export const XtermPane = forwardRef<
     /** Live sessions accept input; others are read-only. */
     interactive: boolean;
     onResize: (cols: number, rows: number) => void;
-    onExit: (code: number) => void;
+    onExit: (code: number, error?: string) => void;
+    /** Desktop: run a real exec session in this container instead of the mock shell. */
+    target?: ExecTarget;
     /** Esc Esc moves focus back to the app. */
     onLeave: () => void;
   }
->(function XtermPane({ sessionId, restore, cwd, themeKey, interactive, onResize, onExit, onLeave }, ref) {
+>(function XtermPane({ sessionId, restore, cwd, themeKey, interactive, onResize, onExit, onLeave, target }, ref) {
   const [scrollback] = usePersistentState("terminal.scrollback", 10_000);
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -98,15 +117,58 @@ export const XtermPane = forwardRef<
       return true;
     });
 
-    const shell = new MockShell((d) => term.write(d), cwd, (code) => cb.current.onExit(code));
-    if (restore) term.write(SCROLLBACK);
-    shell.prompt();
-    const sub = term.onData((d) => interactiveRef.current && shell.input(d));
+    let sub: { dispose: () => void };
+    let resizeRemote = (_c: number, _r: number) => {};
+    let closeRemote = () => {};
+    if (target && backend) {
+      // A real exec stream: output arrives as base64 chunks, input and resizes go back to the backend.
+      const api = backend;
+      let execId: string | null = null;
+      let ended = false;
+      const early: ExecOutput[] = [];
+      const handle = (o: ExecOutput) => {
+        if (o.data) term.write(base64ToBytes(o.data));
+        if (o.exit !== undefined) {
+          ended = true;
+          if (o.error) term.write(`\r\n\x1b[31m${o.error}\x1b[0m\r\n`);
+          cb.current.onExit(o.exit, o.error);
+        }
+      };
+      const off = onEvent<ExecOutput>(EVENTS.exec, (o) => {
+        if (execId === null) early.push(o);
+        else if (o.id === execId) handle(o);
+      });
+      api
+        .startExec({ ...target, command: [], cols: term.cols, rows: term.rows })
+        .then((id) => {
+          execId = id;
+          early.filter((o) => o.id === id).forEach(handle);
+        })
+        .catch((e) => {
+          const msg = errorText(e);
+          term.write(`\x1b[31m${msg}\x1b[0m\r\n`);
+          cb.current.onExit(-1, msg);
+        });
+      sub = term.onData((d) => {
+        if (interactiveRef.current && execId) void api.execInput(execId, d);
+      });
+      resizeRemote = (c, r) => execId && void api.execResize(execId, c, r);
+      closeRemote = () => {
+        off();
+        if (execId && !ended) void api.closeExec(execId);
+      };
+    } else {
+      const shell = new MockShell((d) => term.write(d), cwd, (code) => cb.current.onExit(code));
+      if (restore) term.write(SCROLLBACK);
+      shell.prompt();
+      sub = term.onData((d) => interactiveRef.current && shell.input(d));
+    }
 
     const doFit = () => {
       if (!host.offsetWidth || !host.offsetHeight) return;
       fit.fit();
       cb.current.onResize(term.cols, term.rows);
+      resizeRemote(term.cols, term.rows);
     };
     const ro = new ResizeObserver(doFit);
     ro.observe(host);
@@ -115,6 +177,7 @@ export const XtermPane = forwardRef<
     return () => {
       ro.disconnect();
       sub.dispose();
+      closeRemote();
       term.dispose();
       termRef.current = null;
     };

@@ -4,7 +4,11 @@
 
 import type { AccessSummary, Cluster, DeploymentRow, Environment, Health, PodDetail, PodRow } from "./types";
 
-export const IS_MOCK = true;
+/** True when no Go backend answered at startup (browser dev): the UI shows mock data and says so. */
+export let IS_MOCK = true;
+export function setMockMode(on: boolean) {
+  IS_MOCK = on;
+}
 
 export const clusters: Cluster[] = [
   { id: "prod-eu-west-1", name: "prod-eu-west-1", context: "arn:aws:eks:eu-west-1:482100000000:cluster/prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38, summary: "EKS 1.30 · eu-west-1", readOnly: false, metrics: "metrics-server", server: "https://4F3A…C1.gr7.eu-west-1.eks.amazonaws.com", auth: "exec · aws eks", source: "~/.kube/config", version: "v1.30.4", identity: "sre-oncall" },
@@ -279,7 +283,7 @@ export const forbiddenNamespaces = [
 
 /** Facts the restart dialog shows for a Deployment. */
 export function getDeploymentState(d: DeploymentRow): { health: Health; text: string; mono?: string }[] {
-  if (d.name !== "checkout-api" || d.cluster !== "prod-eu-west-1") {
+  if (!IS_MOCK || d.name !== "checkout-api" || d.cluster !== "prod-eu-west-1") {
     return [{ health: d.readyReplicas < d.replicas ? "warning" : "healthy", text: `${d.readyReplicas} of ${d.replicas} pods are ready.` }];
   }
   return [

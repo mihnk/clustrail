@@ -43,7 +43,7 @@ export function NavigationRail() {
         <LayoutGrid />
       </RailButton>
       <Divider />
-      <RailButton label="Investigations" active={kind === "investigation"} onClick={() => openTab("inv-checkout-api")}>
+      <RailButton label="Investigations" active={kind === "investigation"} onClick={() => openTab("inv-checkout-api") || openView({ id: "inv-checkout-api", kind: "investigation", title: "Investigation" })}>
         <Route />
       </RailButton>
       <RailButton label="Helm releases" active={kind === "helm"} onClick={() => openView({ kind: "helm", title: "Helm releases" })}>

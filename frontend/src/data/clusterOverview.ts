@@ -2,7 +2,10 @@
 // summaries from the node/pod caches, metrics-server usage, detected add-ons.
 // The Go backend computes these from the same informers the explorers use.
 
-import type { Health } from "./types";
+import type { Cluster, DeploymentRow, Health, PodRow } from "./types";
+import type { NodeRow } from "./nodes";
+import type { HelmRelease } from "./helm";
+import type { GitOpsObject } from "./gitops";
 
 export interface Capacity {
   used: number | null;
@@ -25,7 +28,8 @@ export interface ClusterOverview {
   cpu: Capacity;
   memoryGiB: Capacity;
   apiServer: string;
-  latency: { p50: number; p95: number };
+  /** p95 needs a latency history; the desktop build reports the last probe only. */
+  latency: { p50: number; p95: number | null };
   auth: string;
   watching: { types: number; objects: number };
   components: { name: string; health: Health; text: string }[];
@@ -171,3 +175,76 @@ export const clusterOverviews: Record<string, ClusterOverview> = {
     quick: { deployments: 0, deploymentsAttention: 0, events: 0, helm: 0, gitops: null },
   },
 };
+
+// ---------------------------------------------------------------------------
+// Desktop mode: the same overview, derived from the rows the backend streams.
+
+
+const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+export function overviewFromRows(
+  c: Cluster,
+  rows: { pods: PodRow[]; deployments: DeploymentRow[]; nodes: NodeRow[]; helm: HelmRelease[]; gitops: GitOpsObject[] },
+  controller?: { tool: string | null; version?: string },
+): ClusterOverview {
+  const pods = rows.pods.filter((p) => p.cluster === c.id);
+  const deps = rows.deployments.filter((d) => d.cluster === c.id);
+  const nodes = rows.nodes.filter((n) => n.cluster === c.id);
+  const failingDeps = deps.filter((d) => d.health === "failed" || d.health === "warning");
+  const failingPods = pods.filter((p) => p.health === "failed");
+  // Unknown until the first connect: no provider is guessed.
+  const [provider = "", ...rest] = (c.summary ?? "").split(" · ")[0]!.split(" ");
+  const region = (c.summary ?? "").split(" · ")[1] ?? nodes.find((n) => n.labels["topology.kubernetes.io/region"])?.labels["topology.kubernetes.io/region"] ?? "";
+  const usedKnown = nodes.length > 0 && nodes.every((n) => n.cpu.used !== null);
+  const problems = [
+    failingDeps.length && `${failingDeps.length} workload${failingDeps.length === 1 ? "" : "s"} degraded`,
+    failingPods.length && `${failingPods.length} pod${failingPods.length === 1 ? "" : "s"} failing`,
+    nodes.some((n) => n.health === "failed") && `${nodes.filter((n) => n.health === "failed").length} node NotReady`,
+  ].filter(Boolean);
+  const gitops = rows.gitops.filter((g) => g.cluster === c.id);
+  const drift = gitops.filter((g) => g.sync === "OutOfSync").length;
+  return {
+    id: c.id,
+    provider,
+    region,
+    version: rest.join(" ") || (c.version ?? "").replace(/^v(\d+\.\d+).*/, "$1"),
+    gitVersion: c.version ?? "",
+    contextHint: c.context.length > 32 ? `…${c.context.slice(-28)}` : c.context,
+    nodes: { ready: nodes.filter((n) => n.health !== "failed").length, total: nodes.length },
+    problems: problems.length ? problems.join(" · ") : null,
+    cpu: {
+      used: usedKnown ? round1(sum(nodes.map((n) => n.cpu.used ?? 0))) : null,
+      requested: round1(sum(nodes.map((n) => n.cpu.requests))),
+      allocatable: round1(sum(nodes.map((n) => n.cpu.allocatable))),
+    },
+    memoryGiB: {
+      used: usedKnown ? Math.round(sum(nodes.map((n) => n.memoryGiB.used ?? 0))) : null,
+      requested: Math.round(sum(nodes.map((n) => n.memoryGiB.requests))),
+      allocatable: Math.round(sum(nodes.map((n) => n.memoryGiB.allocatable))),
+    },
+    apiServer: c.server ?? "",
+    latency: { p50: c.latencyMs ?? 0, p95: null },
+    auth: c.auth ?? "",
+    watching: { types: 5 + (rows.helm.some((h) => h.cluster === c.id) ? 1 : 0) + (gitops.length ? 1 : 0), objects: pods.length + deps.length + nodes.length },
+    components: [
+      { name: "metrics-server", health: c.metrics ? "healthy" : "unknown", text: c.metrics ? "metrics.k8s.io served" : "not installed · usage unavailable" },
+      ...(controller?.tool ? [{ name: controller.tool, health: "healthy" as const, text: `CRDs served${controller.version ? ` · ${controller.version}` : ""}` }] : []),
+    ],
+    attention: [
+      ...failingDeps.slice(0, 3).map((d) => ({ health: d.health, name: d.name, detail: `Deployment · ${d.namespace}`, fact: `${d.readyReplicas}/${d.replicas}` })),
+      ...failingPods.slice(0, 2).map((p) => ({ health: p.health, name: p.name, detail: p.reason, fact: p.restarts ? `${p.restarts} ↻` : undefined })),
+      ...gitops
+        .filter((g) => g.sync === "OutOfSync")
+        .slice(0, 2)
+        .map((g) => ({ health: "warning" as const, name: g.name, detail: `${g.tool} · OutOfSync`, link: "gitops" as const })),
+    ],
+    quick: {
+      deployments: deps.length,
+      deploymentsAttention: failingDeps.length,
+      events: 0,
+      helm: rows.helm.filter((h) => h.cluster === c.id).length,
+      gitops: gitops.length ? `${gitops.length} apps${drift ? ` · ${drift} drift` : ""}` : null,
+    },
+  };
+}

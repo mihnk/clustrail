@@ -17,6 +17,7 @@ import { EnvironmentBadge, EnvMarker } from "@/components/status/EnvironmentBadg
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { cn } from "@/lib/cn";
 import { isMac, modKey } from "@/lib/platform";
+import { backend } from "@/backend/client";
 import { XtermPane, type XtermHandle } from "./XtermPane";
 
 export interface ShellSession {
@@ -73,7 +74,7 @@ const PRESET: ShellSession[] = [
   },
 ];
 
-const short = (s: ShellSession) => `${s.container}@${s.pod.split("-").pop()}`;
+const short = (s: ShellSession) => (s.container ? `${s.container}@${s.pod.split("-").pop()}` : s.pod.split("-").pop()!);
 const MAX_ATTEMPTS = 5;
 
 /**
@@ -83,8 +84,9 @@ const MAX_ATTEMPTS = 5;
 export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean }) {
   const ws = useWorkspace();
   const { openPalette } = useOverlays();
-  const [sessions, setSessions] = useState<ShellSession[]>(PRESET);
-  const [activeId, setActiveId] = useState("s1");
+  // Desktop sessions start when you open a shell on a pod; the preset sessions are the mock design.
+  const [sessions, setSessions] = useState<ShellSession[]>(backend ? [] : PRESET);
+  const [activeId, setActiveId] = useState(backend ? "" : "s1");
   const [split, setSplit] = useState(true);
   const [size, setSize] = useState<Record<string, string>>({});
   const [findOpen, setFindOpen] = useState(false);
@@ -97,6 +99,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
 
   // Reconnect countdown; success on the next attempt in the mock.
   useEffect(() => {
+    if (backend) return;
     const t = setInterval(() => {
       setSessions((ss) =>
         ss.map((s) => {
@@ -334,7 +337,8 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                   themeKey={ws.theme}
                   interactive={s.state === "connected"}
                   onResize={(c, r) => setSize((m) => (m[s.id] === `${c}×${r}` ? m : { ...m, [s.id]: `${c}×${r}` }))}
-                  onExit={(code) => update(s.id, { state: "ended", ended: `exit ${code} (you typed exit)` })}
+                  onExit={(code, error) => update(s.id, { state: "ended", ended: error ?? (backend ? `exit ${code}` : `exit ${code} (you typed exit)`) })}
+                  target={backend ? { cluster: s.cluster, namespace: s.namespace, pod: s.pod, container: s.container } : undefined}
                   onLeave={() => (document.querySelector('[role="tab"][aria-selected="true"]') as HTMLElement | null)?.focus()}
                 />
               </div>

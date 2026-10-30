@@ -1,7 +1,22 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowLeftRight, Check, ChevronDown, ChevronRight, Code, KeyRound, Layers, Plus, X } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
-import { compareSnapshots, hunks, lineDiff, snapshotFor, specYaml, type DiffLine, type DiffRow, type DiffSection } from "@/data/compare";
+import {
+  compareSnapshots,
+  configHash,
+  configMapRefs,
+  hunks,
+  lineDiff,
+  snapshotFor,
+  snapshotFromObject,
+  specYaml,
+  type DiffLine,
+  type DiffRow,
+  type DiffSection,
+  type Snapshot,
+} from "@/data/compare";
+import { backend, errorText } from "@/backend/client";
+import { parse } from "yaml";
 import type { Cluster, Environment } from "@/data/types";
 import { Banner } from "@/components/ui/banner";
 import { Button, IconButton } from "@/components/ui/button";
@@ -57,7 +72,37 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
 
   const clusters = clusterIds.map((id) => ws.clusterById(id)).filter((c): c is Cluster => !!c);
   const objects = clusters.map((c) => ws.deployments.find((d) => d.cluster === c.id && d.namespace === namespace && d.name === name));
-  const snaps = objects.filter((o) => !!o).map(snapshotFor);
+  // Desktop: read each live object (and the ConfigMaps it references) from its cluster.
+  const [remote, setRemote] = useState<{ key: string; snaps: (Snapshot & { configData?: Record<string, Record<string, string>> })[]; error?: string } | null>(null);
+  const objectsKey = objects.map((o) => (o ? `${o.id}@${o.revisions[0]?.rev ?? ""}:${o.readyReplicas}` : "-")).join("|");
+  useEffect(() => {
+    if (!backend) return;
+    const api = backend;
+    let cancelled = false;
+    void Promise.all(
+      objects.map(async (row) => {
+        if (!row) return null;
+        const live = await api.getObject(row.cluster, kind, namespace, name);
+        const obj = parse(live.yaml);
+        const configs: Record<string, { keys: number; sha: string; data: Record<string, string> }> = {};
+        for (const cm of configMapRefs(obj)) {
+          try {
+            const data = ((parse((await api.getObject(row.cluster, "ConfigMap", namespace, cm)).yaml) as { data?: Record<string, string> }).data ?? {}) as Record<string, string>;
+            configs[cm] = { keys: Object.keys(data).length, sha: await configHash(data), data };
+          } catch {
+            // Missing or unreadable ConfigMap: compared as absent.
+          }
+        }
+        return snapshotFromObject(row, obj, configs);
+      }),
+    )
+      .then((snaps) => !cancelled && setRemote({ key: objectsKey, snaps: snaps.filter((x): x is NonNullable<typeof x> => !!x) }))
+      .catch((e) => !cancelled && setRemote({ key: objectsKey, snaps: [], error: errorText(e) }));
+    return () => {
+      cancelled = true;
+    };
+  }, [objectsKey]);
+  const snaps = backend ? (remote?.snaps ?? []) : objects.filter((o) => !!o).map(snapshotFor);
   const comparable = snaps.length >= 2 && snaps.length === clusters.length;
   const sections = useMemo(() => {
     if (!comparable) return [];
@@ -246,7 +291,11 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
         </div>
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-          {!comparable ? (
+          {backend && clusters.length >= 2 && (!remote || remote.key !== objectsKey) && !remote?.error ? (
+            <div className="p-6 text-cell text-fg-secondary">Reading {kind} {namespace}/{name} from {clusters.map((c) => c.name).join(", ")}…</div>
+          ) : remote?.error ? (
+            <div className="p-6 text-cell text-status-critical">{remote.error}</div>
+          ) : !comparable ? (
             <div className="p-6 text-cell text-fg-secondary">
               {clusters.length < 2
                 ? "Pick at least two clusters to compare."
@@ -295,7 +344,12 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
                             }
                           />
                           {r.kind === "content" && openConfig === r.field && (
-                            <ConfigKeys grid={grid} name={r.field.replace("ConfigMap ", "")} columns={clusters.length} />
+                            <ConfigKeys
+                              grid={grid}
+                              name={r.field.replace("ConfigMap ", "")}
+                              columns={clusters.length}
+                              data={backend ? snaps.map((sn) => (sn as { configData?: Record<string, Record<string, string>> }).configData?.[r.field.replace("ConfigMap ", "")] ?? {}) : undefined}
+                            />
                           )}
                         </Fragment>
                       ))}
@@ -492,17 +546,23 @@ function Marker({ children, className }: { children: ReactNode; className?: stri
   );
 }
 
-function ConfigKeys({ grid, name, columns }: { grid: string; name: string; columns: number }) {
-  const keys = CONFIG_KEYS[name] ?? [];
+function ConfigKeys({ grid, name, columns, data }: { grid: string; name: string; columns: number; data?: Record<string, string>[] }) {
+  // Desktop: keys whose values differ between the clusters' ConfigMaps (ConfigMaps are not secret).
+  const keys: [string, ...string[]][] = data
+    ? [...new Set(data.flatMap((d) => Object.keys(d)))]
+        .filter((k) => new Set(data.map((d) => d[k] ?? "∅")).size > 1)
+        .map((k) => [k, ...data.map((d) => d[k] ?? "— not set")] as [string, ...string[]])
+    : (CONFIG_KEYS[name] ?? []).map(([k, a, b]) => [k, a, ...Array.from({ length: columns - 1 }, () => b)] as [string, ...string[]]);
+  const total = data ? new Set(data.flatMap((d) => Object.keys(d))).size : 12;
   return (
     <div className="border-b border-line-row bg-surface-panel py-1">
-      {keys.map(([k, a, b]) => (
+      {keys.map(([k, ...values]) => (
         <div key={k} className={cn(grid, "min-h-7 text-ui")}>
           <span />
           <span className="truncate pl-3 font-mono text-fg-muted">{k}</span>
-          {Array.from({ length: columns }, (_, i) => (
-            <span key={i} className="justify-self-start rounded-[4px] bg-diff-chg-bg px-1.5 font-mono">
-              {i === 0 ? a : b}
+          {values.map((v, i) => (
+            <span key={i} className="max-w-full justify-self-start truncate rounded-[4px] bg-diff-chg-bg px-1.5 font-mono" title={v}>
+              {v}
             </span>
           ))}
           <span />
@@ -510,7 +570,9 @@ function ConfigKeys({ grid, name, columns }: { grid: string; name: string; colum
       ))}
       <div className={cn(grid, "text-meta text-fg-muted")}>
         <span />
-        <span className="col-span-full col-start-2 pl-3">{keys.length} keys differ · 10 identical</span>
+        <span className="col-span-full col-start-2 pl-3">
+          {keys.length} keys differ · {total - keys.length} identical
+        </span>
       </div>
     </div>
   );

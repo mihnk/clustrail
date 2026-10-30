@@ -132,7 +132,7 @@ export function ClusterInspector({
               <div className="section-label">Connection</div>
               <dl className="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-2.5 gap-y-[5px] text-ui">
                 <KV k="API server" v={<span className="selectable font-mono text-meta">{ov.apiServer}</span>} />
-                <KV k="Latency" v={<span className="font-mono text-meta">{ov.latency.p50}ms p50 · {ov.latency.p95}ms p95</span>} />
+                <KV k="Latency" v={<span className="font-mono text-meta">{ov.latency.p50}ms p50{ov.latency.p95 !== null && ` · ${ov.latency.p95}ms p95`}</span>} />
                 <KV k="Auth" v={<span className="font-mono text-meta">{ov.auth}</span>} />
                 <KV k="Context" v={<span className="selectable font-mono text-meta break-all">{cluster.context}</span>} />
                 <KV k="Watching" v={`${ov.watching.types} resource types · ${ov.watching.objects.toLocaleString()} objects cached`} />
