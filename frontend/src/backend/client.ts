@@ -176,6 +176,9 @@ export const backendApi = {
   addCluster: (id: string, env: Environment, prot: boolean, readOnly: boolean) => call<void>("AddCluster", id, env, prot, readOnly),
 
   addKubeconfig: () => call<string>("AddKubeconfig"),
+  helmRepositories: () => call<{ name: string; url: string }[]>("HelmRepositories"),
+  checkForUpdates: () => call<{ current: string; latest: string; url: string; upToDate: boolean }>("CheckForUpdates"),
+  setMetricsInterval: (seconds: number) => call<void>("SetMetricsInterval", seconds),
   testConnection: (id: string) => call<{ name: string; result: "ok" | "failed" | "skipped"; detail?: string; ms?: number }[]>("TestConnection", id),
 
   podDetail: (cluster: string, ns: string, name: string) => call<PodDetail>("PodDetail", cluster, ns, name),

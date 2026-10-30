@@ -336,3 +336,39 @@ func (h *helmWatcher) manifestOf(ns, name string, rev int) (string, bool) {
 }
 
 func itoa(i int) string { return strconv.Itoa(i) }
+
+// HelmRepository is one entry of Helm's own repositories.yaml (helm repo add).
+type HelmRepository struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// HelmRepositories lists the repositories the Helm CLI on this machine knows.
+// Clustrail reads them to decide whether a chart can be upgraded; it does not change them.
+func HelmRepositories() ([]HelmRepository, error) {
+	path := os.Getenv("HELM_REPOSITORY_CONFIG")
+	if path == "" {
+		dir, err := os.UserConfigDir()
+		if err != nil {
+			return nil, err
+		}
+		path = filepath.Join(dir, "helm", "repositories.yaml")
+	}
+	raw, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return []HelmRepository{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var f struct {
+		Repositories []HelmRepository `json:"repositories"`
+	}
+	if err := yaml.Unmarshal(raw, &f); err != nil {
+		return nil, err
+	}
+	if f.Repositories == nil {
+		f.Repositories = []HelmRepository{}
+	}
+	return f.Repositories, nil
+}

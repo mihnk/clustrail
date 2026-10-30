@@ -180,3 +180,5 @@ func (w *Workspace) AddKubeconfig() (string, error) {
 	}
 	return path, w.m.AddKubeconfig(path)
 }
+
+func (w *Workspace) HelmRepositories() ([]kube.HelmRepository, error) { return kube.HelmRepositories() }

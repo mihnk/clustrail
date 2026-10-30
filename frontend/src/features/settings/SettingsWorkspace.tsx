@@ -35,9 +35,13 @@ import {
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { Logo } from "@/components/shell/Logo";
 import { cn } from "@/lib/cn";
+import { backend, backendInfo, errorText } from "@/backend/client";
 
 
 export const APP_VERSION = "0.9.0";
+
+/** Shown on settings this build stores but does not act on yet. */
+const NOT_YET = "Not available in this build yet.";
 
 interface Category {
   id: string;
@@ -92,7 +96,11 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
   const [autoHideColumns, setAutoHideColumns] = usePersistentState("settings.autoHideColumns", true);
   const [updateMethod, setUpdateMethod] = usePersistentState<"watch" | "poll">("settings.updateMethod", "watch");
   const [pauseBackground, setPauseBackground] = usePersistentState("settings.pauseBackgroundWatches", true);
-  const [metricsInterval, setMetricsInterval] = usePersistentState("settings.metricsIntervalSec", 15);
+  const [metricsInterval, setMetricsIntervalPref] = usePersistentState("settings.metricsIntervalSec", 15);
+  const setMetricsInterval = (v: number) => {
+    setMetricsIntervalPref(v);
+    void backend?.setMetricsInterval(v);
+  };
   const [cacheBudget, setCacheBudget] = usePersistentState("settings.cacheBudgetMB", 1024);
   const [logBuffer, setLogBuffer] = usePersistentState("logs.bufferLines", 100_000);
   const [logMemory, setLogMemory] = usePersistentState("settings.logMemoryMB", 256);
@@ -130,13 +138,23 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
     scrollRef.current?.querySelector(`#settings-${c.id}`)?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
   };
 
+  const [update, setUpdate] = useState<{ upToDate: boolean; latest: string; url: string; error?: string } | null>(null);
   const checkUpdates = () => {
     setChecking(true);
-    setTimeout(() => {
+    const done = (u: typeof update) => {
+      setUpdate(u);
       setChecking(false);
       setCheckedAt(new Date().toLocaleTimeString([], { hour12: false }));
-    }, 900);
+    };
+    if (backend) {
+      // Desktop: asks GitHub for the latest release; nothing else is sent.
+      void backend
+        .checkForUpdates()
+        .then((u) => done(u))
+        .catch((e) => done({ upToDate: false, latest: "", url: "", error: errorText(e) }));
+    } else setTimeout(() => done({ upToDate: true, latest: APP_VERSION, url: "" }), 900);
   };
+  const version = backendInfo?.version ?? APP_VERSION;
 
   const sections: { id: string; col: 0 | 1; node: ReactNode }[] = [
     {
@@ -200,8 +218,9 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       node: (
         <Section id="clusters" icon={<LayoutGrid />} title="Clusters & namespaces">
           {show("on launch", "restore", "workspace") && (
-            <Setting label="On launch">
+            <Setting label="On launch" detail={backend ? NOT_YET : undefined}>
               <Select
+                disabled={!!backend}
                 label="On launch"
                 value={onLaunch}
                 onChange={(v) => setOnLaunch(v as typeof onLaunch)}
@@ -218,8 +237,9 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
             </Setting>
           )}
           {show("default namespace filter") && (
-            <Setting label="Default namespace filter" detail="Applied when a cluster is added to the selection.">
+            <Setting label="Default namespace filter" detail={`Applied when a cluster is added to the selection.${backend ? ` ${NOT_YET}` : ""}`}>
               <Select
+                disabled={!!backend}
                 label="Default namespace filter"
                 value={defaultNs}
                 onChange={(v) => setDefaultNs(v as typeof defaultNs)}
@@ -258,21 +278,21 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       node: (
         <Section id="watch" icon={<RefreshCw />} title="Refresh & watch">
           {show("update method", "watch", "poll") && (
-            <Setting label="Update method" detail="Watch streams changes; polling uses less API quota on very large clusters.">
+            <Setting label="Update method" detail={`Watch streams changes; polling uses less API quota on very large clusters. ${NOT_YET}`}>
               <Segmented
                 aria-label="Update method"
                 value={updateMethod}
                 onValueChange={setUpdateMethod}
                 options={[
                   { value: "watch", label: "Watch" },
-                  { value: "poll", label: "Poll 30s" },
+                  { value: "poll", label: "Poll 30s", disabled: true },
                 ]}
               />
             </Setting>
           )}
           {show("pause watches in background tabs") && (
-            <Setting label="Pause watches in background tabs" detail="After 5 minutes; resumes with a full re-list.">
-              <Switch checked={pauseBackground} onCheckedChange={setPauseBackground} aria-label="Pause background watches" />
+            <Setting label="Pause watches in background tabs" detail={`After 5 minutes; resumes with a full re-list. ${NOT_YET}`}>
+              <Switch disabled checked={pauseBackground} onCheckedChange={setPauseBackground} aria-label="Pause background watches" />
             </Setting>
           )}
           {show("metrics refresh", "metrics-server") && (
@@ -299,10 +319,11 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
               detail={
                 <span className="flex items-center gap-2">
                   <span className="font-mono">{cachedObjects.toLocaleString()} objects cached</span>
+                  <span>· budget {NOT_YET.toLowerCase()}</span>
                 </span>
               }
             >
-              <NumberField label="Resource cache budget" value={cacheBudget} onChange={setCacheBudget} min={256} max={8192} unit="MB" />
+              <NumberField disabled label="Resource cache budget" value={cacheBudget} onChange={setCacheBudget} min={256} max={8192} unit="MB" />
             </Setting>
           )}
           {show("log buffer per stream", "lines") && (
@@ -320,7 +341,7 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
                 </span>
               }
             >
-              <NumberField label="Total log memory" value={logMemory} onChange={setLogMemory} min={64} max={4096} unit="MB" />
+              <NumberField disabled label="Total log memory" value={logMemory} onChange={setLogMemory} min={64} max={4096} unit="MB" />
             </Setting>
           )}
           {show("terminal scrollback") && (
@@ -373,13 +394,14 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       node: (
         <Section id="privacy" icon={<Shield />} title="Privacy & diagnostics">
           {show("usage telemetry", "privacy") && (
-            <Setting label="Usage telemetry" detail={telemetry ? "On. Anonymous feature usage, no cluster names or resource data." : "Off. Clustrail sends nothing unless you turn this on."}>
-              <Switch checked={telemetry} onCheckedChange={setTelemetry} aria-label="Usage telemetry" />
+            <Setting label="Usage telemetry" detail="Off. This build has no telemetry and sends nothing.">
+              <Switch disabled checked={telemetry} onCheckedChange={setTelemetry} aria-label="Usage telemetry" />
             </Setting>
           )}
           {show("crash reports") && (
-            <Setting label="Crash reports">
+            <Setting label="Crash reports" detail={`This build sends no crash reports. ${NOT_YET}`}>
               <Select
+                disabled
                 label="Crash reports"
                 value={crashReports}
                 onChange={(v) => setCrashReports(v as typeof crashReports)}
@@ -423,7 +445,13 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
             label={
               <span className="flex items-center gap-2">
                 <StatusGlyph health={checking ? "progressing" : "completed"} className={checking ? undefined : "text-status-healthy"} />
-                {checking ? "Checking…" : `Clustrail ${APP_VERSION} is up to date`}
+                {checking
+                  ? "Checking…"
+                  : update?.error
+                    ? `Could not check: ${update.error}`
+                    : update && !update.upToDate
+                      ? `Clustrail ${update.latest} is available (you have ${version})`
+                      : `Clustrail ${version}${update ? " is up to date" : ""}`}
               </span>
             }
             detail={checkedAt ? `Checked at ${checkedAt}` : undefined}
@@ -440,7 +468,7 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       col: 1,
       node: show("about", "licenses", "version") ? (
         <Section id="about" icon={<Logo size={18} />} title="About Clustrail">
-          <Setting label={`Version ${APP_VERSION} · Apache-2.0`} detail="Free and open source by mihnk. Every feature is free — no tiers, no account.">
+          <Setting label={`Version ${version} · Apache-2.0`} detail="Free and open source by mihnk. Every feature is free — no tiers, no account.">
             <Button size="sm" variant="ghost" onClick={() => window.open("https://github.com/mihnk/clustrail", "_blank", "noopener")}>
               <ExternalLink aria-hidden />
               github.com/mihnk/clustrail
@@ -544,14 +572,27 @@ function Setting({ label, detail, children }: { label: ReactNode; detail?: React
   );
 }
 
-function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
+function Select({
+  label,
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: [string, string][];
+  disabled?: boolean;
+}) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild disabled={disabled}>
         <button
           type="button"
+          disabled={disabled}
           aria-label={label}
-          className="focus-ring flex h-[26px] items-center gap-2 whitespace-nowrap rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-ui text-fg"
+          className="focus-ring flex h-[26px] items-center gap-2 whitespace-nowrap rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-ui text-fg disabled:opacity-50"
         >
           {options.find(([v]) => v === value)?.[1] ?? value}
           <ChevronDown className="size-3.5 text-fg-muted" aria-hidden />
@@ -571,7 +612,23 @@ function Select({ label, value, onChange, options }: { label: string; value: str
 }
 
 /** Numeric setting: commits on Enter or blur, clamped to its range. */
-function NumberField({ label, value, onChange, min, max, unit }: { label: string; value: number; onChange: (v: number) => void; min: number; max: number; unit?: string }) {
+function NumberField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  unit,
+  disabled,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  unit?: string;
+  disabled?: boolean;
+}) {
   const [draft, setDraft] = useState(value.toLocaleString("en-US"));
   useEffect(() => setDraft(value.toLocaleString("en-US")), [value]);
   const commit = () => {
@@ -582,10 +639,16 @@ function NumberField({ label, value, onChange, min, max, unit }: { label: string
     setDraft(clamped.toLocaleString("en-US"));
   };
   return (
-    <label className="flex h-[26px] w-[96px] items-center gap-1 rounded-md border border-line-strong bg-surface-panel px-2 font-mono text-ui focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
+    <label
+      className={cn(
+        "flex h-[26px] w-[96px] items-center gap-1 rounded-md border border-line-strong bg-surface-panel px-2 font-mono text-ui focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]",
+        disabled && "opacity-50",
+      )}
+    >
       <span className="sr-only">{label}</span>
       <input
         value={draft}
+        disabled={disabled}
         inputMode="numeric"
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
@@ -602,7 +665,29 @@ function HelmRepos({ repos, setRepos, visible }: { repos: HelmRepo[]; setRepos: 
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  // Desktop: the Helm CLI's own repositories (helm repo add); read-only here.
+  const [helmRepos, setHelmRepos] = useState<HelmRepo[] | null>(null);
+  useEffect(() => {
+    if (backend) void backend.helmRepositories().then(setHelmRepos, () => setHelmRepos([]));
+  }, []);
   if (!visible) return null;
+  if (backend) {
+    return (
+      <Section id="helm" icon={<LifeBuoy />} title="Helm repositories">
+        {(helmRepos ?? []).map((r) => (
+          <Setting key={r.name} label={<span className="font-mono">{r.name}</span>} detail={<span className="font-mono">{r.url}</span>}>
+            <span />
+          </Setting>
+        ))}
+        <Setting
+          label={helmRepos?.length === 0 ? "No Helm repositories on this machine." : "From Helm's repositories.yaml on this machine."}
+          detail="Clustrail uses them to tell whether a release's chart source is known. Rollback works without them; upgrade is not available in this build. Manage them with helm repo add / remove."
+        >
+          <span />
+        </Setting>
+      </Section>
+    );
+  }
   const valid = /^[a-z0-9][a-z0-9-]*$/.test(name) && /^(https:\/\/|oci:\/\/)\S+$/.test(url) && !repos.some((r) => r.name === name);
   const field = "h-[26px] min-w-0 rounded-md border border-line-strong bg-surface-app px-2 text-ui text-fg outline-none placeholder:text-fg-muted focus:border-accent";
   return (

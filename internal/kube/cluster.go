@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -39,10 +40,19 @@ const (
 	EventClusters = "clustrail:clusters"
 	EventJob      = "clustrail:job"
 
-	flushInterval   = 250 * time.Millisecond
-	probeInterval   = 15 * time.Second
-	metricsInterval = 15 * time.Second
+	flushInterval = 250 * time.Millisecond
+	probeInterval = 15 * time.Second
 )
+
+// metricsEvery is the metrics-server polling interval (Settings › Refresh & watch), in seconds.
+var metricsEvery atomic.Int64
+
+func init() { metricsEvery.Store(15) }
+
+// SetMetricsInterval changes how often metrics-server is polled; running loops pick it up on their next tick.
+func SetMetricsInterval(seconds int) {
+	metricsEvery.Store(int64(min(max(seconds, 10), 300)))
+}
 
 // clusterConn is one connected context: clients, informers and the rows
 // derived from them. Rows are rebuilt for changed objects only and sent to
@@ -611,13 +621,11 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 		}
 	}
 	tick()
-	t := time.NewTicker(metricsInterval)
-	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case <-time.After(time.Duration(metricsEvery.Load()) * time.Second):
 			tick()
 		}
 	}
