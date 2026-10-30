@@ -1,6 +1,6 @@
 ---
+import { getImage } from 'astro:assets';
 import Base from '../layouts/Base.astro';
-import AppWindow from './AppWindow.astro';
 import type { Locale, UIKey } from '../i18n/ui';
 import { useTranslations } from '../i18n/utils';
 
@@ -23,13 +23,44 @@ const why: { title: UIKey; items: UIKey[] }[] = [
 const tools: { icon: string; title: string; text: UIKey }[] = [
   { icon: 'i-logs', title: t('tl.logs'), text: 'tl.logs.text' },
   { icon: 'i-term', title: t('tl.term'), text: 'tl.term.text' },
-  { icon: 'i-code', title: t('tl.yaml'), text: 'tl.yaml.text' },
-  { icon: 'i-scale', title: t('tl.compare'), text: 'tl.compare.text' },
+  { icon: 'i-route', title: t('tl.chain'), text: 'tl.chain.text' },
+  { icon: 'i-net', title: t('tl.netpol'), text: 'tl.netpol.text' },
   { icon: 'i-layers', title: t('tl.workloads'), text: 'tl.workloads.text' },
   { icon: 'i-node', title: t('tl.nodes'), text: 'tl.nodes.text' },
+  { icon: 'i-disk', title: t('tl.storage'), text: 'tl.storage.text' },
+  { icon: 'i-alert', title: t('tl.checks'), text: 'tl.checks.text' },
+  { icon: 'i-code', title: t('tl.yaml'), text: 'tl.yaml.text' },
+  { icon: 'i-scale', title: t('tl.compare'), text: 'tl.compare.text' },
   { icon: 'i-helm', title: 'Helm', text: 'tl.helm.text' },
   { icon: 'i-git', title: 'GitOps', text: 'tl.gitops.text' },
 ];
+
+// Screenshots of the app with sample data, taken by frontend/e2e/screenshots.spec.ts
+// into docs/images (shared with the README) and served as WebP here.
+const shots = import.meta.glob<{ default: ImageMetadata }>('../../../docs/images/*.png', {
+  eager: true,
+});
+const shot = (name: string) => shots[`../../../docs/images/${name}.png`]!.default;
+async function srcset(name: string) {
+  const sizes = await Promise.all(
+    [960, 1440, 2880].map((width) =>
+      getImage({ src: shot(name), width, format: 'webp', quality: 82 }),
+    ),
+  );
+  return {
+    src: sizes[1]!.src,
+    full: sizes[2]!.src,
+    srcset: sizes.map((s, i) => `${s.src} ${[960, 1440, 2880][i]}w`).join(', '),
+  };
+}
+const hero = { dark: await srcset('pods'), light: await srcset('pods-light') };
+const gallery: { name: string; title: UIKey; text: UIKey; alt: UIKey }[] = [
+  { name: 'logs', title: 'gl.logs', text: 'gl.logs.text', alt: 'gl.logs.alt' },
+  { name: 'service-chain', title: 'gl.chain', text: 'gl.chain.text', alt: 'gl.chain.alt' },
+  { name: 'helm-upgrade', title: 'gl.helm', text: 'gl.helm.text', alt: 'gl.helm.alt' },
+  { name: 'network-policies', title: 'gl.net', text: 'gl.net.text', alt: 'gl.net.alt' },
+];
+const galleryImages = await Promise.all(gallery.map((g) => srcset(g.name)));
 const never: { icon: string; text: UIKey }[] = [
   { icon: 'i-user-x', text: 'lf.account' },
   { icon: 'i-home', text: 'lf.agents' },
@@ -73,7 +104,22 @@ const prodTag = '<span class="tag tag-prod">PROD</span>';
         <span class="dot" aria-hidden="true"></span>
         {t('hero.status')}
       </p>
-      <AppWindow label={t('hero.shot')} />
+      <picture class="shot">
+        <source
+          media="(prefers-color-scheme: light)"
+          srcset={hero.light.srcset}
+          sizes="(min-width: 1152px) 1120px, 100vw"
+        />
+        <img
+          src={hero.dark.src}
+          srcset={hero.dark.srcset}
+          sizes="(min-width: 1152px) 1120px, 100vw"
+          width="1440"
+          height="900"
+          alt={t('hero.shot')}
+          fetchpriority="high"
+        />
+      </picture>
       <p class="caption">{t('hero.caption')}</p>
     </section>
   </div>
@@ -323,6 +369,41 @@ const prodTag = '<span class="tag tag-prod">PROD</span>';
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="tour" aria-labelledby="gl">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">{t('gl.eyebrow')}</span>
+        <h2 id="gl">{t('gl.title')}</h2>
+      </div>
+      <div class="gallery">
+        {gallery.map((g, i) => (
+          <figure>
+            <a
+              class="shot"
+              href={galleryImages[i]!.full}
+              aria-label={`${t(g.title)} (${t('gl.full')})`}
+            >
+              <img
+                src={galleryImages[i]!.src}
+                srcset={galleryImages[i]!.srcset}
+                sizes="(min-width: 1152px) 548px, (min-width: 860px) 50vw, 100vw"
+                width="1440"
+                height="900"
+                loading="lazy"
+                decoding="async"
+                alt={t(g.alt)}
+              />
+            </a>
+            <figcaption>
+              <b>{t(g.title)}</b>
+              <span>{t(g.text)}</span>
+            </figcaption>
+          </figure>
+        ))}
       </div>
     </div>
   </section>

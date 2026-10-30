@@ -355,7 +355,11 @@ func (b *chainBuilder) controllerPods(ci *ChainIngress) []*corev1.Pod {
 	case len(ready) == 0:
 		b.add("error", msg("The ingress controller has {v0} pods and none is ready", len(pods.Items)), data(pods.Items[0].Namespace+"/"+pods.Items[0].Name))
 	default:
-		b.add("ok", msg("IngressClass {v0} exists and its controller has {v1} ready pods", ci.Class, len(ready)), data(ready[0].Namespace+"/"+ready[0].Name))
+		m := msg("IngressClass {v0} exists and its controller has {v1} ready pods", ci.Class, len(ready))
+		if len(ready) == 1 {
+			m = msg("IngressClass {v0} exists and its controller has 1 ready pod", ci.Class)
+		}
+		b.add("ok", m, data(ready[0].Namespace+"/"+ready[0].Name))
 	}
 	if ci.Controller == "ingress.k8s.aws/alb" {
 		// The ALB sends traffic to pod IPs or node ports from outside the cluster: no controller pod is on the path.
@@ -451,7 +455,11 @@ func (b *chainBuilder) service(name string, wantPorts []string) ChainService {
 		if len(pods) == 0 {
 			b.add("error", msg("Selector {v0} matches no pods", cs.Selector), b.nearMiss(svc.Spec.Selector))
 		} else {
-			b.add("ok", msg("Selector {v0} matches {v1} pods", cs.Selector, len(pods)), text{})
+			m := msg("Selector {v0} matches {v1} pods", cs.Selector, len(pods))
+			if len(pods) == 1 {
+				m = msg("Selector {v0} matches 1 pod", cs.Selector)
+			}
+			b.add("ok", m, text{})
 		}
 	}
 	for i := range pods {

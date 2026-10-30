@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 
 // The desktop app's Go side, faked at the Wails transport (POST /wails/runtime):
 // calls are answered from a fixture the Go converters produce
-// (go test -run TestWriteUIFixture, see README), events are dispatched the way
+// (go test -run TestWriteUIFixture, see docs/development.md), events are dispatched the way
 // the runtime does.
 
 const fixture = JSON.parse(readFileSync(fileURLToPath(new URL("./fixtures/desktop.json", import.meta.url)), "utf8"));
@@ -223,7 +223,7 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
           pods: [{ name: "checkout-api-7d9f8b6c4-9rkzd", phase: "Running", ready: false, reason: "Readiness probe failed: connection refused" }], ingresses: ["shop"],
         }],
         checks: [
-          { status: "ok", text: "Selector app=checkout-api matches 1 pods", template: "Selector {v0} matches {v1} pods", args: ["app=checkout-api", "1"] },
+          { status: "ok", text: "Selector app=checkout-api matches 1 pod", template: "Selector {v0} matches 1 pod", args: ["app=checkout-api"] },
           { status: "error", text: "service/checkout-api has no ready endpoints", template: "service/{v0} has no ready endpoints", args: ["checkout-api"], hint: "checkout-api-7d9f8b6c4-9rkzd: Readiness probe failed: connection refused" },
         ],
         verdict: { status: "error", text: "service/checkout-api has no ready endpoints", template: "service/{v0} has no ready endpoints", args: ["checkout-api"], hint: "checkout-api-7d9f8b6c4-9rkzd: Readiness probe failed: connection refused" },
@@ -335,6 +335,8 @@ export interface FakeOptions {
   clusters?: unknown[];
   /** Contexts whose kubeconfig now names another API server, by id. */
   targetChanged?: Record<string, { from: string; to: string }>;
+  /** Changes the fake data before the page loads (screenshots use richer data). */
+  patch?: (d: ReturnType<typeof data>) => void;
 }
 
 /** Opens the app in desktop mode against the fake backend, with fresh local storage. */
@@ -346,6 +348,7 @@ export async function openDesktop(page: Page, opts: FakeOptions = {}): Promise<F
     d.list.forbidden = [];
     (d as { clusters: unknown[] }).clusters = opts.clusters;
   }
+  opts.patch?.(d);
   for (const c of d.clusters as { id: string; targetChanged?: unknown }[]) if (opts.targetChanged?.[c.id]) c.targetChanged = opts.targetChanged[c.id];
   const calls: string[] = [];
   const callArgs: { method: string; args: unknown[] }[] = [];

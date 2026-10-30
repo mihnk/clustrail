@@ -26,7 +26,7 @@ larger change, open an issue first so we can agree on the approach.
 
 ## Setup
 
-See [Development](README.md#development) in the README for requirements and
+See [docs/development.md](docs/development.md) for requirements and
 how to run the app. For a real cluster to test against:
 
 ```bash
@@ -49,8 +49,8 @@ cd frontend && npm run e2e
 
 - Add or update Go tests (fake clientsets in `internal/kube/*_test.go`) for
   backend changes, and a Playwright test for new UI flows.
-- If you change the row converters, regenerate the e2e fixture (command in the
-  README).
+- If you change the row converters, regenerate the e2e fixture (command in
+  [docs/development.md](docs/development.md)).
 - Match the surrounding code: naming, comment density, and the design tokens
   in `frontend/src/styles/index.css` rather than raw colors.
 - Keep commits focused, with a message that says what changed and why.

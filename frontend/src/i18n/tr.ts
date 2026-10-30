@@ -1734,4 +1734,7 @@ export const tr: Record<string, string> = {
   "protected": "korumalı",
   "standard": "standart",
   "now points to {to} (was {from}). Its environment and protection were set for the old server, so changes are locked until you confirm them for the new one.": "artık {to} adresini gösteriyor (önceden {from}). Ortamı ve koruması eski sunucu için ayarlanmıştı; yeni sunucu için onaylayana kadar değişiklikler kilitli.",
+  "{n} object is deleted by this upgrade: {v0}.": "Bu yükseltme {n} nesneyi siler: {v0}.",
+  "Selector {v0} matches 1 pod": "Selector {v0}, 1 pod'a uyuyor",
+  "IngressClass {v0} exists and its controller has 1 ready pod": "IngressClass {v0} var ve controller'ının 1 hazır pod'u var",
 };

@@ -1,6 +1,6 @@
 # Performance architecture (M0)
 
-This page covers the path a pod change takes from the Kubernetes API to a painted table row. It also covers what bounds each stage and how the app measures it. Pods are the only kind on this path so far. Every other kind still goes through the older `clustrail:delta` events (250 ms flush, see the README).
+This page covers the path a pod change takes from the Kubernetes API to a painted table row. It also covers what bounds each stage and how the app measures it. Pods are the only kind on this path so far. Every other kind still goes through the older `clustrail:delta` events (250 ms flush, see [backend.md](backend.md)).
 
 Measured numbers are in [`docs/benchmarks/m0-results.md`](../benchmarks/m0-results.md).
 

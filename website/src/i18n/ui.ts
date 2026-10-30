@@ -33,9 +33,8 @@ export const ui = {
     'hero.status':
       'In active development — the first public release is on its way. Watch the repository to hear when it ships.',
     'hero.shot':
-      'Clustrail window showing Pods from three clusters, with a failing checkout-api pod open in the inspector',
-    'hero.caption':
-      'Design preview with sample data. Interface may change before the first release.',
+      'Clustrail showing pods from two clusters in one list, with a crash-looping checkout-api pod open in the inspector',
+    'hero.caption': 'The app with sample data.',
 
     'why.eyebrow': 'What it’s for',
     'why.title': 'Built for the engineer who has five clusters open before lunch.',
@@ -99,10 +98,10 @@ export const ui = {
     'tl.title': 'Everything you reach for, in one window.',
     'tl.logs': 'Logs',
     'tl.logs.text':
-      'Merge pods into one stream, search and filter, read the previous container, and pause without losing lines.',
-    'tl.term': 'Terminal',
+      'Follow a workload, a label selector or single pods in one stream; search, pin lines and read the previous container.',
+    'tl.term': 'Terminal & debug',
     'tl.term.text':
-      'Shells in tabs and splits, with cluster, pod and container always in view and reconnects handled.',
+      'Shells in tabs, ephemeral debug containers like kubectl debug, node shells, and port forwards that survive pod restarts.',
     'tl.yaml': 'YAML editor',
     'tl.yaml.text':
       'Folding, validation, side-by-side diff and server-side dry run before you apply.',
@@ -111,12 +110,12 @@ export const ui = {
       'Staging against production: images, limits, env vars and HPA, showing only what differs.',
     'tl.workloads': 'Workloads',
     'tl.workloads.text':
-      'Scale, restart and roll back Deployments with rollout history and related resources.',
+      'Deployments, StatefulSets, DaemonSets, Jobs and CronJobs: scale, restart, roll back, run a CronJob now.',
     'tl.nodes': 'Nodes',
     'tl.nodes.text':
       'Conditions, allocation and taints, plus cordon and a drain preflight that lists every pod.',
     'tl.helm.text':
-      'Releases, values, manifests and history across clusters, with rollback when you need it.',
+      'Releases, values and history across clusters; upgrade with a previewed diff, or roll back.',
     'tl.gitops.text':
       'Argo CD and Flux status, drift and errors, wherever a controller is installed.',
 
@@ -168,6 +167,40 @@ export const ui = {
     'footer.issues': 'Issues',
     'footer.note': 'A mihnk project · Apache-2.0',
 
+    'gl.eyebrow': 'A closer look',
+    'gl.title': 'From the symptom to the cause, in one window.',
+    'gl.full': 'full size',
+    'gl.logs': 'Logs from every pod',
+    'gl.logs.text':
+      'Follow a Deployment and its pods merge into one stream. Pods that start later join it; one that crashes says so.',
+    'gl.logs.alt':
+      'Merged logs of three checkout-api pods, one reconnecting after an OutOfMemoryError',
+    'gl.chain': 'Service chain',
+    'gl.chain.text':
+      'Ingress → Service → endpoints → pods, read from the objects. The first broken link is the likely cause.',
+    'gl.chain.alt':
+      'Service chain: the Service has no ready endpoints because the readiness probe fails',
+    'gl.helm': 'Helm upgrade with a diff',
+    'gl.helm.text':
+      'A server-side dry run, diffed object by object against what is deployed, before anything changes.',
+    'gl.helm.alt':
+      'Helm upgrade preview: the new values and the image change diffed against the deployed manifest',
+    'gl.net': 'Network policies',
+    'gl.net.text':
+      'Who can reach a pod and what it can reach, and whether one connection is allowed, by which rule.',
+    'gl.net.alt': 'Network policies of a pod: who can reach it, and a denied connection check',
+    'tl.chain': 'Service chain',
+    'tl.chain.text':
+      'Why a Service or Ingress serves nothing: class, ports, selector, endpoints, probes, TLS and policies, checked in order.',
+    'tl.netpol': 'Network policies',
+    'tl.netpol.text':
+      'The policies that select a pod, what each rule allows, and a check for one connection.',
+    'tl.storage': 'Storage',
+    'tl.storage.text':
+      'Claims, volumes and classes: why a claim is Pending, how full a volume is, which pods mount it.',
+    'tl.checks': 'Checks',
+    'tl.checks.text':
+      'Warning events across clusters, certificates and tokens about to expire, and what you may do per namespace.',
     'notfound.title': 'Page not found — Clustrail',
     'notfound.heading': 'This page is off the route.',
     'notfound.text': 'The page you were looking for does not exist.',
@@ -195,8 +228,8 @@ export const ui = {
     'hero.status':
       'Aktif olarak geliştiriliyor; ilk açık sürüm yolda. Çıktığında haberdar olmak için repoyu izleyin.',
     'hero.shot':
-      'Üç cluster’ın Pod’larını gösteren Clustrail penceresi; hatalı checkout-api pod’u denetçide açık',
-    'hero.caption': 'Örnek verilerle tasarım önizlemesi. Arayüz ilk sürümden önce değişebilir.',
+      'İki cluster’ın pod’larını tek listede gösteren Clustrail; sürekli çöken checkout-api pod’u denetçide açık',
+    'hero.caption': 'Örnek verilerle uygulama.',
 
     'why.eyebrow': 'Ne için',
     'why.title': 'Öğleden önce beş cluster açmış mühendis için yapıldı.',
@@ -259,10 +292,10 @@ export const ui = {
     'tl.title': 'Uzandığınız her şey, tek pencerede.',
     'tl.logs': 'Loglar',
     'tl.logs.text':
-      'Pod’ları tek akışta birleştirin, arayın ve filtreleyin, önceki container’ı okuyun, satır kaybetmeden duraklatın.',
-    'tl.term': 'Terminal',
+      'Bir iş yükünü, label selector’ı ya da tek pod’ları tek akışta izleyin; arayın, satır sabitleyin, önceki container’ı okuyun.',
+    'tl.term': 'Terminal ve debug',
     'tl.term.text':
-      'Sekmelerde ve bölmelerde shell’ler; cluster, pod ve container hep görünür, yeniden bağlanma halledilir.',
+      'Sekmelerde shell’ler, kubectl debug gibi geçici debug container’ları, node shell’leri ve pod yeniden başlasa da süren port forward’lar.',
     'tl.yaml': 'YAML düzenleyici',
     'tl.yaml.text': 'Uygulamadan önce katlama, doğrulama, yan yana fark ve sunucu tarafı dry run.',
     'tl.compare': 'Ortam karşılaştırma',
@@ -270,12 +303,12 @@ export const ui = {
       'Staging ile production: image’lar, limitler, ortam değişkenleri ve HPA; yalnızca farklar.',
     'tl.workloads': 'İş yükleri',
     'tl.workloads.text':
-      'Deployment’ları rollout geçmişi ve ilişkili kaynaklarla ölçekleyin, yeniden başlatın, geri alın.',
+      'Deployment, StatefulSet, DaemonSet, Job ve CronJob: ölçekleyin, yeniden başlatın, geri alın, CronJob’u hemen çalıştırın.',
     'tl.nodes': 'Node’lar',
     'tl.nodes.text':
       'Koşullar, ayrımlar ve taint’ler; ayrıca cordon ve her pod’u listeleyen bir drain ön kontrolü.',
     'tl.helm.text':
-      'Cluster’lar genelinde release’ler, değerler, manifest’ler ve geçmiş; gerektiğinde geri alma.',
+      'Cluster’lar arası release’ler, değerler ve geçmiş; farkı önizleyerek yükseltin ya da geri alın.',
     'tl.gitops.text':
       'Bir controller kurulu olan her yerde Argo CD ve Flux durumu, sapmalar ve hatalar.',
 
@@ -326,6 +359,41 @@ export const ui = {
     'footer.issues': 'Issue’lar',
     'footer.note': 'Bir mihnk projesi · Apache-2.0',
 
+    'gl.eyebrow': 'Yakından bakış',
+    'gl.title': 'Belirtiden nedene, tek pencerede.',
+    'gl.full': 'tam boyut',
+    'gl.logs': 'Her pod’un logu',
+    'gl.logs.text':
+      'Bir Deployment’ı takip edin, pod’larının logları tek akışta birleşsin. Sonradan başlayan pod’lar akışa katılır; çöken pod bunu söyler.',
+    'gl.logs.alt':
+      'Üç checkout-api pod’unun birleşik logları; biri OutOfMemoryError sonrası yeniden bağlanıyor',
+    'gl.chain': 'Servis zinciri',
+    'gl.chain.text':
+      'Ingress → Service → endpoint’ler → pod’lar, nesnelerden okunur. İlk kopuk halka muhtemel nedendir.',
+    'gl.chain.alt':
+      'Servis zinciri: readiness probe başarısız olduğu için Service’in hazır endpoint’i yok',
+    'gl.helm': 'Farkı görerek Helm yükseltme',
+    'gl.helm.text':
+      'Hiçbir şey değişmeden önce sunucu tarafı dry run, kurulu olanla nesne nesne karşılaştırılır.',
+    'gl.helm.alt':
+      'Helm yükseltme önizlemesi: yeni değerler ve kurulu manifest’e göre image değişikliği',
+    'gl.net': 'Network policy’ler',
+    'gl.net.text':
+      'Bir pod’a kim ulaşabilir, pod nereye ulaşabilir; tek bir bağlantıya izin var mı, hangi kuralla.',
+    'gl.net.alt':
+      'Bir pod’un network policy’leri: kim ulaşabilir ve reddedilen bir bağlantı kontrolü',
+    'tl.chain': 'Servis zinciri',
+    'tl.chain.text':
+      'Bir Service ya da Ingress neden hiçbir şey sunmuyor: class, port, selector, endpoint, probe, TLS ve policy’ler sırayla kontrol edilir.',
+    'tl.netpol': 'Network policy’ler',
+    'tl.netpol.text':
+      'Bir pod’u seçen policy’ler, her kuralın izin verdikleri ve tek bir bağlantı için kontrol.',
+    'tl.storage': 'Depolama',
+    'tl.storage.text':
+      'Claim, volume ve class’lar: claim neden Pending, volume ne kadar dolu, hangi pod’lar bağlıyor.',
+    'tl.checks': 'Kontroller',
+    'tl.checks.text':
+      'Cluster’lar arası Warning event’leri, süresi dolmak üzere olan sertifika ve token’lar, namespace başına yetkileriniz.',
     'notfound.title': 'Sayfa bulunamadı — Clustrail',
     'notfound.heading': 'Bu sayfa rotanın dışında.',
     'notfound.text': 'Aradığınız sayfa yok.',

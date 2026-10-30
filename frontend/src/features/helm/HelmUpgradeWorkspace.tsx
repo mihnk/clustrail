@@ -255,7 +255,7 @@ export function HelmUpgradeWorkspace({ tab }: { tab: WorkspaceTab; active: boole
           {plan && counts.removed > 0 && (
             <div className="mx-3.5 mt-2.5 flex items-start gap-2 rounded-lg bg-status-warning-soft px-3 py-2 text-meta text-fg-secondary">
               <TriangleAlert className="mt-px size-3.5 shrink-0 text-status-warning" aria-hidden />
-              <span>{tt("{n} objects are deleted by this upgrade: {v0}.", { n: counts.removed, v0: (plan.objects ?? []).filter((o) => o.change === "removed").map((o) => `${o.kind}/${o.name}`).join(", ") })}</span>
+              <span>{tt(counts.removed === 1 ? "{n} object is deleted by this upgrade: {v0}." : "{n} objects are deleted by this upgrade: {v0}.", { n: counts.removed, v0: (plan.objects ?? []).filter((o) => o.change === "removed").map((o) => `${o.kind}/${o.name}`).join(", ") })}</span>
             </div>
           )}
           <code className="selectable mx-3.5 my-2.5 block break-all rounded-md bg-surface-panel px-2.5 py-1.5 font-mono text-meta text-fg-secondary">{command}</code>

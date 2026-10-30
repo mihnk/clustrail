@@ -281,7 +281,7 @@ test("upgrades a Helm release after previewing what changes", async ({ page }) =
   await page.getByRole("button", { name: "Preview changes" }).click();
   await expect(visible(page, "1 changed")).toBeVisible();
   await expect(visible(page, /\+\s+image: ghcr\.io\/acme\/payments-workers:1\.8\.4/)).toBeVisible();
-  await expect(visible(page, /objects are deleted by this upgrade: ServiceMonitor\/payments-workers-v2/)).toBeVisible();
+  await expect(visible(page, "1 object is deleted by this upgrade: ServiceMonitor/payments-workers-v2.")).toBeVisible();
   expect(backend.argsOf("PlanHelmUpgrade")[0]![0]).toMatchObject({ cluster: "prod-eu-west-1", namespace: "payments", name: "payments-workers", wait: true, atomic: true, timeoutSec: 300 });
   // Editing after the preview asks for a new one.
   await values.fill("replicaCount: 4\n");
@@ -327,7 +327,7 @@ test("service chain explains why a Service has nothing to route to", async ({ pa
   await page.getByRole("menuitem", { name: "Service chain" }).click();
   await expect(visible(page, "Likely cause: service/checkout-api has no ready endpoints")).toBeVisible();
   await expect(page.getByRole("status").getByText(/Readiness probe failed: connection refused/)).toBeVisible();
-  await expect(visible(page, "Selector app=checkout-api matches 1 pods")).toBeVisible();
+  await expect(visible(page, "Selector app=checkout-api matches 1 pod")).toBeVisible();
   await expect(visible(page, "0 ready · 1 not ready")).toBeVisible();
   expect(backend.argsOf("ServiceChain")[0]).toEqual(["prod-eu-west-1", "payments", "Service", "checkout-api"]);
 });

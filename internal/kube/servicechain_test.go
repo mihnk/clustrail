@@ -90,7 +90,7 @@ func TestServiceChainNoReadyEndpoints(t *testing.T) {
 	if ch.Ingress == nil || ch.Ingress.Class != "nginx" || ch.Ingress.ControllerPods != 1 || len(ch.Ingress.Routes) != 1 || ch.Ingress.Address[0] != "34.120.8.17" {
 		t.Fatalf("ingress = %+v", ch.Ingress)
 	}
-	if !hasCheck(ch, "ok", "controller has 1 ready pods") || !hasCheck(ch, "ok", "resolves to Service port 80") || !hasCheck(ch, "ok", "matches 1 pods") || !hasCheck(ch, "ok", "targetPort http is declared") {
+	if !hasCheck(ch, "ok", "controller has 1 ready pod") || !hasCheck(ch, "ok", "resolves to Service port 80") || !hasCheck(ch, "ok", "matches 1 pod") || !hasCheck(ch, "ok", "targetPort http is declared") {
 		t.Fatalf("checks = %+v", ch.Checks)
 	}
 	if !hasCheck(ch, "warning", "shop-tls holds no certificate") {
