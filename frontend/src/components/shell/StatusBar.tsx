@@ -93,7 +93,7 @@ export function StatusBar() {
       <div className="flex-1" />
       <PortForwardIndicator />
       {protectedCount > 0 && (
-        <span className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">
+        <span data-tour="protected" className="flex items-center gap-1.5 whitespace-nowrap text-env-prod-ink">
           <Lock className="size-3" aria-hidden />
           {t(protectedCount === 1 ? "{n} production cluster protected" : "{n} production clusters protected", { n: protectedCount })}</span>
       )}

@@ -269,6 +269,16 @@ func (w *Workspace) CloseExec(id string)                     { w.m.CloseExec(id)
 
 func (w *Workspace) TestConnection(id string) ([]kube.TestStep, error) { return w.m.TestConnection(id) }
 
+// First-run setup.
+func (w *Workspace) Setup() kube.SetupInfo                             { return w.m.Setup() }
+func (w *Workspace) SetupTest(id string) (kube.SetupTestResult, error) { return w.m.SetupTest(id) }
+func (w *Workspace) PasteKubeconfig(text string) (string, error)       { return w.m.PasteKubeconfig(text) }
+func (w *Workspace) SkipSetup() error                                  { return w.m.SkipSetup() }
+func (w *Workspace) RestartSetup() error                               { return w.m.RestartSetup() }
+func (w *Workspace) CompleteSetup(choices []kube.SetupChoice, selected []string) error {
+	return w.m.CompleteSetup(choices, selected)
+}
+
 // AddKubeconfig asks for a kubeconfig file with the native file dialog and adds it.
 // It returns the chosen path, or "" when the dialog was cancelled.
 func (w *Workspace) AddKubeconfig() (string, error) {

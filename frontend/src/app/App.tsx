@@ -35,15 +35,42 @@ import { backend } from "@/backend/client";
 import { DiagnosticsPanel } from "@/features/bench/DiagnosticsPanel";
 import { runBenchmark } from "@/features/bench/runner";
 import { t } from "@/i18n";
+import { SetupFlow, type SetupSummary } from "@/features/setup/SetupFlow";
+import { SetupTips } from "@/features/setup/SetupTips";
+import { SETUP_EVENT } from "@/features/setup/api";
 
 export function App() {
+  // First-run setup comes before the workspace: the Go side says whether it is due.
+  const [setup, setSetup] = useState<"checking" | "needed" | "done">(backend ? "checking" : "done");
+  const [summary, setSummary] = useState<SetupSummary | null>(null);
+  useEffect(() => {
+    if (backend) {
+      backend.setup().then(
+        (info) => setSetup(info?.needed ? "needed" : "done"),
+        () => setSetup("done"),
+      );
+    }
+    const open = () => setSetup("needed");
+    window.addEventListener(SETUP_EVENT, open);
+    return () => window.removeEventListener(SETUP_EVENT, open);
+  }, []);
   return (
     <ToastProvider>
       <WorkspaceProvider>
         <TooltipProvider delayDuration={400}>
           <ConfirmationProvider>
             <ShortcutsProvider>
-              <AppShell />
+              {setup === "needed" ? (
+                <SetupFlow
+                  onDone={(s) => {
+                    setSummary(s);
+                    setSetup("done");
+                  }}
+                  onSkip={() => setSetup("done")}
+                />
+              ) : setup === "done" ? (
+                <AppShell setupSummary={summary} onSetupTipsClosed={() => setSummary(null)} />
+              ) : null}
               <PortForwardHost />
             </ShortcutsProvider>
           </ConfirmationProvider>
@@ -53,8 +80,12 @@ export function App() {
   );
 }
 
-function AppShell() {
+function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSummary | null; onSetupTipsClosed: () => void }) {
   const ws = useWorkspace();
+  // Right after setup: the overview of the clusters it connected.
+  useEffect(() => {
+    if (setupSummary) ws.openView({ kind: "clusters", title: t("Clusters") });
+  }, [setupSummary]);
   const { theme, density, tabs, activeTabId, activeTab, clusterById } = ws;
   useBackendSync();
   // Development diagnostics (⌘⇧D) and the in-app benchmark runner (CLUSTRAIL_BENCH).
@@ -100,6 +131,7 @@ function AppShell() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-app text-fg">
       <WindowToolbar />
+      {setupSummary && <SetupTips summary={setupSummary} onClose={onSetupTipsClosed} />}
       {/* The protected band belongs to single-cluster lists; tool tabs carry their own context. */}
       {scopedCluster?.protected && activeTab?.kind === "deployments" && <ProtectedContextBar cluster={scopedCluster} />}
       <div className="flex min-h-0 flex-1">

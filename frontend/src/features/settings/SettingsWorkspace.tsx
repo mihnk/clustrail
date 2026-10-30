@@ -37,6 +37,7 @@ import { Logo } from "@/components/shell/Logo";
 import { cn } from "@/lib/cn";
 import { backend, backendInfo, errorText } from "@/backend/client";
 import { LANGUAGE_PREFERENCE, locale, t as tt, tn, type LanguageSetting } from "@/i18n";
+import { SETUP_EVENT } from "@/features/setup/api";
 
 
 export const APP_VERSION = "0.9.0";
@@ -278,6 +279,17 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
                   ["clusters", tt("Open Clusters overview")],
                 ]}
               />
+            </Setting>
+          )}
+          {show("setup", "first run", "onboarding", "kubeconfig") && (
+            <Setting label={tt("First-run setup")} detail={tt("Find kubeconfig files, choose contexts, set environments and protection, and test connections again.")}>
+              <Button
+                onClick={() =>
+                  void (backend ? backend.restartSetup() : Promise.resolve()).then(() => window.dispatchEvent(new Event(SETUP_EVENT)))
+                }
+              >
+                {tt("Run setup again")}
+              </Button>
             </Setting>
           )}
           {show("connect automatically", "auto connect") && (

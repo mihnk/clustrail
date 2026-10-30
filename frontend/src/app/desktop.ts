@@ -148,7 +148,7 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
         a.setHelmReleases(snap.helm);
         a.setGitops(snap.gitops);
         const known = new Set(list.clusters.map((c) => c.id));
-        a.setSelectedClusterIds(list.selected.filter((id) => known.has(id)));
+        a.setSelectedClusterIds((list.selected ?? []).filter((id) => known.has(id)));
         loaded.current = true;
         if (autoConnect) void api.autoConnect();
       })

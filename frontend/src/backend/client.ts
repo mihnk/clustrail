@@ -270,6 +270,53 @@ export interface ExecOutput {
   error?: string;
 }
 
+// First-run setup (internal/kube/setup.go).
+export interface SetupLocation {
+  path: string;
+  via: "default" | "env" | "added";
+  state: "found" | "missing" | "invalid" | "unset";
+  error?: string;
+  contexts: number;
+}
+export interface SetupContext {
+  id: string;
+  name: string;
+  cluster: string;
+  server: string;
+  auth: string;
+  source: string;
+  current: boolean;
+  /** Stored or suggested; "" when the user must choose. */
+  env: Environment | "";
+  hint?: { word: string; field: "context" | "cluster" | "server" };
+  stored: boolean;
+  protected: boolean;
+  readOnly: boolean;
+  known: boolean;
+}
+export interface SetupInfo {
+  needed: boolean;
+  locations: SetupLocation[];
+  contexts: SetupContext[];
+}
+export interface TestStepResult {
+  name: string;
+  result: "ok" | "failed" | "skipped";
+  detail?: string;
+  ms?: number;
+}
+export interface SetupTestResult {
+  steps: TestStepResult[];
+  state: "connected" | "auth" | "unreachable" | "failed";
+  hint?: string;
+}
+export interface SetupChoice {
+  id: string;
+  env: Environment;
+  protected: boolean;
+  readOnly: boolean;
+}
+
 /** Turns a Wails RuntimeError into the Go error text. */
 export function errorText(e: unknown): string {
   if (e instanceof Error) {
@@ -315,6 +362,12 @@ export const backendApi = {
   podChecksum: (cluster: string) => call<{ count: number; sum: number }>("PodChecksum", cluster),
   revealLog: () => call<void>("RevealLog"),
   testConnection: (id: string) => call<{ name: string; result: "ok" | "failed" | "skipped"; detail?: string; ms?: number }[]>("TestConnection", id),
+  setup: () => call<SetupInfo>("Setup"),
+  setupTest: (id: string) => call<SetupTestResult>("SetupTest", id),
+  pasteKubeconfig: (text: string) => call<string>("PasteKubeconfig", text),
+  skipSetup: () => call<void>("SkipSetup"),
+  restartSetup: () => call<void>("RestartSetup"),
+  completeSetup: (choices: SetupChoice[], selected: string[]) => call<void>("CompleteSetup", choices, selected),
 
   podDetail: (cluster: string, ns: string, name: string) => call<PodDetail>("PodDetail", cluster, ns, name),
   events: (cluster: string, ns: string, kind: string, name: string) => call<ResourceEvent[]>("Events", cluster, ns, kind, name),

@@ -26,6 +26,9 @@ type settingsFile struct {
 	ExtraKubeconfigs []string `json:"extraKubeconfigs,omitempty"`
 	Selected         []string `json:"selected,omitempty"`
 	FirstRunDone     bool     `json:"firstRunDone"`
+	// SetupDone: first-run setup was finished or skipped. Missing in files
+	// written before setup existed, whose users are past it.
+	SetupDone *bool `json:"setupDone,omitempty"`
 }
 
 // Store persists context settings as JSON in the user config directory
@@ -48,6 +51,7 @@ func OpenStore(path string) (*Store, error) {
 	s := &Store{path: path, data: settingsFile{Contexts: map[string]ContextSettings{}}}
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
+		s.data.SetupDone = new(bool) // a fresh install starts with setup
 		return s, nil
 	}
 	if err != nil {
@@ -158,7 +162,7 @@ func (s *Store) AddKubeconfig(path string) error {
 func (s *Store) Selected() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]string(nil), s.data.Selected...)
+	return append([]string{}, s.data.Selected...) // [] rather than null in JSON
 }
 
 func (s *Store) SetSelected(ids []string) error {
@@ -172,4 +176,28 @@ func (s *Store) FirstRunDone() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.data.FirstRunDone
+}
+
+// SetupDone reports whether first-run setup was finished or skipped.
+func (s *Store) SetupDone() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data.SetupDone == nil || *s.data.SetupDone
+}
+
+func (s *Store) SetSetupDone(done bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.SetupDone = &done
+	return s.save()
+}
+
+// SetKnown replaces the set of known contexts: the ones chosen in setup.
+// Every other context shows as available ("New") in Connections.
+func (s *Store) SetKnown(contexts []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.Known = append([]string(nil), contexts...)
+	s.data.FirstRunDone = true
+	return s.save()
 }

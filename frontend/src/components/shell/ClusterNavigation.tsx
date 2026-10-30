@@ -136,7 +136,7 @@ function ClusterList() {
   const { clusters, selectedClusterIds, toggleCluster } = useWorkspace();
   const selected = new Set(selectedClusterIds);
   return (
-    <section aria-label={t("Clusters")} className="flex flex-col gap-0.5">
+    <section aria-label={t("Clusters")} data-tour="clusters" className="flex flex-col gap-0.5">
       <div className="flex items-center justify-between px-2 pb-1">
         <span className="section-label">{t("Clusters")}</span>
         <span className="font-mono text-label text-fg-muted">

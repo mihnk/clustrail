@@ -56,6 +56,7 @@ export function WindowToolbar() {
       <button
         type="button"
         onClick={openPalette}
+        data-tour="palette"
         className="focus-ring no-drag flex h-7 w-[300px] items-center gap-1.5 rounded-md border border-line-strong bg-surface-panel pl-2 pr-1.5 text-cell text-fg-muted"
       >
         <Search className="size-3.5" aria-hidden />

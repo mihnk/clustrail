@@ -36,6 +36,13 @@ through one Wails service (`internal/app.Workspace`) and its events.
   first-file-wins rule. Files are polled for changes; contexts that appear
   later show as *New* and are never connected automatically. The kubeconfig is
   never written.
+- **First-run setup** (`setup.go`): a fresh install starts with five steps:
+  the kubeconfig files found (or, when there are none, choosing, pasting or
+  creating one), the contexts to show, environment and protection (suggested
+  from the context, cluster or server name; a context without a hint must be
+  chosen), and a parallel connection test. A pasted kubeconfig becomes a new
+  file, `~/.kube/clustrail-pasted.yaml` (0600); existing kubeconfig files are
+  never written. Settings › Run setup again repeats it.
 - **Settings** (`settings.go`): group, protection (Standard · Protected ·
   Read-only) and hidden contexts live in `~/.config/clustrail/contexts.json`.
   Read-only is enforced in Go for every change and every shell; it is a guard
