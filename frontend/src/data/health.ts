@@ -14,4 +14,5 @@ export const healthRank: Record<Health, number> = {
   unknown: 4,
   healthy: 5,
   completed: 6,
+  idle: 7,
 };

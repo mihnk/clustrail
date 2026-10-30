@@ -11,6 +11,7 @@ export function ResizeHandle({
   max,
   onChange,
   label,
+  onReset,
   className,
 }: {
   value: number;
@@ -18,6 +19,8 @@ export function ResizeHandle({
   max: number;
   onChange: (value: number) => void;
   label: string;
+  /** Double-click resets to the default width. */
+  onReset?: () => void;
   className?: string;
 }) {
   const start = useRef<{ x: number; value: number } | null>(null);
@@ -56,6 +59,7 @@ export function ResizeHandle({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onKeyDown={onKeyDown}
+      onDoubleClick={onReset}
       className={cn(
         "no-drag absolute inset-y-0 -left-[3px] z-10 w-1.5 cursor-col-resize outline-none hover:bg-accent/40 focus-visible:bg-accent/60",
         className,

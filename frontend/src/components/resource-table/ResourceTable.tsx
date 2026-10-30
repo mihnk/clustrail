@@ -12,6 +12,7 @@ import { flexRender, type Column, type Row, type RowData, type Table } from "@ta
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ResourceContextMenuContent,
   type ActionTarget,
@@ -63,11 +64,18 @@ export interface ResourceTableProps<T> {
   rowActions?: (id: string) => { actions: ResourceAction[]; target: ActionTarget } | null;
   /** Section rows (e.g. one per cluster); sorting applies within each group. */
   grouping?: ResourceTableGrouping<T>;
+  /** Bulk selection (checkbox column): Space toggles, Shift-click selects a range, ⌘A selects all rows. */
+  checked?: ReadonlySet<string>;
+  onCheckedChange?: (ids: Set<string>) => void;
+  /** Extra row styling, e.g. stale rows from a reconnecting cluster. */
+  rowClassName?: (row: T) => string | undefined;
   /** Grid spacing; 8/12 for explorers, wider for single-cluster lists. */
   columnGap?: number;
   paddingX?: number;
   "aria-label": string;
   empty?: ReactNode;
+  /** Rendered after the rows inside the scroll area (loading placeholders, offline cluster cards). */
+  after?: ReactNode;
 }
 
 type Item<T> = { kind: "group"; key: string; rows: Row<T>[] } | { kind: "row"; row: Row<T> };
@@ -87,10 +95,14 @@ export function ResourceTable<T>({
   onAutoHiddenChange,
   rowActions,
   grouping,
+  checked,
+  onCheckedChange,
+  rowClassName,
   columnGap = 8,
   paddingX = 12,
   "aria-label": ariaLabel,
   empty,
+  after,
 }: ResourceTableProps<T>) {
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -99,7 +111,10 @@ export function ResourceTable<T>({
   const width = useElementWidth(rootRef);
 
   const visible = table.getVisibleLeafColumns();
-  const columns = useMemo(() => fitColumns(visible, width, columnGap, paddingX), [visible, width, columnGap, paddingX]);
+  const columns = useMemo(
+    () => fitColumns(visible, width - (checked !== undefined ? 20 + columnGap : 0), columnGap, paddingX),
+    [visible, width, columnGap, paddingX, checked !== undefined],
+  );
   const autoHidden = useMemo(
     () => visible.filter((c) => !columns.includes(c)).map((c) => c.columnDef.meta?.label ?? c.id),
     [visible, columns],
@@ -108,9 +123,10 @@ export function ResourceTable<T>({
   // Report only when the set of hidden columns changes.
   useEffect(() => onAutoHiddenChange?.(autoHidden), [autoHiddenKey]);
 
-  const gridTemplateColumns = columns
-    .map((c) => (c.columnDef.meta?.width === "fill" ? "minmax(0,1fr)" : `${c.columnDef.meta?.width ?? 80}px`))
-    .join(" ");
+  const bulk = checked !== undefined && onCheckedChange !== undefined;
+  const gridTemplateColumns = (bulk ? "20px " : "") +
+    columns.map((c) => (c.columnDef.meta?.width === "fill" ? "minmax(0,1fr)" : `${c.columnDef.meta?.width ?? 80}px`)).join(" ");
+  const anchor = useRef<string | null>(null);
   const gridStyle = { gridTemplateColumns, columnGap, paddingInline: paddingX };
 
   const rows = table.getRowModel().rows;
@@ -152,14 +168,56 @@ export function ResourceTable<T>({
     virtualizer.scrollToIndex(itemIndex!, { align: "auto" });
   };
 
+  const rowIds = () => rowPositions.map((i) => (items[i] as { row: Row<T> }).row.id);
+  const toggleChecked = (id: string) => {
+    if (!bulk) return;
+    const next = new Set(checked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    anchor.current = id;
+    onCheckedChange(next);
+  };
+  const checkRange = (to: string) => {
+    if (!bulk) return;
+    const ids = rowIds();
+    const a = ids.indexOf(anchor.current ?? to);
+    const b = ids.indexOf(to);
+    const [from, until] = a < b ? [a, b] : [b, a];
+    onCheckedChange(new Set([...checked, ...ids.slice(Math.max(0, from), until + 1)]));
+  };
+  /** Opens the row menu for the selected row from the keyboard (⇧F10 / Menu key). */
+  const openRowMenu = () => {
+    const el = selectedItem >= 0 ? scrollRef.current?.querySelector<HTMLElement>(`#${rowDomId(selectedItem)}`) : null;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: r.left + 160, clientY: r.bottom }));
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const page = Math.max(1, Math.floor((scrollRef.current?.clientHeight ?? rowHeight) / rowHeight) - 1);
+    const mod = e.metaKey || e.ctrlKey;
+    if ((e.key === "F10" && e.shiftKey) || e.key === "ContextMenu") {
+      openRowMenu();
+      e.preventDefault();
+      return;
+    }
+    if (bulk && mod && e.key.toLowerCase() === "a") {
+      onCheckedChange(new Set(rowIds()));
+      e.preventDefault();
+      return;
+    }
     switch (e.key) {
       case "ArrowDown":
+      case "j":
         moveTo(selectedPos + 1);
         break;
       case "ArrowUp":
+      case "k":
         moveTo(selectedPos <= 0 ? 0 : selectedPos - 1);
+        break;
+      case " ":
+        if (!bulk || !selectedId) return;
+        toggleChecked(selectedId);
         break;
       case "PageDown":
         moveTo(selectedPos + page);
@@ -192,6 +250,11 @@ export function ResourceTable<T>({
     e.preventDefault();
   };
 
+  // Keep the selected row in view when the selection changes from outside (palette, links).
+  useEffect(() => {
+    if (selectedItem >= 0) virtualizer.scrollToIndex(selectedItem, { align: "auto" });
+  }, [selectedId]);
+
   const virtualItems = virtualizer.getVirtualItems();
   const activeRendered = virtualItems.some((v) => v.index === selectedItem);
 
@@ -202,6 +265,15 @@ export function ResourceTable<T>({
         className="grid h-[30px] shrink-0 items-center border-b border-line bg-surface-panel text-meta font-medium text-fg-muted dark:bg-transparent"
         style={gridStyle}
       >
+        {bulk && (
+          <div role="columnheader" className="flex items-center">
+            <Checkbox
+              aria-label="Select all rows"
+              checked={checked.size === 0 ? false : checked.size >= rowPositions.length ? true : "indeterminate"}
+              onCheckedChange={(on) => onCheckedChange(on ? new Set(rowIds()) : new Set())}
+            />
+          </div>
+        )}
         {columns.map((column) => (
           <HeaderCell key={column.id} column={column} />
         ))}
@@ -262,6 +334,7 @@ export function ResourceTable<T>({
                   }
                   const row = it.row;
                   const selected = row.id === selectedId;
+                  const isChecked = bulk && checked.has(row.id);
                   return (
                     <div
                       key={v.key}
@@ -270,16 +343,32 @@ export function ResourceTable<T>({
                       role="row"
                       aria-rowindex={v.index + 2}
                       aria-selected={selected}
-                      onClick={() => onSelect(row.id)}
+                      onClick={(e) => {
+                        if (bulk && e.shiftKey) checkRange(row.id);
+                        else if (bulk && (e.metaKey || e.ctrlKey)) toggleChecked(row.id);
+                        onSelect(row.id);
+                      }}
                       onDoubleClick={() => onOpen?.(row.id)}
                       className={cn(
                         "absolute left-0 top-0 grid w-full items-center border-b border-line-row text-cell text-fg-secondary",
                         selected
                           ? "bg-surface-selected text-fg shadow-[inset_0_0_0_1px_var(--line-selected)]"
-                          : "bg-surface-panel hover:bg-surface-hover dark:bg-transparent dark:hover:bg-surface-hover",
+                          : isChecked
+                            ? "bg-accent-soft"
+                            : "bg-surface-panel hover:bg-surface-hover dark:bg-transparent dark:hover:bg-surface-hover",
+                        rowClassName?.(row.original),
                       )}
                       style={{ ...gridStyle, height: rowHeight, transform: `translateY(${v.start}px)` }}
                     >
+                      {bulk && (
+                        <div role="gridcell" className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            aria-label={`Select ${row.id}`}
+                            checked={isChecked}
+                            onCheckedChange={() => toggleChecked(row.id)}
+                          />
+                        </div>
+                      )}
                       {columns.map((column) => {
                         const cell = row.getAllCells().find((c) => c.column.id === column.id)!;
                         return (
@@ -301,6 +390,7 @@ export function ResourceTable<T>({
               </div>
             )}
             {rows.length === 0 && grouping && empty}
+            {after}
           </div>
         </ContextMenuTrigger>
         {menu && <ResourceContextMenuContent actions={menu.actions} target={menu.target} />}

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { Code, Layers, RotateCcw, Scaling, Trash2 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
@@ -13,12 +13,17 @@ import { restartDeploymentRequest } from "./requests";
 
 /** Deployments of one namespace in one cluster (e.g. a protected production context). */
 export function DeploymentsWorkspace({ cluster: clusterId, namespace }: { cluster: string; namespace: string }) {
-  const { deployments, clusterById, density, restartDeployment } = useWorkspace();
+  const { deployments, clusterById, density, restartDeployment, selectedClusterIds, reveal } = useWorkspace();
   const { confirm } = useConfirm();
   const cluster = clusterById(clusterId);
   const rows = useMemo(
-    () => deployments.filter((d) => d.cluster === clusterId && d.namespace === namespace),
-    [deployments, clusterId, namespace],
+    () =>
+      deployments.filter(
+        (d) =>
+          (clusterId ? d.cluster === clusterId : selectedClusterIds.includes(d.cluster)) &&
+          (!namespace || d.namespace === namespace),
+      ),
+    [deployments, clusterId, namespace, selectedClusterIds],
   );
   const [sorting, setSorting] = useState<SortingState>([{ id: "status", desc: false }]);
   const [selectedId, setSelectedId] = useState<string | null>(rows[0]?.id ?? null);
@@ -46,7 +51,7 @@ export function DeploymentsWorkspace({ cluster: clusterId, namespace }: { cluste
         onSelect: () => confirm(restartDeploymentRequest(d, cluster, () => restartDeployment(d.id))),
       },
       { id: "scale", group: "modify", label: "Scale…", icon: <Scaling />, disabled: true },
-      { id: "delete", group: "modify", label: "Delete deployment…", icon: <Trash2 />, shortcut: "⌘⌫", disabled: true },
+      { id: "delete", group: "modify", label: "Delete deployment…", icon: <Trash2 />, shortcut: "⌘⌫", danger: true, disabled: true },
     ],
     [cluster, confirm, restartDeployment],
   );
@@ -60,6 +65,10 @@ export function DeploymentsWorkspace({ cluster: clusterId, namespace }: { cluste
   );
 
   const selected = rows.find((r) => r.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (reveal?.kind === "deployment" && rows.some((r) => r.id === reveal.id)) setSelectedId(reveal.id);
+  }, [reveal?.seq]);
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-app">

@@ -58,6 +58,22 @@
   --shadow-menu: 0 12px 32px rgb(0 0 0 / 0.35);
   --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(0 0 0 / 0.2);
   --scrim: rgb(5 7 9 / 0.62);
+  --status-healthy-soft: #12291d;
+  /* Terminal, code and diff (Monaco/xterm themes read these). */
+  --term-bg: #090b0d;
+  --term-fg: #d7dde3;
+  --code-key: #82b8f0;
+  --code-str: #b9d98c;
+  --code-num: #e8b86d;
+  --code-bool: #d49bf0;
+  --code-comment: #6e7984;
+  --diff-add-bg: #12291d;
+  --diff-add-fg: #6fd69f;
+  --diff-del-bg: #2e1716;
+  --diff-del-fg: #f28b82;
+  --diff-chg-bg: #2b2410;
+  --diff-chg-fg: #e8b04d;
+  --highlight: #5a4a12;
   color-scheme: dark;
 }
 
@@ -96,6 +112,21 @@
   --shadow-menu: 0 12px 32px rgb(17 22 27 / 0.14);
   --shadow-dialog: 0 24px 64px rgb(17 22 27 / 0.18), 0 0 0 1px rgb(17 22 27 / 0.06);
   --scrim: rgb(17 22 27 / 0.38);
+  --status-healthy-soft: #e6f4ec;
+  --term-bg: #fbfbfc;
+  --term-fg: #1b2128;
+  --code-key: #1f5fad;
+  --code-str: #3f7a12;
+  --code-num: #9a5b05;
+  --code-bool: #8a3fb8;
+  --code-comment: #6b7580;
+  --diff-add-bg: #e6f4ec;
+  --diff-add-fg: #17663d;
+  --diff-del-bg: #fcebea;
+  --diff-del-fg: #b42318;
+  --diff-chg-bg: #fcf3df;
+  --diff-chg-fg: #8a5206;
+  --highlight: #fbe7a6;
   color-scheme: light;
 }
 
@@ -143,6 +174,21 @@
   --color-env-stg: var(--env-stg);
   --color-env-dev: var(--env-dev);
   --color-scrim: var(--scrim);
+  --color-status-healthy-soft: var(--status-healthy-soft);
+  --color-term-bg: var(--term-bg);
+  --color-term-fg: var(--term-fg);
+  --color-code-key: var(--code-key);
+  --color-code-str: var(--code-str);
+  --color-code-num: var(--code-num);
+  --color-code-bool: var(--code-bool);
+  --color-code-comment: var(--code-comment);
+  --color-diff-add-bg: var(--diff-add-bg);
+  --color-diff-add-fg: var(--diff-add-fg);
+  --color-diff-del-bg: var(--diff-del-bg);
+  --color-diff-del-fg: var(--diff-del-fg);
+  --color-diff-chg-bg: var(--diff-chg-bg);
+  --color-diff-chg-fg: var(--diff-chg-fg);
+  --color-highlight: var(--highlight);
   --shadow-menu: var(--shadow-menu);
   --shadow-dialog: var(--shadow-dialog);
   --spacing-row: var(--row-h);

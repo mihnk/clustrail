@@ -59,6 +59,7 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       label: "Delete pod…",
       icon: <Trash2 />,
       shortcut: "⌘⌫",
+      danger: true,
       disabled: pod.health === "terminating",
       onSelect: () => deps.confirm(deletePodRequest(pod, deps.cluster, () => deps.deletePod(pod.id))),
     },

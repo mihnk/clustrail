@@ -78,7 +78,7 @@ export const checkoutInvestigation: Investigation = {
     { id: "m8vtn", depth: 2, marker: { health: "failed" }, name: "…m8vtn", fact: "11 ↻", factTone: "failed" },
     { id: "9rkzd", depth: 2, marker: { health: "healthy" }, name: "…9rkzd", fact: "0 ↻", muted: true },
     { id: "h2pqs", depth: 2, marker: { health: "healthy" }, name: "…h2pqs", fact: "0 ↻", muted: true },
-    { id: "rs13", depth: 1, marker: { health: "unknown" }, name: "…5f6b9d8c7", kind: "RS · rev 13 · 0 pods", muted: true },
+    { id: "rs13", depth: 1, marker: { health: "idle" }, name: "…5f6b9d8c7", kind: "RS · rev 13 · 0 pods", muted: true },
     { id: "svc", depth: 0, marker: { health: "warning" }, name: "checkout-api", kind: "Service", fact: "2/4 ep", factTone: "warning" },
     { id: "pdb", depth: 0, marker: { health: "warning" }, name: "checkout-api", kind: "PodDisruptionBudget", fact: "0 allowed", factTone: "warning" },
     { id: "hpa", depth: 0, marker: { health: "healthy" }, name: "checkout-api", kind: "HPA", fact: "4 / 4–8" },

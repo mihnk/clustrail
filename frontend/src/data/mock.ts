@@ -7,12 +7,15 @@ import type { AccessSummary, Cluster, DeploymentRow, Environment, Health, PodDet
 export const IS_MOCK = true;
 
 export const clusters: Cluster[] = [
-  { id: "prod-eu-west-1", name: "prod-eu-west-1", context: "arn:aws:eks:eu-west-1:482100000000:cluster/prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38, summary: "EKS 1.30 · eu-west-1" },
-  { id: "prod-us-east-1", name: "prod-us-east-1", context: "arn:aws:eks:us-east-1:482100000000:cluster/prod-us-east-1", env: "prod", protected: true, connection: "connected", latencyMs: 112, summary: "EKS 1.30 · us-east-1" },
-  { id: "staging-eu-1", name: "staging-eu-1", context: "gke_acme-staging_europe-west4_staging-eu-1", env: "stg", protected: false, connection: "connected", latencyMs: 64, summary: "GKE 1.31 · europe-west4" },
-  { id: "staging-perf", name: "staging-perf", context: "gke_acme-staging_europe-west4_staging-perf", env: "stg", protected: false, connection: "disconnected", latencyMs: null, summary: null },
-  { id: "dev-shared", name: "dev-shared", context: "dev-shared", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null },
-  { id: "kind-local", name: "kind-local", context: "kind-kind-local", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null },
+  { id: "prod-eu-west-1", name: "prod-eu-west-1", context: "arn:aws:eks:eu-west-1:482100000000:cluster/prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38, summary: "EKS 1.30 · eu-west-1", readOnly: false, metrics: "metrics-server" },
+  { id: "prod-us-east-1", name: "prod-us-east-1", context: "arn:aws:eks:us-east-1:482100000000:cluster/prod-us-east-1", env: "prod", protected: true, connection: "connected", latencyMs: 112, summary: "EKS 1.30 · us-east-1", readOnly: false, metrics: "metrics-server" },
+  { id: "staging-eu-1", name: "staging-eu-1", context: "gke_acme-staging_europe-west4_staging-eu-1", env: "stg", protected: false, connection: "connected", latencyMs: 64, summary: "GKE 1.31 · europe-west4", readOnly: false, metrics: "metrics-server" },
+  { id: "staging-perf", name: "staging-perf", context: "gke_acme-staging_europe-west4_staging-perf", env: "stg", protected: false, connection: "auth-expired", latencyMs: null, summary: null, readOnly: false, metrics: null,
+    error: "gke-gcloud-auth-plugin: token expired (Reauthentication required)",
+    authHint: { plugin: "gke-gcloud-auth-plugin", command: "gcloud auth login" }, lastConnected: "2h ago" },
+  { id: "dev-shared", name: "dev-shared", context: "dev-shared", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null, readOnly: true, metrics: null, lastConnected: "3d ago" },
+  { id: "kind-local", name: "kind-local", context: "kind-kind-local", env: "dev", protected: false, connection: "unreachable", latencyMs: null, summary: null, readOnly: false, metrics: null,
+    error: "dial tcp 127.0.0.1:6443: connect: connection refused", lastConnected: "3d ago" },
 ];
 
 export const initialSelectedClusters = ["prod-eu-west-1", "prod-us-east-1", "staging-eu-1"];
@@ -317,6 +320,14 @@ export function getPodDetail(pod: PodRow): PodDetail {
         { kind: "Deployment", name: "checkout-api", note: "2/4 ready", tone: "warning" },
         { kind: "ReplicaSet", name: "checkout-api-7d9f8b6c4", note: "rev 14" },
       ],
+      relations: [
+        { label: "Owned by", objects: [{ kind: "deploy", name: "checkout-api" }, { kind: "rs", name: "…7d9f8b6c4" }], via: "ownerReferences" },
+        { label: "Selected by", objects: [{ kind: "svc", name: "checkout-api" }], pill: { text: "not ready", tone: "warning" }, via: "Service selector app=checkout-api" },
+        { label: "Uses", objects: [{ kind: "cm", name: "checkout-api-config" }, { kind: "secret", name: "checkout-api-db" }], via: "volumes and envFrom" },
+        { label: "Runs on", objects: [{ kind: "node", name: "ip-10-42-3-17" }], via: "spec.nodeName" },
+        { label: "Disruption", objects: [{ kind: "pdb", name: "checkout-api" }], pill: { text: "0 allowed", tone: "warning" }, via: "PDB selector" },
+        { label: "Managed by", objects: [{ kind: "argocd", name: "checkout-api" }], via: "label app.kubernetes.io/instance + Argo CD tracking annotation" },
+      ],
     };
   }
 
@@ -343,5 +354,12 @@ export function getPodDetail(pod: PodRow): PodDetail {
     events: [],
     memory: null,
     ownerChain: pod.owner ? [{ kind: pod.owner.kind, name: pod.owner.name, note: "" }] : [],
+    relations: [
+      ...(pod.owner
+        ? [{ label: "Owned by" as const, objects: [{ kind: pod.owner.kind === "ReplicaSet" ? "rs" : pod.owner.kind.toLowerCase(), name: pod.owner.name }], via: "ownerReferences" }]
+        : []),
+      { label: "Selected by", objects: [{ kind: "svc", name: app }], via: `Service selector app=${app}` },
+      { label: "Runs on", objects: [{ kind: "node", name: pod.node.split(".")[0] ?? pod.node }], via: "spec.nodeName" },
+    ],
   };
 }

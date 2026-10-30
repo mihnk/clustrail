@@ -6,19 +6,22 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { Box, ChevronDown, Columns3, Lock, Plus, Search, SearchX } from "lucide-react";
+import { Box, ChevronDown, Columns3, Lock, Plus, ScrollText, Search, SearchX, Trash2 } from "lucide-react";
+import { ClusterStateBanners, DisconnectedCluster, SkeletonRows, isOffline } from "@/components/cluster/ClusterStates";
+import { ClusterPicker } from "@/components/cluster/ClusterPicker";
+import { InspectorPanel } from "@/components/ui/inspector-panel";
+import { useOverlays } from "@/app/shortcuts";
+import type { PodRow } from "@/data/types";
 import { FilterToken, RemovableFilterToken } from "@/components/ui/filter-token";
-import { Banner } from "@/components/ui/banner";
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { useWorkspace } from "@/app/workspace";
-import { ROW_HEIGHT, usePersistentState } from "@/app/preferences";
+import { ROW_HEIGHT } from "@/app/preferences";
 import { getPodDetail } from "@/data/mock";
 import { isAttention } from "@/data/health";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
 import { Button, IconButton } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Segmented } from "@/components/ui/segmented";
-import { ResizeHandle } from "@/components/ui/resize-handle";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
@@ -50,13 +53,40 @@ const SUGGESTED_LABEL_KEYS = ["tier", "app.kubernetes.io/part-of"];
 /** Toolbars and footers sit on the panel surface in light theme, on the app surface in dark. */
 const BAR = "bg-surface-panel dark:bg-transparent";
 
-const INSPECTOR_MIN = 320;
-const INSPECTOR_MAX = 640;
 
 export function PodsWorkspace({ active }: { active: boolean }) {
-  const { pods, selectedClusters, clusterById, density, theme, tabs, openTab, deployments, deletePod, restartDeployment } =
-    useWorkspace();
+  const {
+    pods: allPods,
+    selectedClusters,
+    clusterById,
+    density,
+    theme,
+    tabs,
+    openTab,
+    deployments,
+    deletePod,
+    restartDeployment,
+    reveal,
+    toggleCluster,
+  } = useWorkspace();
   const { confirm } = useConfirm();
+  const { clusterPickerOpen, setClusterPickerOpen } = useOverlays();
+
+  // Rows as the cluster states allow: listing clusters have none yet (progressive
+  // loading), reconnecting clusters keep their rows but mark them stale.
+  const pods = useMemo<PodRow[]>(() => {
+    const state = new Map(selectedClusters.map((c) => [c.id, c]));
+    return allPods.flatMap((p) => {
+      const c = state.get(p.cluster);
+      if (!c || c.connection === "connecting") return [];
+      if (c.connection === "reconnecting" && c.stale) {
+        const age = Math.round((Date.now() - c.stale.since) / 1000);
+        return [{ ...p, health: "unknown" as const, status: `${p.status}?`, reason: `Last update ${age}s ago`, staleSeconds: age }];
+      }
+      return [p];
+    });
+  }, [allPods, selectedClusters]);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
 
   // View state kept per tab: filters, sort, selection, inspector.
   const [query, setQuery] = useState("");
@@ -72,7 +102,6 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>("prod-eu-west-1/payments/checkout-api-7d9f8b6c4-x2kqp");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("overview");
-  const [inspectorWidth, setInspectorWidth] = usePersistentState("inspectorWidth", 380);
   const [autoHidden, setAutoHidden] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -133,7 +162,8 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   });
 
   const selectedPod = useMemo(() => pods.find((p) => p.id === selectedId) ?? null, [pods, selectedId]);
-  const selectedVisible = selectedId !== null && rows.some((p) => p.id === selectedId);
+  // Only filters can hide a pod that is in the selected clusters.
+  const selectedHiddenByFilters = selectedPod !== null && !rows.some((p) => p.id === selectedId);
   const detail = useMemo(() => (selectedPod ? getPodDetail(selectedPod) : null), [selectedPod]);
 
   const actionsFor = useCallback(
@@ -141,9 +171,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
       const pod = pods.find((p) => p.id === id);
       if (!pod) return null;
       const cluster = clusterById(pod.cluster);
-      return {
-        target: { env: pod.env, protected: cluster?.protected ?? false },
-        actions: podActions(pod, {
+      const actions = podActions(pod, {
           cluster,
           deployments,
           confirm,
@@ -151,7 +179,11 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           restartDeployment,
           openTab,
           hasTab: (tabId) => tabs.some((t) => t.id === tabId),
-        }),
+        });
+      return {
+        target: { env: pod.env, protected: cluster?.protected ?? false, readOnly: cluster?.readOnly },
+        // Stale rows: nothing acts on data that may no longer be true.
+        actions: pod.staleSeconds !== undefined ? actions.map((a) => ({ ...a, disabled: true })) : actions,
       };
     },
     [pods, clusterById, deployments, confirm, deletePod, restartDeployment, openTab, tabs],
@@ -180,7 +212,9 @@ export function PodsWorkspace({ active }: { active: boolean }) {
 
   const nsLabel =
     namespaces === null
-      ? `${allNamespaces.length} selected`
+      ? allNamespaces.length === 0
+        ? "any"
+        : `${allNamespaces.length} selected`
       : namespaces.size === 1
         ? ([...namespaces][0] ?? "")
         : `${namespaces.size} selected`;
@@ -246,8 +280,70 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     [grouped, selectedClusters, collapsedGroups, clusterById],
   );
 
-  const offline = selectedClusters.filter((c) => c.connection !== "connected");
-  const allConnected = offline.length === 0;
+  const allConnected = selectedClusters.every((c) => c.connection === "connected");
+  const offline = selectedClusters.filter(isOffline);
+  const listing = selectedClusters.filter((c) => c.connection === "connecting");
+  const countsByCluster = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const p of pods) m[p.cluster] = (m[p.cluster] ?? 0) + 1;
+    return m;
+  }, [pods]);
+
+  // A resource picked elsewhere (command palette, links): select it and make sure filters don't hide it.
+  useEffect(() => {
+    if (reveal?.kind !== "pod") return;
+    if (!rows.some((p) => p.id === reveal.id)) clearFilters();
+    setSelectedId(reveal.id);
+    setInspectorOpen(true);
+  }, [reveal?.seq]);
+
+  const checkedPods = pods.filter((p) => checked.has(p.id));
+  const bulkDelete = () => {
+    const groups = [...new Set(checkedPods.map((p) => p.cluster))].map((id) => {
+      const c = clusterById(id);
+      return {
+        cluster: id,
+        env: c?.env ?? "dev",
+        protected: c?.protected ?? false,
+        items: checkedPods
+          .filter((p) => p.cluster === id)
+          .map((p) => ({
+            name: `${p.namespace}/${p.name}`,
+            health: p.health,
+            note: p.owner && p.owner.kind !== "Job" ? `recreated by ${p.owner.kind === "ReplicaSet" ? "RS" : p.owner.kind}` : "not replaced",
+          })),
+      };
+    });
+    const n = checkedPods.length;
+    confirm({
+      title: `Delete ${n} ${n === 1 ? "pod" : "pods"} in ${groups.length} ${groups.length === 1 ? "cluster" : "clusters"}?`,
+      action: "Delete pods",
+      targetName: `${n} pods`,
+      icon: <Trash2 />,
+      env: groups.some((g) => g.env === "prod") ? "prod" : groups.some((g) => g.env === "stg") ? "stg" : "dev",
+      cluster: groups.map((g) => g.cluster).join(", "),
+      protected: groups.some((g) => g.protected),
+      destructive: true,
+      targets: groups,
+      phrase: `delete ${n} pods`,
+      whatHappens: "Each pod is deleted with its default grace period. Pods owned by a controller are replaced; the others are not.",
+      command: groups
+        .map((g) => `kubectl --context ${g.cluster} delete pod ${g.items.map((i) => i.name.split("/")[1]).join(" ")}`)
+        .join(" && "),
+      confirmLabel: `Delete ${n} pods`,
+      onConfirm: () => {
+        checkedPods.forEach((p) => deletePod(p.id));
+        setChecked(new Set());
+      },
+    });
+  };
+  const activeFilters = [
+    deferredQuery.trim() && `“${deferredQuery.trim()}”`,
+    health === "attention" && "status = attention",
+    namespaces !== null && `namespace = ${[...namespaces].join(", ")}`,
+    owner !== "any" && `owner = ${owner}`,
+    ...labelFilters.map((l) => `label ${l}`),
+  ].filter(Boolean);
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -265,21 +361,27 @@ export function PodsWorkspace({ active }: { active: boolean }) {
               {selectedClusters.length} {selectedClusters.length === 1 ? "cluster" : "clusters"}
             </span>
           </Tooltip>
-          <div className="hidden min-w-0 items-center gap-1.5 overflow-hidden @[800px]:flex">
-            {selectedClusters.map((c) => (
-              <span
-                key={c.id}
-                title={c.connection === "connected" ? undefined : "Not connected"}
-                className={cn(
-                  "flex h-[22px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-line bg-surface-elevated px-2 text-ui text-fg-secondary",
-                  c.connection !== "connected" && "text-fg-muted",
-                )}
-              >
-                <EnvMarker env={c.env} />
-                {c.name}
-              </span>
-            ))}
-          </div>
+          <ClusterPicker open={active && clusterPickerOpen} onOpenChange={setClusterPickerOpen}>
+            <button
+              type="button"
+              aria-label="Pick clusters"
+              className="focus-ring hidden min-w-0 items-center gap-1.5 overflow-hidden rounded-md border-0 bg-transparent p-0 @[800px]:flex"
+            >
+              {selectedClusters.map((c) => (
+                <span
+                  key={c.id}
+                  title={c.connection === "connected" ? undefined : c.connection}
+                  className={cn(
+                    "flex h-[22px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-line bg-surface-elevated px-2 text-ui text-fg-secondary",
+                    c.connection !== "connected" && "text-fg-muted",
+                  )}
+                >
+                  <EnvMarker env={c.env} />
+                  {c.name}
+                </span>
+              ))}
+            </button>
+          </ClusterPicker>
           <div className="flex-1" />
           <Segmented<ClusterView>
             aria-label="Cluster view"
@@ -439,13 +541,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           />
         </div>
 
-        {offline.length > 0 && (
-          <Banner tone="warning" className="mx-3 my-2 shrink-0">
-            Results are incomplete: <span className="font-mono">{offline.map((c) => c.name).join(", ")}</span>{" "}
-            {offline.length === 1 ? "is" : "are"} not connected. Showing pods from {selectedClusters.length - offline.length} of{" "}
-            {selectedClusters.length} selected clusters.
-          </Banner>
-        )}
+        <ClusterStateBanners clusters={selectedClusters} counts={countsByCluster} noun="pods" />
 
         <ResourceTable
           table={table}
@@ -461,18 +557,54 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           onAutoHiddenChange={setAutoHidden}
           rowActions={actionsFor}
           grouping={grouping}
+          checked={checked}
+          onCheckedChange={setChecked}
+          rowClassName={(p) => (p.staleSeconds !== undefined ? "!text-fg-muted" : undefined)}
+          after={listing.length > 0 ? <SkeletonRows count={4} rowHeight={ROW_HEIGHT[density]} /> : undefined}
           empty={
-            <EmptyState
-              icon={<SearchX />}
-              title="No pods match"
-              action={
-                <Button onClick={clearFilters}>Clear filters</Button>
-              }
-            >
-              {pods.length === 0 ? "No pods in the selected clusters." : "Nothing in the selected clusters matches the current filters."}
-            </EmptyState>
+            offline.length > 0 && offline.length === selectedClusters.length ? (
+              <div className="flex flex-col gap-3 p-4">
+                {offline.map((c) => (
+                  <DisconnectedCluster key={c.id} cluster={c} onRemove={() => toggleCluster(c.id, false)} />
+                ))}
+              </div>
+            ) : listing.length > 0 ? null : selectedClusters.length === 0 ? (
+              <EmptyState title="No clusters selected">Pick clusters in the sidebar or with {"⌘⇧C"}.</EmptyState>
+            ) : activeFilters.length > 0 ? (
+              <EmptyState icon={<SearchX />} title="No pods match these filters" action={<Button onClick={clearFilters}>Clear filters</Button>}>
+                {activeFilters.join(" · ")} · {selectedClusters.length} {selectedClusters.length === 1 ? "cluster" : "clusters"}
+              </EmptyState>
+            ) : (
+              <EmptyState title="No pods">There are no pods in the selected clusters.</EmptyState>
+            )
           }
         />
+
+        {checked.size > 0 && (
+          <div className="flex h-11 shrink-0 items-center gap-2 border-t border-line-selected bg-accent-soft pl-3.5 pr-3">
+            <b className="text-cell font-semibold">{checked.size} selected</b>
+            <span className="text-meta text-fg-muted">
+              {new Set(checkedPods.map((p) => p.cluster)).size} clusters
+            </span>
+            <div className="flex-1" />
+            <Button size="sm" disabled title="The Logs workspace opens for several pods once it is implemented.">
+              <ScrollText aria-hidden />
+              Logs
+            </Button>
+            <Button
+              size="sm"
+              variant={checkedPods.some((p) => clusterById(p.cluster)?.protected) ? "locked" : "default"}
+              disabled={checkedPods.some((p) => clusterById(p.cluster)?.readOnly || p.staleSeconds !== undefined)}
+              onClick={bulkDelete}
+            >
+              {checkedPods.some((p) => clusterById(p.cluster)?.protected) ? <Lock aria-hidden /> : <Trash2 aria-hidden />}
+              Delete…
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setChecked(new Set())}>
+              Clear
+            </Button>
+          </div>
+        )}
 
         <div className={cn("flex h-7 shrink-0 items-center gap-3.5 border-t border-line px-3.5 text-meta text-fg-muted", BAR)}>
           <span>
@@ -480,7 +612,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           </span>
           {attentionCount > 0 && <span className="text-status-critical">{attentionCount} need attention</span>}
           <span className="truncate">{grouped ? "Grouped by cluster · Cluster column replaced by Node" : sortNote}</span>
-          {selectedId && !selectedVisible && inspectorOpen && <span className="text-status-warning">Selected pod is hidden by filters</span>}
+          {selectedHiddenByFilters && inspectorOpen && <span className="text-status-warning">Selected pod is hidden by filters</span>}
           <div className="flex-1" />
           {autoHidden.length > 0 ? (
             <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>
@@ -493,18 +625,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
       </main>
 
       {inspectorOpen && detail && (
-        <aside
-          aria-label="Pod inspector"
-          style={{ width: inspectorWidth }}
-          className="relative flex shrink-0 flex-col overflow-hidden border-l border-line bg-surface-panel"
-        >
-          <ResizeHandle
-            label="Resize inspector"
-            value={inspectorWidth}
-            min={INSPECTOR_MIN}
-            max={INSPECTOR_MAX}
-            onChange={setInspectorWidth}
-          />
+        <InspectorPanel label="Pod inspector" storageKey="pods" active={active}>
           <PodInspector
             detail={detail}
             cluster={clusterById(detail.pod.cluster)}
@@ -516,7 +637,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
             onOpenOwner={(kind, name) => kind === "Deployment" && openTab(`deploy-${name}`)}
             themeKey={theme}
           />
-        </aside>
+        </InspectorPanel>
       )}
     </div>
   );

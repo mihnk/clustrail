@@ -54,10 +54,13 @@ export function EnvMarker({ env, className }: { env: Environment; className?: st
   );
 }
 
-const connectionLabel: Record<ConnectionState, string> = {
+export const connectionLabel: Record<ConnectionState, string> = {
   connected: "Connected",
+  connecting: "Connecting",
   reconnecting: "Reconnecting",
   disconnected: "Not connected",
+  "auth-expired": "Credentials expired",
+  unreachable: "Unreachable",
 };
 
 export function ConnectionDot({ state, className }: { state: ConnectionState; className?: string }) {
@@ -69,8 +72,10 @@ export function ConnectionDot({ state, className }: { state: ConnectionState; cl
       className={cn(
         "inline-block size-1.5 shrink-0 rounded-full",
         state === "connected" && "bg-status-healthy",
-        state === "reconnecting" && "shadow-[inset_0_0_0_1.5px_var(--status-warning)]",
+        (state === "reconnecting" || state === "auth-expired") && "shadow-[inset_0_0_0_1.5px_var(--status-warning)]",
+        state === "connecting" && "shadow-[inset_0_0_0_1.5px_var(--status-progressing)]",
         state === "disconnected" && "shadow-[inset_0_0_0_1.5px_var(--fg-muted)]",
+        state === "unreachable" && "rounded-[1px] bg-status-critical",
         className,
       )}
     />

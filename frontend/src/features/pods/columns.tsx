@@ -42,6 +42,11 @@ export const podColumns = [
       <span className="flex min-w-0 items-center gap-1.5">
         <EnvMarker env={p.env} />
         <span className="truncate">{p.cluster}</span>
+        {p.staleSeconds !== undefined && (
+          <span className="rounded bg-surface-hover px-[5px] py-[3px] font-mono text-2xs font-medium leading-none text-fg-secondary">
+            {p.staleSeconds}s
+          </span>
+        )}
       </span>
     ),
   }),
@@ -80,13 +85,13 @@ export const podColumns = [
     id: "cpu",
     meta: { label: "CPU", width: 48, align: "right", priority: 60, sortNote: "CPU" },
     sortDescFirst: true,
-    cell: ({ row: { original: p } }) => formatCpu(p.cpuMilli),
+    cell: ({ row: { original: p } }) => <span title={p.cpuMilli === null ? "No usage data" : undefined}>{formatCpu(p.cpuMilli)}</span>,
   }),
   col.accessor((p) => p.memoryMiB ?? -1, {
     id: "memory",
     meta: { label: "Memory", width: 54, align: "right", priority: 60, sortNote: "memory" },
     sortDescFirst: true,
-    cell: ({ row: { original: p } }) => formatMemory(p.memoryMiB),
+    cell: ({ row: { original: p } }) => <span title={p.memoryMiB === null ? "No usage data" : undefined}>{formatMemory(p.memoryMiB)}</span>,
   }),
   col.accessor("ageSeconds", {
     id: "age",

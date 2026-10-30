@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Layers } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmationProvider } from "@/components/safety/ConfirmationDialog";
 import { WindowToolbar } from "@/components/shell/WindowToolbar";
 import { ClusterNavigation } from "@/components/shell/ClusterNavigation";
@@ -12,16 +13,21 @@ import { InvestigationWorkspace } from "@/features/investigation/InvestigationWo
 import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
+import { ShortcutsProvider } from "./shortcuts";
 
 export function App() {
   return (
-    <WorkspaceProvider>
-      <TooltipProvider delayDuration={400}>
-        <ConfirmationProvider>
-          <AppShell />
-        </ConfirmationProvider>
-      </TooltipProvider>
-    </WorkspaceProvider>
+    <ToastProvider>
+      <WorkspaceProvider>
+        <TooltipProvider delayDuration={400}>
+          <ConfirmationProvider>
+            <ShortcutsProvider>
+              <AppShell />
+            </ShortcutsProvider>
+          </ConfirmationProvider>
+        </TooltipProvider>
+      </WorkspaceProvider>
+    </ToastProvider>
   );
 }
 
@@ -70,6 +76,12 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
     case "investigation":
       return <InvestigationWorkspace />;
     case "deployments":
-      return <DeploymentsWorkspace cluster={tab.cluster ?? ""} namespace="payments" />;
+      return <DeploymentsWorkspace cluster={tab.cluster ?? ""} namespace={tab.params?.namespace ?? ""} />;
+    default:
+      return (
+        <EmptyState className="flex-1" title={tab.title}>
+          This view is not implemented in this build.
+        </EmptyState>
+      );
   }
 }

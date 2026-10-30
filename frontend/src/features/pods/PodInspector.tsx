@@ -178,7 +178,11 @@ export function PodInspector({
           <EventsPanel events={detail.events} />
         </TabsContent>
 
-        {(["logs", "yaml", "metrics", "related"] as const).map((t) => (
+        <TabPanel value="related">
+          <RelatedList relations={detail.relations} />
+        </TabPanel>
+
+        {(["logs", "yaml", "metrics"] as const).map((t) => (
           <TabPanel key={t} value={t}>
             <EmptyState title="Not available yet">This view is not implemented in this build.</EmptyState>
           </TabPanel>
@@ -278,6 +282,44 @@ function KV({ k, v }: { k: string; v: ReactNode }) {
       <dt className="text-fg-muted">{k}</dt>
       <dd className="m-0 min-w-0 text-fg">{v}</dd>
     </>
+  );
+}
+
+/**
+ * Related objects as a list, not a graph: it scales to hundreds of objects
+ * and reads well with a screen reader. Each line says how it was found.
+ */
+function RelatedList({ relations }: { relations: PodDetail["relations"] }) {
+  return (
+    <dl className="m-0 flex flex-col">
+      {relations.map((r) => (
+        <div key={r.label} className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-x-2.5 py-1.5 text-ui">
+          <dt className="pt-px text-meta text-fg-muted">{r.label}</dt>
+          <dd className="m-0 flex min-w-0 flex-col gap-0.5">
+            <span className="flex flex-wrap items-center gap-1.5 font-mono">
+              {r.objects.map((o, i) => (
+                <span key={o.kind + o.name} className="flex items-center gap-1.5">
+                  {i > 0 && <span className="text-fg-muted">{r.label === "Owned by" ? "›" : "·"}</span>}
+                  <span className="text-fg-muted">{o.kind}/</span>
+                  <span className="truncate">{o.name}</span>
+                </span>
+              ))}
+              {r.pill && (
+                <span
+                  className={cn(
+                    "rounded px-[5px] py-[3px] text-2xs font-semibold leading-none",
+                    r.pill.tone === "warning" ? "bg-status-warning-soft text-status-warning" : "bg-status-progressing-soft text-status-progressing",
+                  )}
+                >
+                  {r.pill.text}
+                </span>
+              )}
+            </span>
+            <span className="text-label text-fg-muted">via {r.via}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

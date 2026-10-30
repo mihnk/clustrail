@@ -33,6 +33,8 @@ export interface ResourceAction {
   shortcut?: string;
   /** Not possible here (not implemented, forbidden by RBAC, read-only context). */
   disabled?: boolean;
+  /** Destructive Modify actions (Delete) are listed last, in their own group. */
+  danger?: boolean;
   onSelect?: () => void;
 }
 
@@ -40,6 +42,8 @@ export interface ActionTarget {
   env: Environment;
   /** Clustrail protection: Modify items stay selectable and open the unlock flow. */
   protected: boolean;
+  /** Read-only context: Modify items are shown disabled with the reason, never hidden. */
+  readOnly?: boolean;
 }
 
 /** Right-click menu for a resource. Groups are always Observe, then Modify. */
@@ -85,7 +89,7 @@ export function ModifyMenuButton({
 }) {
   const modify = actions.filter((a) => a.group === "modify");
   const button = (
-    <Button variant={target.protected ? "locked" : "default"} size={size}>
+    <Button variant={target.protected || target.readOnly ? "locked" : "default"} size={size}>
       {target.protected && <Lock aria-hidden />}
       Modify
       <ChevronDown aria-hidden />
@@ -93,8 +97,14 @@ export function ModifyMenuButton({
   );
   return (
     <DropdownMenu>
-      {target.protected ? (
-        <Tooltip content={`${cluster} is protected. Each change asks for confirmation.`}>
+      {target.protected || target.readOnly ? (
+        <Tooltip
+          content={
+            target.readOnly
+              ? `${cluster} is a read-only context in Clustrail. Changes and shell are blocked.`
+              : `${cluster} is protected. Each change asks for confirmation.`
+          }
+        >
           <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
         </Tooltip>
       ) : (
@@ -112,15 +122,19 @@ function ActionGroups({ actions, target, kind }: { actions: ResourceAction[]; ta
   const Label = kind === "context" ? ContextMenuLabel : DropdownMenuLabel;
   const Separator = kind === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
   const observe = actions.filter((a) => a.group === "observe");
-  const modify = actions.filter((a) => a.group === "modify");
+  const modify = actions.filter((a) => a.group === "modify" && !a.danger);
+  const danger = actions.filter((a) => a.group === "modify" && a.danger);
 
-  const items = (list: ResourceAction[], locked: boolean) =>
+  const items = (list: ResourceAction[], locked: boolean, red = false) =>
     list.map((a) => (
       <Item
         key={a.id}
-        disabled={a.disabled}
+        disabled={a.disabled || target.readOnly}
         onSelect={a.onSelect}
-        className={cn(locked && "text-fg-muted data-[highlighted]:text-fg")}
+        className={cn(
+          locked && "text-fg-muted data-[highlighted]:text-fg",
+          red && "text-status-critical data-[highlighted]:text-status-critical data-[disabled]:text-fg-muted",
+        )}
       >
         {a.icon}
         {a.label}
@@ -139,15 +153,20 @@ function ActionGroups({ actions, target, kind }: { actions: ResourceAction[]; ta
           {items(observe, false)}
         </>
       )}
-      {observe.length > 0 && modify.length > 0 && <Separator />}
-      {modify.length > 0 && (
+      {observe.length > 0 && modify.length + danger.length > 0 && <Separator />}
+      {modify.length + danger.length > 0 && (
+        <Label>
+          {target.protected && <Lock className="size-3 text-env-prod-ink" aria-label="Protected" />}
+          Modify
+          {target.readOnly && <span className="normal-case tracking-normal">· read-only context</span>}
+          <EnvironmentBadge env={target.env} size="sm" className="ml-auto text-[9.5px] tracking-[.05em]" />
+        </Label>
+      )}
+      {items(modify, target.protected)}
+      {danger.length > 0 && (
         <>
-          <Label>
-            {target.protected && <Lock className="size-3 text-env-prod-ink" aria-label="Protected" />}
-            Modify
-            <EnvironmentBadge env={target.env} size="sm" className="ml-auto text-[9.5px] tracking-[.05em]" />
-          </Label>
-          {items(modify, target.protected)}
+          {modify.length > 0 && <Separator />}
+          {items(danger, false, true)}
         </>
       )}
     </>

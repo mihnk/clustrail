@@ -4,7 +4,18 @@
 
 export type Environment = "prod" | "stg" | "dev";
 
-export type ConnectionState = "connected" | "reconnecting" | "disconnected";
+export type ConnectionState =
+  | "connected"
+  /** Initial list in progress. */
+  | "connecting"
+  /** Watch lost; data shown is stale until it recovers. */
+  | "reconnecting"
+  /** Not connected on purpose (never auto-connected). */
+  | "disconnected"
+  /** The kubeconfig auth plugin failed or returned an expired token. */
+  | "auth-expired"
+  /** TCP/TLS to the API server failed. */
+  | "unreachable";
 
 /** Health category. Every category has its own glyph silhouette. */
 export type Health =
@@ -14,7 +25,10 @@ export type Health =
   | "healthy"
   | "completed"
   | "terminating"
-  | "unknown";
+  /** Status not reported: stale data, unreachable cluster. */
+  | "unknown"
+  /** Exists but runs nothing, e.g. an old ReplicaSet with 0 pods. */
+  | "idle";
 
 export interface Cluster {
   /** Stable id; also the display name. */
@@ -29,6 +43,17 @@ export interface Cluster {
   latencyMs: number | null;
   /** From server version and node labels, e.g. "EKS 1.30 · eu-west-1". Unknown until connected. */
   summary: string | null;
+  /** Clustrail read-only mode: blocks changes and shell. Never a substitute for RBAC. */
+  readOnly: boolean;
+  /** Usage metrics source, or null when metrics.k8s.io is not available. */
+  metrics: "metrics-server" | null;
+  /** Why the cluster is not connected, verbatim from the client (e.g. auth plugin or dial error). */
+  error?: string;
+  /** For auth-expired: the plugin and the command the user runs in their own terminal. */
+  authHint?: { plugin: string; command: string };
+  lastConnected?: string;
+  /** While reconnecting: when data went stale and the retry loop state. */
+  stale?: { since: number; attempt: number; nextRetrySec: number };
 }
 
 export interface PodRow {
@@ -53,6 +78,8 @@ export interface PodRow {
   ageSeconds: number;
   owner: { kind: string; name: string } | null;
   labels: Record<string, string>;
+  /** Set while the cluster reconnects: seconds since the last update. */
+  staleSeconds?: number;
 }
 
 /** Result of SelfSubjectAccessReview for the current view, shown in the status bar. */
@@ -121,4 +148,15 @@ export interface PodDetail {
   events: ResourceEvent[];
   memory: { container: string; series: MetricSeries } | null;
   ownerChain: { kind: string; name: string; note: string; tone?: Health }[];
+  /** Related tab: one relation per line, with how it was found. */
+  relations: PodRelation[];
+}
+
+export interface PodRelation {
+  label: "Owned by" | "Selected by" | "Uses" | "Runs on" | "Disruption" | "Managed by";
+  /** Kind shorthand + name, e.g. "svc/checkout-api". */
+  objects: { kind: string; name: string }[];
+  pill?: { text: string; tone: "warning" | "info" };
+  /** How Clustrail found it: ownerReferences, selector, volume, nodeName, labels. */
+  via: string;
 }

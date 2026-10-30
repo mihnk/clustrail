@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlertDialog } from "radix-ui";
-import { Check, Copy, ShieldCheck, X } from "lucide-react";
+import { Check, Copy, Lock, ShieldCheck, X } from "lucide-react";
 import type { Environment, Health } from "@/data/types";
 import { usePersistentState } from "@/app/preferences";
 import { Button, IconButton } from "@/components/ui/button";
@@ -29,6 +29,11 @@ export interface ConfirmationRequest {
   command?: string;
   confirmLabel: string;
   onConfirm: () => void;
+  /** Bulk actions: every target, grouped by cluster. The title replaces "<action> <target>?". */
+  title?: ReactNode;
+  targets?: { cluster: string; env: Environment; protected: boolean; items: { name: string; health: Health; note?: string }[] }[];
+  /** Typed confirmation phrase; defaults to cluster/name. */
+  phrase?: string;
 }
 
 export interface ActivityEntry {
@@ -43,7 +48,8 @@ type Level = "light" | "standard" | "protected";
 
 /** DEV: single confirm. STG: impact summary, Cancel is default. PROD/protected: typed confirmation. */
 function levelOf(r: ConfirmationRequest): Level {
-  if (r.protected || r.env === "prod") return "protected";
+  // The strongest rule wins: one protected target makes the whole action typed.
+  if (r.protected || r.env === "prod" || r.targets?.some((t) => t.protected || t.env === "prod")) return "protected";
   return r.env === "dev" ? "light" : "standard";
 }
 
@@ -104,7 +110,7 @@ function ConfirmationDialog({
   onAccept: () => void;
 }) {
   const level = levelOf(r);
-  const phrase = `${r.cluster}/${r.targetName}`;
+  const phrase = r.phrase ?? `${r.cluster}/${r.targetName}`;
   const [typed, setTyped] = useState("");
   const confirmRef = useRef<HTMLButtonElement>(null);
   const matches = level !== "protected" || typed.trim() === phrase;
@@ -140,9 +146,13 @@ function ConfirmationDialog({
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <AlertDialog.Title className="m-0 text-[16px] font-semibold">
-                {r.action} <span className="font-mono">{r.targetName}</span>?
+                {r.title ?? (
+                  <>
+                    {r.action} <span className="font-mono">{r.targetName}</span>?
+                  </>
+                )}
               </AlertDialog.Title>
-              <AlertDialog.Description asChild>
+              <AlertDialog.Description asChild className={r.targets ? "sr-only" : undefined}>
                 <div className="flex flex-wrap items-center gap-2 text-cell text-fg-secondary">
                   <EnvironmentBadge env={r.env} />
                   <span className="font-mono">{r.cluster}</span>
@@ -169,6 +179,26 @@ function ConfirmationDialog({
           </div>
 
           <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 py-4">
+            {r.targets && (
+              <section className="flex flex-col gap-1">
+                {r.targets.map((g) => (
+                  <div key={g.cluster} className="flex flex-col">
+                    <div className="flex items-center gap-1.5 pb-0.5 pt-1">
+                      <EnvironmentBadge env={g.env} />
+                      <span className="font-mono text-ui">{g.cluster}</span>
+                      {g.protected && <Lock className="size-3 text-env-prod-ink" aria-label="Protected" />}
+                    </div>
+                    {g.items.map((t) => (
+                      <div key={t.name} className="grid h-6 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-x-2 text-ui">
+                        <StatusGlyph health={t.health} />
+                        <span className="truncate font-mono">{t.name}</span>
+                        {t.note && <span className="text-meta text-fg-muted">{t.note}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </section>
+            )}
             {level !== "light" && r.whatHappens && (
               <section className="flex flex-col gap-2">
                 <span className="section-label">What will happen</span>
@@ -192,7 +222,8 @@ function ConfirmationDialog({
                 <div className="flex gap-2.5 rounded-lg bg-env-prod-soft px-3 py-2.5 text-cell">
                   <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-env-prod-ink" aria-hidden />
                   <span>
-                    <b className="font-semibold">{r.cluster} is protected.</b> Confirming unlocks this single action.
+                    <b className="font-semibold">{r.targets ? "A target is protected." : `${r.cluster} is protected.`}</b>{" "}
+                    Confirming unlocks this single action.
                     Protected mode stays on and the action is recorded in the local activity log. Your Kubernetes
                     permissions (RBAC) still decide whether the request succeeds.
                   </span>

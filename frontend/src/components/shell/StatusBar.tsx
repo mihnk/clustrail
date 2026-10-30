@@ -4,7 +4,7 @@ import { IS_MOCK, getAccessSummary } from "@/data/mock";
 import { ConnectionDot } from "@/components/status/EnvironmentBadge";
 
 export function StatusBar() {
-  const { selectedClusters, activeTab, clusterById } = useWorkspace();
+  const { clusters, selectedClusters, activeTab, clusterById } = useWorkspace();
   const investigating = activeTab?.kind === "investigation";
   const scoped = activeTab?.cluster ? clusterById(activeTab.cluster) : undefined;
 
@@ -37,6 +37,7 @@ export function StatusBar() {
     );
   }
   const connected = selectedClusters.filter((c) => c.connection === "connected");
+  const expired = clusters.filter((c) => c.connection === "auth-expired").length;
   const protectedCount = selectedClusters.filter((c) => c.protected).length;
   const allConnected = connected.length === selectedClusters.length;
 
@@ -45,7 +46,7 @@ export function StatusBar() {
       <span className="flex items-center gap-1.5 whitespace-nowrap">
         <ConnectionDot state={allConnected ? "connected" : "reconnecting"} />
         <span className="text-fg-secondary">
-          {connected.length}/{selectedClusters.length} connected
+          {connected.length}/{selectedClusters.length} selected connected
         </span>
       </span>
       {investigating ? (
@@ -54,6 +55,11 @@ export function StatusBar() {
       ) : (
         <span className="truncate font-mono text-label">
           {connected.map((c) => `${c.name} ${c.latencyMs}ms`).join(" · ")}
+        </span>
+      )}
+      {expired > 0 && (
+        <span className="whitespace-nowrap text-status-warning">
+          {expired} {expired === 1 ? "credential" : "credentials"} expired
         </span>
       )}
       <div className="flex-1" />

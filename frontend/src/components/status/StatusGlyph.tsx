@@ -9,6 +9,7 @@ export const healthTone: Record<Health, string> = {
   completed: "text-status-neutral",
   terminating: "text-status-neutral",
   unknown: "text-status-neutral",
+  idle: "text-status-neutral",
 };
 
 /**
@@ -59,6 +60,13 @@ function glyph(health: Health) {
     case "terminating":
       return <circle cx="6" cy="6" r="4.4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.2 1.6" />;
     case "unknown":
-      return <circle cx="6" cy="6" r="4.4" fill="none" stroke="currentColor" strokeWidth="1.5" />;
+      return (
+        <>
+          <rect x="1.6" y="1.6" width="8.8" height="8.8" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M4 6h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </>
+      );
+    case "idle":
+      return <circle cx="6" cy="6" r="4.4" fill="none" stroke="currentColor" strokeWidth="1.4" />;
   }
 }
