@@ -72,6 +72,7 @@ type clusterConn struct {
 	ctx    context.Context
 
 	factory   informers.SharedInformerFactory
+	nsFactory informers.SharedInformerFactory
 	pods      listerscorev1.PodLister
 	nodes     listerscorev1.NodeLister
 	deploys   listersappsv1.DeploymentLister
@@ -80,8 +81,13 @@ type clusterConn struct {
 	helm      *helmWatcher
 	gitops    *gitopsWatcher
 	forbidden []Forbidden
-	syncFns   []cache.InformerSynced
-	kinds     kindIndex
+	// fallbackNS is the namespace listed instead when RBAC denies a resource
+	// cluster-wide: the context's namespace, or "default".
+	fallbackNS string
+	// podsNS is "" when pods are watched cluster-wide, else fallbackNS.
+	podsNS  string
+	syncFns []cache.InformerSynced
+	kinds   kindIndex
 
 	mu         sync.Mutex
 	dirtyPods  map[string]bool // ns/name
@@ -94,12 +100,14 @@ type clusterConn struct {
 	onState    func(ConnectionState, error)
 }
 
-// Forbidden is a resource this identity cannot list cluster-wide.
+// Forbidden is a resource this identity cannot list cluster-wide. Shown is
+// the one namespace listed instead, when that is allowed.
 type Forbidden struct {
 	Cluster   string `json:"cluster"`
 	Namespace string `json:"namespace"`
 	User      string `json:"user"`
 	Resource  string `json:"resource"`
+	Shown     string `json:"shown,omitempty"`
 }
 
 // ConnectInfo is what a successful connect learned about the cluster.
@@ -226,10 +234,31 @@ func shortIdentity(u string) string {
 
 // canList asks the API server whether this identity may list a resource cluster-wide.
 func (c *clusterConn) canList(ctx context.Context, group, resource string) bool {
+	return c.canListIn(ctx, group, resource, "")
+}
+
+// canListIn is canList for one namespace ("" means all namespaces).
+func (c *clusterConn) canListIn(ctx context.Context, group, resource, ns string) bool {
 	r, err := c.client.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &authzv1.SelfSubjectAccessReview{
-		Spec: authzv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authzv1.ResourceAttributes{Verb: "list", Group: group, Resource: resource}},
+		Spec: authzv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authzv1.ResourceAttributes{Verb: "list", Group: group, Resource: resource, Namespace: ns}},
 	}, metav1.CreateOptions{})
 	return err != nil || r.Status.Allowed // on error, try and let the informer report
+}
+
+// scope decides where a namespaced resource is listed: cluster-wide when
+// allowed, else in fallbackNS when that is allowed. ok is false when neither is.
+// A denial is recorded either way so the UI can say what is missing.
+func (c *clusterConn) scope(ctx context.Context, identity, group, resource, label string) (ns string, ok bool) {
+	if c.canList(ctx, group, resource) {
+		return "", true
+	}
+	f := Forbidden{Cluster: c.id, Namespace: "all namespaces", User: identity, Resource: label}
+	if c.fallbackNS != "" && c.canListIn(ctx, group, resource, c.fallbackNS) {
+		f.Shown = c.fallbackNS
+		ns, ok = c.fallbackNS, true
+	}
+	c.forbidden = append(c.forbidden, f)
+	return ns, ok
 }
 
 // start launches informers and the flush, probe and metrics loops.
@@ -263,17 +292,22 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 		})
 	}
 
-	type res struct{ group, resource string }
-	allowed := map[res]bool{}
-	for _, r := range []res{{"", "pods"}, {"", "nodes"}, {"apps", "deployments"}, {"apps", "replicasets"}, {"autoscaling", "horizontalpodautoscalers"}} {
-		allowed[r] = c.canList(ctx, r.group, r.resource)
-		if !allowed[r] {
-			c.forbidden = append(c.forbidden, Forbidden{Cluster: c.id, Namespace: "all namespaces", User: identity, Resource: r.resource})
+	// Namespaced informers live in their own factory, used only for the
+	// resources this identity may not list cluster-wide.
+	var nsFactory informers.SharedInformerFactory
+	factoryFor := func(ns string) informers.SharedInformerFactory {
+		if ns == "" {
+			return c.factory
 		}
+		if nsFactory == nil {
+			nsFactory = informers.NewSharedInformerFactoryWithOptions(c.client, 0, informers.WithNamespace(ns))
+		}
+		return nsFactory
 	}
 
-	if allowed[res{"", "pods"}] {
-		inf := c.factory.Core().V1().Pods()
+	if ns, ok := c.scope(ctx, identity, "", "pods", "pods"); ok {
+		c.podsNS = ns
+		inf := factoryFor(ns).Core().V1().Pods()
 		c.pods = inf.Lister()
 		add(inf.Informer(), func(obj any) {
 			if p, ok := obj.(*corev1.Pod); ok {
@@ -289,7 +323,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			}
 		})
 	}
-	if allowed[res{"", "nodes"}] {
+	if c.canList(ctx, "", "nodes") { // cluster-scoped: no namespace to fall back to
 		inf := c.factory.Core().V1().Nodes()
 		c.nodes = inf.Lister()
 		add(inf.Informer(), func(any) {
@@ -297,9 +331,11 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			c.nodesDirty = true
 			c.mu.Unlock()
 		})
+	} else {
+		c.forbidden = append(c.forbidden, Forbidden{Cluster: c.id, Namespace: "cluster", User: identity, Resource: "nodes"})
 	}
-	if allowed[res{"apps", "deployments"}] {
-		inf := c.factory.Apps().V1().Deployments()
+	if ns, ok := c.scope(ctx, identity, "apps", "deployments", "deployments"); ok {
+		inf := factoryFor(ns).Apps().V1().Deployments()
 		c.deploys = inf.Lister()
 		add(inf.Informer(), func(obj any) {
 			if d, ok := obj.(*appsv1.Deployment); ok {
@@ -309,8 +345,8 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			}
 		})
 	}
-	if allowed[res{"apps", "replicasets"}] {
-		inf := c.factory.Apps().V1().ReplicaSets()
+	if ns, ok := c.scope(ctx, identity, "apps", "replicasets", "replicasets"); ok {
+		inf := factoryFor(ns).Apps().V1().ReplicaSets()
 		c.rsets = inf.Lister()
 		add(inf.Informer(), func(obj any) {
 			if rs, ok := obj.(*appsv1.ReplicaSet); ok {
@@ -322,8 +358,8 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			}
 		})
 	}
-	if allowed[res{"autoscaling", "horizontalpodautoscalers"}] {
-		inf := c.factory.Autoscaling().V2().HorizontalPodAutoscalers()
+	if ns, ok := c.scope(ctx, identity, "autoscaling", "horizontalpodautoscalers", "horizontalpodautoscalers"); ok {
+		inf := factoryFor(ns).Autoscaling().V2().HorizontalPodAutoscalers()
 		c.hpas = inf.Lister()
 		add(inf.Informer(), func(obj any) {
 			if h, ok := obj.(*autoscalingv2.HorizontalPodAutoscaler); ok && h.Spec.ScaleTargetRef.Kind == "Deployment" {
@@ -333,11 +369,15 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			}
 		})
 	}
+	c.nsFactory = nsFactory
 
-	c.helm = newHelmWatcher(c)
+	c.helm = newHelmWatcher(c, identity)
 	c.gitops = newGitOpsWatcher(c)
 
 	c.factory.Start(ctx.Done())
+	if nsFactory != nil {
+		nsFactory.Start(ctx.Done())
+	}
 	c.helm.start(ctx)
 	c.gitops.start(ctx)
 
@@ -354,6 +394,9 @@ func (c *clusterConn) stop() {
 	}
 	if c.factory != nil {
 		c.factory.Shutdown()
+	}
+	if c.nsFactory != nil {
+		c.nsFactory.Shutdown()
 	}
 }
 
@@ -585,7 +628,7 @@ func (c *clusterConn) allNodeRows(env Environment, now time.Time) []NodeRow {
 // samples kept here start when Clustrail connected and are labeled that way.
 func (c *clusterConn) metricsLoop(ctx context.Context) {
 	tick := func() {
-		pm, err := c.metrics.MetricsV1beta1().PodMetricses("").List(ctx, metav1.ListOptions{})
+		pm, err := c.metrics.MetricsV1beta1().PodMetricses(c.podsNS).List(ctx, metav1.ListOptions{})
 		if err == nil {
 			podUsage := make(map[string]Usage, len(pm.Items))
 			now := time.Now()

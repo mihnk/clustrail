@@ -241,22 +241,25 @@ func cachedChartNames(dir string) map[string]bool {
 
 // helmWatcher reads Helm release Secrets (label owner=helm).
 type helmWatcher struct {
-	c       *clusterConn
-	lister  listerscorev1.SecretLister
-	synced  cache.InformerSynced
-	mu      sync.Mutex
-	dirty   bool
-	sentAll bool
+	c        *clusterConn
+	identity string
+	lister   listerscorev1.SecretLister
+	synced   cache.InformerSynced
+	mu       sync.Mutex
+	dirty    bool
+	sentAll  bool
 }
 
-func newHelmWatcher(c *clusterConn) *helmWatcher { return &helmWatcher{c: c} }
+func newHelmWatcher(c *clusterConn, identity string) *helmWatcher {
+	return &helmWatcher{c: c, identity: identity}
+}
 
 func (h *helmWatcher) start(ctx context.Context) {
-	if !h.c.canList(ctx, "", "secrets") {
-		h.c.forbidden = append(h.c.forbidden, Forbidden{Cluster: h.c.id, Namespace: "all namespaces", Resource: "secrets (Helm releases)"})
+	ns, ok := h.c.scope(ctx, h.identity, "", "secrets", "secrets (Helm releases)")
+	if !ok {
 		return
 	}
-	f := informers.NewSharedInformerFactoryWithOptions(h.c.client, 0, informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+	f := informers.NewSharedInformerFactoryWithOptions(h.c.client, 0, informers.WithNamespace(ns), informers.WithTweakListOptions(func(o *metav1.ListOptions) {
 		o.LabelSelector = "owner=helm"
 	}))
 	inf := f.Core().V1().Secrets()

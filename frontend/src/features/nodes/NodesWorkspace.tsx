@@ -8,7 +8,7 @@ import type { NodeRow } from "@/data/nodes";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
 import type { ResourceAction } from "@/components/resource-actions/ResourceActions";
 import { useConfirm, type ConfirmationRequest } from "@/components/safety/ConfirmationDialog";
-import { ClusterStateBanners } from "@/components/cluster/ClusterStates";
+import { ClusterStateBanners, RbacBanner } from "@/components/cluster/ClusterStates";
 import { useClusterGrouping } from "@/components/cluster/useClusterGrouping";
 import { Button } from "@/components/ui/button";
 import { FilterToken } from "@/components/ui/filter-token";
@@ -262,6 +262,7 @@ export function NodesWorkspace({ active }: { active: boolean }) {
         </div>
 
         <ClusterStateBanners clusters={selectedClusters} counts={counts} noun="nodes" />
+        <RbacBanner clusters={selectedClusterIds} resource="nodes" />
 
         <ResourceTable
           table={table}

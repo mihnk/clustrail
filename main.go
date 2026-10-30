@@ -23,6 +23,9 @@ var assets embed.FS
 var appIcon []byte
 
 func main() {
+	// Exec auth plugins (aws, gcloud, kubelogin) must be on PATH even when started from Finder.
+	app.FixPath()
+
 	wails := application.New(application.Options{
 		Name:        "Clustrail",
 		Description: "Kubernetes desktop workspace",

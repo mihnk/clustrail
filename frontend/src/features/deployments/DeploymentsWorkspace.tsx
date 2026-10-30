@@ -11,7 +11,7 @@ import type { DeploymentRow } from "@/data/types";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
 import { ModifyMenuButton } from "@/components/resource-actions/ResourceActions";
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
-import { ClusterStateBanners } from "@/components/cluster/ClusterStates";
+import { ClusterStateBanners, RbacBanner } from "@/components/cluster/ClusterStates";
 import { ClusterPicker } from "@/components/cluster/ClusterPicker";
 import { useClusterGrouping } from "@/components/cluster/useClusterGrouping";
 import { Banner } from "@/components/ui/banner";
@@ -277,7 +277,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
   }, [active]);
 
   const selected = deployments.find((d) => d.id === selectedId) ?? null;
-  const forbidden = (backend ? (ws.backendMeta?.forbidden ?? []) : forbiddenNamespaces).filter(
+  const forbidden = (backend ? [] : forbiddenNamespaces).filter(
     (f) => selectedClusterIds.includes(f.cluster) && f.resource === "deployments",
   );
   const allConnected = selectedClusters.every((c) => c.connection === "connected");
@@ -423,6 +423,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
         </div>
 
         <ClusterStateBanners clusters={selectedClusters} counts={counts} noun="deployments" />
+        <RbacBanner clusters={selectedClusterIds} resource="deployments" />
 
         <ResourceTable
           table={table}

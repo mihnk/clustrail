@@ -295,6 +295,10 @@ func (m *Manager) ListNamespaces(cluster string) ([]string, error) {
 	ctx, cancel := actionCtx()
 	defer cancel()
 	list, err := c.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if apierrors.IsForbidden(err) && c.fallbackNS != "" {
+		// Namespace-scoped identities cannot list namespaces; offer their own.
+		return []string{c.fallbackNS}, nil
+	}
 	if err != nil {
 		return nil, err
 	}

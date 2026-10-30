@@ -300,7 +300,9 @@ export function HelmWorkspace({ active }: { active: boolean }) {
           {backend ? (
             unreadable.length > 0 && (
               <span className="truncate max-[1360px]:hidden">
-                Secrets not readable on {unreadable.map((f) => f.cluster).join(", ")} → releases there are not listed
+                {unreadable.map((f) =>
+                  f.shown ? `Secrets readable only in ${f.shown} on ${f.cluster} → other releases there are not listed` : `Secrets not readable on ${f.cluster} → releases there are not listed`,
+                ).join(" · ")}
               </span>
             )
           ) : (

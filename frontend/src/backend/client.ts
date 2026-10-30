@@ -27,6 +27,8 @@ export interface ForbiddenInfo {
   namespace: string;
   user: string;
   resource: string;
+  /** The one namespace listed instead, when RBAC allows it there. */
+  shown?: string;
 }
 
 export interface ControllerInfo {

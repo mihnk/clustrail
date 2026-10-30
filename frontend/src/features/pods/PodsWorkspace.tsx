@@ -7,7 +7,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { Box, ChevronDown, Columns3, Lock, Plus, ScrollText, Search, SearchX, Trash2 } from "lucide-react";
-import { ClusterStateBanners, DisconnectedCluster, SkeletonRows, isOffline } from "@/components/cluster/ClusterStates";
+import { ClusterStateBanners, RbacBanner, DisconnectedCluster, SkeletonRows, isOffline } from "@/components/cluster/ClusterStates";
 import { ClusterPicker } from "@/components/cluster/ClusterPicker";
 import { InspectorPanel } from "@/components/ui/inspector-panel";
 import { useOverlays } from "@/app/shortcuts";
@@ -525,6 +525,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
         </div>
 
         <ClusterStateBanners clusters={selectedClusters} counts={countsByCluster} noun="pods" />
+        <RbacBanner clusters={selectedClusters.map((c) => c.id)} resource="pods" />
 
         <ResourceTable
           table={table}

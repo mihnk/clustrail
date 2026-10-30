@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Activity, KeyRound, RefreshCw, Unplug } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import type { Cluster } from "@/data/types";
@@ -162,5 +162,51 @@ export function SkeletonRows({ count, rowHeight }: { count: number; rowHeight: n
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * What RBAC kept out of this list (desktop): resources this identity cannot
+ * list cluster-wide, and the one namespace shown instead when that is allowed.
+ */
+export function RbacBanner({ clusters, resource }: { clusters: string[]; resource: string }) {
+  const ws = useWorkspace();
+  const [open, setOpen] = useState(false);
+  const rows = (ws.backendMeta?.forbidden ?? []).filter((f) => clusters.includes(f.cluster) && f.resource === resource);
+  if (!rows.length) return null;
+  const first = rows[0]!;
+  const scope = first.namespace === "cluster" ? "" : first.shown ? ` -n ${first.shown}` : " -A";
+  return (
+    <Banner
+      tone="warning"
+      className="shrink-0 rounded-none border-t border-line"
+      action={
+        <Button size="sm" variant="ghost" onClick={() => setOpen(!open)}>
+          {open ? "Hide" : "Details"}
+        </Button>
+      }
+    >
+      <b className="font-semibold">Limited by RBAC:</b>{" "}
+      {rows.map((f, i) => (
+        <span key={f.cluster}>
+          {i > 0 && " · "}
+          <span className="font-mono">{f.user || "this identity"}</span> can’t list {f.resource} in {f.namespace === "cluster" ? "this cluster" : "all namespaces"} on{" "}
+          {f.cluster}
+          {f.shown ? (
+            <>
+              {" "}→ showing only <span className="font-mono">{f.shown}</span>
+            </>
+          ) : (
+            " → none listed"
+          )}
+        </span>
+      ))}
+      {open && (
+        <span className="selectable mt-1 block font-mono text-meta text-fg-secondary">
+          kubectl --context {first.cluster} auth can-i list {resource}
+          {scope}
+        </span>
+      )}
+    </Banner>
   );
 }

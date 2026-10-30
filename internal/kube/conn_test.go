@@ -164,6 +164,50 @@ func TestForbiddenResourcesAreReported(t *testing.T) {
 	}
 }
 
+func TestNamespaceFallbackWhenClusterWideDenied(t *testing.T) {
+	mk := func(ns, name string) *corev1.Pod {
+		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
+	}
+	client := fake.NewClientset(mk("payments", "mine"), mk("kube-system", "theirs"))
+	// A namespace-admin: pods only in "payments", nothing cluster-wide.
+	client.PrependReactor("create", "selfsubjectaccessreviews", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		ra := a.(k8stesting.CreateAction).GetObject().(*authzv1.SelfSubjectAccessReview).Spec.ResourceAttributes
+		return true, &authzv1.SelfSubjectAccessReview{Status: authzv1.SubjectAccessReviewStatus{Allowed: ra.Namespace == "payments" && ra.Resource == "pods"}}, nil
+	})
+	rec := &recorder{}
+	c := connFromClients("test", func() Environment { return EnvDev }, rec, func(ConnectionState, error) {}, client, dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()), metricsfake.NewSimpleClientset())
+	c.fallbackNS = "payments"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := c.start(ctx, "dev-team", false); err != nil {
+		t.Fatal(err)
+	}
+	defer c.stop()
+
+	var pods *Forbidden
+	for i, f := range c.forbidden {
+		if f.Resource == "pods" {
+			pods = &c.forbidden[i]
+		} else if f.Shown != "" {
+			t.Fatalf("%s must not fall back: %+v", f.Resource, f)
+		}
+	}
+	if pods == nil || pods.Shown != "payments" || pods.User != "dev-team" {
+		t.Fatalf("forbidden = %+v", c.forbidden)
+	}
+	if c.podsNS != "payments" || c.deploys != nil || c.nodes != nil {
+		t.Fatalf("podsNS=%q deploys=%v nodes=%v", c.podsNS, c.deploys != nil, c.nodes != nil)
+	}
+	waitFor(t, "pods reset", func() bool { return len(rec.deltas("pods")) > 0 })
+	for _, d := range rec.deltas("pods") {
+		for _, u := range d.Upserts {
+			if p := u.(PodRow); p.Namespace != "payments" {
+				t.Fatalf("pod outside the allowed namespace listed: %+v", p)
+			}
+		}
+	}
+}
+
 func managerWith(c *clusterConn, readOnly bool) *Manager {
 	m := &Manager{state: map[string]*Cluster{c.id: {ID: c.id, ReadOnly: readOnly}}, conns: map[string]*clusterConn{c.id: c}, emit: c.emit, ctx: context.Background()}
 	return m
@@ -321,7 +365,7 @@ func TestHelmReleasesFromSecrets(t *testing.T) {
 	c, _, rec := newFakeConn(t, rel(7, "deployed", "2.3.2", "1.8.4"), rel(8, "failed", "2.4.0", "1.9.0"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c.helm = newHelmWatcher(c)
+	c.helm = newHelmWatcher(c, "me")
 	c.helm.start(ctx)
 	waitFor(t, "helm delta", func() bool { return len(rec.deltas("helm")) > 0 })
 	rows := rec.deltas("helm")[0].Upserts

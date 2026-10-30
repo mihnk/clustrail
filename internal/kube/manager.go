@@ -209,6 +209,22 @@ func (m *Manager) restConfig(id string) (*rest.Config, *clientcmdapi.AuthInfo, e
 	return cfg, auth, nil
 }
 
+// contextNamespace is the namespace the kubeconfig context sets, else "default".
+func (m *Manager) contextNamespace(id string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	name := id
+	if st := m.state[id]; st != nil {
+		name = st.Context
+	}
+	for _, kctx := range m.kc.Contexts {
+		if kctx.Name == name && kctx.Namespace != "" {
+			return kctx.Namespace
+		}
+	}
+	return "default"
+}
+
 // Connect connects a context in the background; progress arrives as cluster events.
 func (m *Manager) Connect(id string) {
 	m.mu.Lock()
@@ -249,6 +265,7 @@ func (m *Manager) connect(id string) {
 		fail(err)
 		return
 	}
+	conn.fallbackNS = m.contextNamespace(id)
 	ctx, cancel := context.WithTimeout(m.ctx, 25*time.Second)
 	info, err := conn.probe(ctx)
 	cancel()
