@@ -47,7 +47,9 @@ through one Wails service (`internal/app.Workspace`) and its events.
   never written. Settings › Run setup again repeats it.
 - **Settings** (`settings.go`): group, protection (Standard · Protected ·
   Read-only) and hidden contexts live in `~/.config/clustrail/contexts.json`.
-  Read-only is enforced in Go for every change and every shell; it is a guard
+  Read-only is enforced in Go for every change, every shell and every port
+  forward (a forwarded port reaches the application, which can change data);
+  viewing (logs, YAML, events) stays available. It is a guard
   against mistakes, not a substitute for RBAC.
 - **Connections** (`manager.go`, `cluster.go`): one connection per context.
   Connect probes `/version`, identity (SelfSubjectReview) and metrics.k8s.io,

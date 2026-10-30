@@ -1535,4 +1535,7 @@ export const tr: Record<string, string> = {
   "Bearer token": "Bearer token",
   "API server certificate": "API server sertifikası",
   "A User is checked on its own: its groups are not known to Clustrail. Check a Group too when access comes through one.": "User tek başına kontrol edilir: grupları Clustrail tarafından bilinmez. Erişim bir grup üzerinden geliyorsa Group'u da kontrol edin.",
+  "Warning events in the last 15 minutes": "Son 15 dakikadaki uyarı olayları",
+  "Port forward · read-only context": "Port yönlendir · salt okunur context",
+  "Unterminated quote": "Kapanmamış tırnak",
 };

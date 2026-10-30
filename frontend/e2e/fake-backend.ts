@@ -160,6 +160,8 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       };
     case "Namespaces":
       return ["default", "payments"];
+    case "WarningCount":
+      return 2;
     case "AccessMatrix": {
       const verbs = ["get", "list", "watch", "create", "update", "patch", "delete"];
       const resources = [

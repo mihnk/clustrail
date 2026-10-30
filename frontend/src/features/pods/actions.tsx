@@ -60,9 +60,10 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
     {
       id: "forward",
       group: "observe",
-      label: t("Port forward…"),
+      label: deps.cluster?.readOnly ? t("Port forward · read-only context") : t("Port forward…"),
       icon: <Cable />,
-      disabled: !backend || pod.status !== "Running",
+      // The forwarded port reaches the application, which can change data: blocked like a shell.
+      disabled: !backend || deps.cluster?.readOnly || pod.status !== "Running",
       onSelect: () => openPortForward({ cluster: pod.cluster, namespace: pod.namespace, kind: "Pod", name: pod.name }),
     },
     {

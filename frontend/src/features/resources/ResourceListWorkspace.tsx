@@ -299,7 +299,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         { id: "open", group: "observe", label: tt("Open in tab"), icon: <PanelTop />, onSelect: () => ws.openView(resourceTab(r.cluster, kind, r.namespace ?? "", r.name)) },
         { id: "yaml", group: "observe", label: tt("View YAML"), icon: <Code />, shortcut: "Y", onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params }) },
         ...(kind === "Service"
-          ? [{ id: "forward", group: "observe" as const, label: tt("Port forward…"), icon: <Cable />, onSelect: () => openPortForward({ cluster: r.cluster, namespace: r.namespace ?? "", kind: "Service", name: r.name }) }]
+          ? [{ id: "forward", group: "observe" as const, label: c?.readOnly ? tt("Port forward · read-only context") : tt("Port forward…"), icon: <Cable />, disabled: c?.readOnly, onSelect: () => openPortForward({ cluster: r.cluster, namespace: r.namespace ?? "", kind: "Service", name: r.name }) }]
           : []),
         ...extra.filter((a) => a.group === "modify"),
         { id: "edit", group: "modify", label: tt("Edit YAML…"), icon: <Pencil />, onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params: { ...params, mode: "edit" } }) },

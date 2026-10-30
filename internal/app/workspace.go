@@ -172,6 +172,10 @@ func (w *Workspace) AccessMatrix(cluster string, subject kube.AccessSubject, nam
 	return w.m.AccessMatrix(cluster, subject, namespace)
 }
 
+func (w *Workspace) WarningCount(cluster string, sinceSec int) (int, error) {
+	return w.m.WarningCount(cluster, sinceSec)
+}
+
 func (w *Workspace) Expiry(cluster string) (kube.ExpiryReport, error) { return w.m.Expiry(cluster) }
 
 // Debugging.

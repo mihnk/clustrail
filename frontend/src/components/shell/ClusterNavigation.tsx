@@ -26,6 +26,7 @@ import {
 import { DEFAULT_INVESTIGATION, useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
 import { LISTED_KINDS } from "@/features/resources/kinds";
+import { useWarningCount } from "@/features/insights/shared";
 import type { Environment } from "@/data/types";
 import { isAttention } from "@/data/health";
 import { IS_MOCK } from "@/data/mock";
@@ -63,6 +64,7 @@ export function ClusterNavigation() {
       />
     );
   };
+  const warnings = useWarningCount();
   const attention = useMemo(() => pods.filter((p) => isAttention(p.health)).length, [pods]);
   // Mock: the design's numbers. Desktop: counts over the selected clusters; kinds Clustrail does not list yet show none.
   const inSel = <T extends { cluster: string }>(rows: T[]) => rows.filter((r) => selectedClusterIds.includes(r.cluster));
@@ -128,7 +130,13 @@ export function ClusterNavigation() {
       </NavSection>
 
       <NavSection title={<span className="section-label">{t("Checks")}</span>}>
-        <NavItem icon={<TriangleAlert />} label={t("Warning events")} active={kind === "warnings"} onClick={() => openView({ kind: "warnings", title: t("Warning events") })} />
+        <NavItem
+          icon={<TriangleAlert />}
+          label={t("Warning events")}
+          active={kind === "warnings"}
+          onClick={() => openView({ kind: "warnings", title: t("Warning events") })}
+          trailing={warnings ? <CountPill tone="warning" className="ml-auto" title={t("Warning events in the last 15 minutes")}>{warnings}</CountPill> : undefined}
+        />
         <NavItem icon={<FileBadge />} label={t("Certificates")} active={kind === "certificates"} onClick={() => openView({ kind: "certificates", title: t("Certificates") })} />
         <NavItem icon={<ShieldCheck />} label={t("Access")} active={kind === "access"} onClick={() => openView({ kind: "access", title: t("Access") })} />
       </NavSection>

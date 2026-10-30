@@ -9,6 +9,7 @@ import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { useToast } from "@/components/ui/toast";
 import { sessionRevealId } from "@/features/terminal/session";
 import { cn } from "@/lib/cn";
+import { quoteArg, splitArgs } from "@/lib/shellwords";
 import { t as tt, tn } from "@/i18n";
 
 // Debug a pod with an ephemeral container, or a node through a privileged pod
@@ -144,11 +145,14 @@ function PodDebugDialog({ target }: { target: Extract<DebugTarget, { kind: "pod"
   }, [target.cluster, target.namespace, target.pod]);
 
   const chosen = image === "custom" ? custom.trim() : image;
-  const argv = command.trim().split(/\s+/).filter(Boolean);
-  const kubectl = `kubectl --context ${typed.context} debug -n ${target.namespace} ${target.pod} -it --image=${chosen || "IMAGE"}${targetContainer ? ` --target=${targetContainer}` : ""} --profile=${profile} -- ${argv.join(" ") || "sh"}`;
+  // Quoted like a shell: sh -c 'nslookup api; sh' is three arguments.
+  const split = splitArgs(command);
+  const argv = Array.isArray(split) && split.length ? split : ["sh"];
+  const commandError = Array.isArray(split) ? undefined : split.error;
+  const kubectl = `kubectl --context ${typed.context} debug -n ${target.namespace} ${target.pod} -it --image=${chosen || "IMAGE"}${targetContainer ? ` --target=${targetContainer}` : ""} --profile=${profile} -- ${argv.map(quoteArg).join(" ")}`;
 
   const start = () => {
-    if (!backend || !chosen || !typed.ok) return;
+    if (!backend || !chosen || !typed.ok || commandError) return;
     setBusy(true);
     setError(null);
     backend
@@ -156,7 +160,7 @@ function PodDebugDialog({ target }: { target: Extract<DebugTarget, { kind: "pod"
       .then((dc) => {
         closeDebug();
         ws.openView({ id: "shell", kind: "shell", title: "Shell", cluster: target.cluster });
-        ws.revealResource("session", sessionRevealId({ cluster: target.cluster, namespace: dc.namespace, pod: dc.pod, container: dc.container, command: argv.length ? argv : ["sh"], debug: true }));
+        ws.revealResource("session", sessionRevealId({ cluster: target.cluster, namespace: dc.namespace, pod: dc.pod, container: dc.container, command: argv, debug: true }));
         toast.show({ kind: "success", title: tt("Debug container running"), target: `${dc.container} · ${target.pod}` });
       })
       .catch((e) => {
@@ -178,7 +182,7 @@ function PodDebugDialog({ target }: { target: Extract<DebugTarget, { kind: "pod"
           <Dialog.Close asChild>
             <Button>{tt("Cancel")}</Button>
           </Dialog.Close>
-          <Button variant="danger" disabled={!chosen || !typed.ok || busy} onClick={start}>
+          <Button variant="danger" disabled={!chosen || !typed.ok || !!commandError || busy} onClick={start}>
             {busy ? tt("Starting… (pulling the image)") : tt("Add debug container")}
           </Button>
         </>
@@ -228,7 +232,7 @@ function PodDebugDialog({ target }: { target: Extract<DebugTarget, { kind: "pod"
           </select>
         </label>
       </div>
-      <TextField label={tt("Command")} mono value={command} onChange={(e) => setCommand(e.target.value)} />
+      <TextField label={tt("Command")} mono value={command} error={commandError && tt("Unterminated quote")} onChange={(e) => setCommand(e.target.value)} />
       <div className="flex items-start gap-2 rounded-lg bg-status-warning-soft px-3 py-2 text-meta leading-[1.45] text-fg-secondary">
         <TriangleAlert className="mt-px size-3.5 shrink-0 text-status-warning" aria-hidden />
         <span>{tt("An ephemeral container cannot be removed. It stays in the pod spec until the pod is deleted, and it does not restart. The pod keeps running; nothing else changes.")}</span>

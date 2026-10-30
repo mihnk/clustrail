@@ -34,9 +34,9 @@ export function deploymentActions(d: DeploymentRow, deps: DeploymentActionDeps):
     {
       id: "forward",
       group: "observe",
-      label: t("Port forward…"),
+      label: deps.cluster?.readOnly ? t("Port forward · read-only context") : t("Port forward…"),
       icon: <Cable />,
-      disabled: !backend || d.readyReplicas === 0,
+      disabled: !backend || deps.cluster?.readOnly || d.readyReplicas === 0,
       onSelect: () => openPortForward({ cluster: d.cluster, namespace: d.namespace, kind: "Deployment", name: d.name }),
     },
     {

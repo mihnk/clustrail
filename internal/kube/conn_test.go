@@ -222,6 +222,9 @@ func TestReadOnlyBlocksChanges(t *testing.T) {
 	if _, err := m.StartExec(ExecRequest{Cluster: "test"}); err != ErrReadOnly {
 		t.Fatalf("exec err = %v", err)
 	}
+	if _, err := m.StartPortForward(PortForwardRequest{Cluster: "test", Namespace: "payments", Kind: "Pod", Name: "a", Port: 8080}); err != ErrReadOnly {
+		t.Fatalf("port forward err = %v", err)
+	}
 }
 
 func TestRestartScaleRollback(t *testing.T) {

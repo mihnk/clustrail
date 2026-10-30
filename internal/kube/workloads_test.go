@@ -182,6 +182,9 @@ func TestClusterWarningsFallsBackToNamespace(t *testing.T) {
 	if out.Scope != "payments" || len(out.Events) != 1 || out.Events[0].Reason != "Failed" {
 		t.Fatalf("out = %+v", out)
 	}
+	if n, err := m.WarningCount("test", 900); n != 1 || err != nil {
+		t.Fatalf("count = %d %v", n, err)
+	}
 }
 
 func TestAccessMatrixForSelfAndBindings(t *testing.T) {

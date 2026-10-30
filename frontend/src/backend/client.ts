@@ -551,6 +551,7 @@ export const backendApi = {
   jobStatus: (cluster: string, ns: string, name: string) => call<JobStatus>("JobStatus", cluster, ns, name),
 
   clusterWarnings: (cluster: string, sinceSec: number) => call<WarningList>("ClusterWarnings", cluster, sinceSec),
+  warningCount: (cluster: string, sinceSec: number) => call<number>("WarningCount", cluster, sinceSec),
   accessMatrix: (cluster: string, subject: AccessSubject, namespace: string) => call<AccessResult>("AccessMatrix", cluster, subject, namespace),
   expiry: (cluster: string) => call<ExpiryReport>("Expiry", cluster),
 

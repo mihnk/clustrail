@@ -106,7 +106,7 @@ export function ModifyMenuButton({
         <Tooltip
           content={
             target.readOnly
-              ? `${cluster} is a read-only context in Clustrail. Changes and shell are blocked.`
+              ? `${cluster} is a read-only context in Clustrail. Changes, shells and port forwards are blocked.`
               : `${cluster} is protected. Each change asks for confirmation.`
           }
         >
@@ -131,11 +131,12 @@ function ActionGroups({ actions, target, kind }: { actions: ResourceAction[]; ta
   const modify = actions.filter((a) => a.group === "modify" && !a.danger);
   const danger = actions.filter((a) => a.group === "modify" && a.danger);
 
-  const items = (list: ResourceAction[], locked: boolean, red = false) =>
+  // Read-only blocks changes, not looking: Observe items stay usable (shell, debug and port forward disable themselves).
+  const items = (list: ResourceAction[], locked: boolean, red = false, readOnly = !!target.readOnly) =>
     list.map((a) => (
       <Item
         key={a.id}
-        disabled={a.disabled || target.readOnly}
+        disabled={a.disabled || readOnly}
         onSelect={a.onSelect}
         className={cn(
           locked && "text-fg-muted data-[highlighted]:text-fg",
@@ -154,7 +155,7 @@ function ActionGroups({ actions, target, kind }: { actions: ResourceAction[]; ta
         <>
           <Label>
             <Eye className="size-3" aria-hidden />{t("Observe")}</Label>
-          {items(observe, false)}
+          {items(observe, false, false, false)}
         </>
       )}
       {observe.length > 0 && modify.length + danger.length > 0 && <Separator />}

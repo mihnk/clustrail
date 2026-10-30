@@ -72,6 +72,13 @@ func (m *Manager) ClusterWarnings(cluster string, sinceSec int) (WarningList, er
 	return out, nil
 }
 
+// WarningCount counts the Warning events of the last sinceSec seconds, for the
+// sidebar badge; only the number leaves the backend.
+func (m *Manager) WarningCount(cluster string, sinceSec int) (int, error) {
+	l, err := m.ClusterWarnings(cluster, sinceSec)
+	return len(l.Events), err
+}
+
 func warningEvents(items []corev1.Event, now time.Time, window time.Duration) []WarningEvent {
 	out := make([]WarningEvent, 0, len(items))
 	sort.Slice(items, func(i, j int) bool { return lastSeen(items[i]).After(lastSeen(items[j])) })

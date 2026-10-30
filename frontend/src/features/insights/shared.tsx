@@ -127,3 +127,33 @@ export function kindKeyOf(kind: string): string {
   };
   return groups[kind] ? `${groups[kind]}/${kind}` : kind;
 }
+
+/** Warning events of the last 15 minutes across the connected selected clusters, for the sidebar. Read every minute while the window is visible. */
+export function useWarningCount(): number | null {
+  const clusters = useConnectedClusters();
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const key = clusters.join(",");
+  useEffect(() => {
+    if (!backend || !clusters.length) return;
+    let cancelled = false;
+    const run = () => {
+      if (document.visibilityState !== "visible") return;
+      for (const c of clusters) {
+        backend!
+          .warningCount(c, 900)
+          .then((n) => !cancelled && setCounts((m) => (m[c] === n ? m : { ...m, [c]: n })))
+          .catch(() => {});
+      }
+    };
+    run();
+    const t = setInterval(run, 60_000);
+    document.addEventListener("visibilitychange", run);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", run);
+    };
+  }, [key]);
+  if (!backend || !clusters.length) return null;
+  return clusters.reduce((sum, c) => sum + (counts[c] ?? 0), 0);
+}

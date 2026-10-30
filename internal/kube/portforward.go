@@ -68,8 +68,10 @@ type forwards struct {
 
 // StartPortForward starts a forward and keeps it alive: when the pod goes
 // away it re-resolves the target and reconnects on the same local port.
+// Read-only contexts refuse it: a forwarded port reaches the application, which
+// may change data, so it counts as a change like a shell does.
 func (m *Manager) StartPortForward(req PortForwardRequest) (PortForward, error) {
-	c, err := m.conn(req.Cluster)
+	c, err := m.writable(req.Cluster)
 	if err != nil {
 		return PortForward{}, err
 	}

@@ -92,6 +92,8 @@ test("streams logs from the backend", async ({ page }) => {
 });
 
 test("warning events, certificates and access checks", async ({ page }) => {
+  // The sidebar counts the last 15 minutes.
+  await expect(page.getByTitle("Warning events in the last 15 minutes")).toHaveText("2");
   await sidebar(page, /^Warning events/).click();
   await expect(visible(page, "Back-off restarting failed container api")).toBeVisible();
   await expect(visible(page, "×14")).toBeVisible();
@@ -117,6 +119,8 @@ test("warning events, certificates and access checks", async ({ page }) => {
 
 test("runs a CronJob now", async ({ page }) => {
   await page.keyboard.press("Control+j");
+  // The kind picker lists what the cluster serves; typing before it opens would go elsewhere.
+  await expect(visible(page, "certificates.cert-manager.io")).toBeVisible();
   await page.keyboard.type("cj");
   await page.keyboard.press("Enter");
   await visible(page, "0 2 * * *").click({ button: "right" });
@@ -247,14 +251,19 @@ test("adds a debug container and opens a shell in it", async ({ page }) => {
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("An ephemeral container cannot be removed", { exact: false })).toBeVisible();
   await expect(dialog.getByText(/kubectl --context .* debug -n payments checkout-api-7d9f8b6c4-9rkzd -it --image=nicolaka\/netshoot:v0.13/)).toBeVisible();
+  // Quoted like a shell: three arguments, shown quoted in the kubectl line.
+  await dialog.getByLabel("Command").fill("sh -c 'nslookup checkout-api; sh");
+  await expect(dialog.getByText("Unterminated quote")).toBeVisible();
+  await dialog.getByLabel("Command").fill("sh -c 'nslookup checkout-api; sh'");
+  await expect(dialog.getByText("-- sh -c 'nslookup checkout-api; sh'", { exact: false })).toBeVisible();
   const add = dialog.getByRole("button", { name: "Add debug container" });
   // Production: the context name must be typed first.
   await expect(add).toBeDisabled();
   await dialog.getByRole("textbox").last().fill("prod-eu-west-1");
   await add.click();
   await expect.poll(() => backend.argsOf("AddDebugContainer")[0]).toEqual([
-    { cluster: "prod-eu-west-1", namespace: "payments", pod: "checkout-api-7d9f8b6c4-9rkzd", image: "nicolaka/netshoot:v0.13", target: "api", profile: "general", command: ["sh"] },
+    { cluster: "prod-eu-west-1", namespace: "payments", pod: "checkout-api-7d9f8b6c4-9rkzd", image: "nicolaka/netshoot:v0.13", target: "api", profile: "general", command: ["sh", "-c", "nslookup checkout-api; sh"] },
   ]);
   await expect.poll(() => backend.argsOf("StartExec").length).toBe(1);
-  expect(backend.argsOf("StartExec")[0]![0]).toMatchObject({ pod: "checkout-api-7d9f8b6c4-9rkzd", container: "debugger-k2x9q", command: ["sh"] });
+  expect(backend.argsOf("StartExec")[0]![0]).toMatchObject({ pod: "checkout-api-7d9f8b6c4-9rkzd", container: "debugger-k2x9q", command: ["sh", "-c", "nslookup checkout-api; sh"] });
 });

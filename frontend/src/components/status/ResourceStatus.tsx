@@ -24,9 +24,10 @@ export function ResourceStatus({
 }
 
 /** Filled count pill. Only error and warning counts are filled. */
-export function CountPill({ tone, children, className }: { tone: "critical" | "warning"; children: ReactNode; className?: string }) {
+export function CountPill({ tone, children, className, title }: { tone: "critical" | "warning"; children: ReactNode; className?: string; title?: string }) {
   return (
     <span
+      title={title}
       className={cn(
         "rounded px-[5px] py-[3px] font-mono text-2xs font-semibold leading-none",
         tone === "critical" ? "bg-status-critical-soft text-status-critical" : "bg-status-warning-soft text-status-warning",
