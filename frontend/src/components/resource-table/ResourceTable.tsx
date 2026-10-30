@@ -70,6 +70,12 @@ export interface ResourceTableProps<T> {
   onCheckedChange?: (ids: Set<string>) => void;
   /** Extra row styling, e.g. stale rows from a reconnecting cluster. */
   rowClassName?: (row: T) => string | undefined;
+  /**
+   * Rows update in place but keep their order while the pointer is over the
+   * table; the number of rows that would move is reported.
+   */
+  holdOrderWhileHovered?: boolean;
+  onHeldUpdatesChange?: (count: number) => void;
   /** Narrowest the flexible column may get before lower-priority columns hide. */
   fillMin?: number;
   /** Grid spacing; 8/12 for explorers, wider for single-cluster lists. */
@@ -101,6 +107,8 @@ export function ResourceTable<T>({
   checked,
   onCheckedChange,
   rowClassName,
+  holdOrderWhileHovered,
+  onHeldUpdatesChange,
   fillMin = 220,
   columnGap = 8,
   paddingX = 12,
@@ -133,7 +141,16 @@ export function ResourceTable<T>({
   const anchor = useRef<string | null>(null);
   const gridStyle = { gridTemplateColumns, columnGap, paddingInline: paddingX };
 
-  const rows = table.getRowModel().rows;
+  const liveRows = table.getRowModel().rows;
+  const [frozenOrder, setFrozenOrder] = useState<string[] | null>(null);
+  const rows = useMemo(() => {
+    if (!frozenOrder) return liveRows;
+    const byId = new Map(liveRows.map((r) => [r.id, r]));
+    const known = new Set(frozenOrder);
+    return [...frozenOrder.flatMap((id) => byId.get(id) ?? []), ...liveRows.filter((r) => !known.has(r.id))];
+  }, [liveRows, frozenOrder]);
+  const heldUpdates = frozenOrder ? rows.reduce((n, r, i) => n + (liveRows[i]?.id !== r.id ? 1 : 0), 0) : 0;
+  useEffect(() => onHeldUpdatesChange?.(heldUpdates), [heldUpdates]);
   const items = useMemo<Item<T>[]>(() => {
     if (!grouping) return rows.map((row) => ({ kind: "row", row }));
     const byKey = new Map<string, Row<T>[]>(grouping.keys.map((k) => [k, []]));
@@ -290,6 +307,8 @@ export function ResourceTable<T>({
             tabIndex={0}
             aria-activedescendant={activeRendered ? rowDomId(selectedItem) : undefined}
             onKeyDown={onKeyDown}
+            onPointerEnter={() => holdOrderWhileHovered && setFrozenOrder(liveRows.map((r) => r.id))}
+            onPointerLeave={() => setFrozenOrder(null)}
             onContextMenu={(e) => {
               const id = (e.target as HTMLElement).closest("[data-row-id]")?.getAttribute("data-row-id");
               if (!id || !rowActions?.(id)) {

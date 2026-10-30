@@ -79,6 +79,10 @@ interface WorkspaceState {
   // the UI then follows the resulting watch events.
   deletePod: (id: string) => void;
   restartDeployment: (id: string) => void;
+  scaleDeployment: (id: string, replicas: number) => void;
+  rollbackDeployment: (id: string, rev: number) => void;
+  setDeploymentPaused: (id: string, paused: boolean) => void;
+  deleteDeployment: (id: string) => void;
 
   scenarios: MockScenarios;
   setScenario: (key: keyof MockScenarios, on: boolean) => void;
@@ -249,7 +253,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const before = deployments.find((d) => d.id === id);
       if (!before) return;
       setDeployments((ds) =>
-        ds.map((d) => (d.id === id ? { ...d, health: "progressing", status: "Progressing", updatedReplicas: 0 } : d)),
+        ds.map((d) =>
+          d.id === id
+            ? { ...d, health: "progressing", status: "Progressing", rollout: "Progressing", reason: "Rolling out: pod template restartedAt changed", updatedReplicas: 0 }
+            : d,
+        ),
       );
       const tid = toast.show({
         kind: "progress",
@@ -270,6 +278,88 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     },
     [deployments, later, toast],
   );
+
+  const patchDeployment = useCallback(
+    (id: string, patch: Partial<DeploymentRow>) => setDeployments((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d))),
+    [],
+  );
+
+  const scaleDeployment = useCallback(
+    (id: string, replicas: number) => {
+      const d = deployments.find((x) => x.id === id);
+      if (!d) return;
+      patchDeployment(id, { replicas, rollout: "Progressing", health: "progressing", reason: `Scaling to ${replicas}` });
+      later(2500, () => {
+        const ready = Math.min(replicas, d.readyReplicas + Math.max(0, replicas - d.replicas));
+        patchDeployment(id, {
+          replicas,
+          readyReplicas: ready,
+          availableReplicas: ready,
+          updatedReplicas: replicas,
+          ...(ready < replicas
+            ? { health: "failed" as const, status: "Degraded", rollout: "Degraded", reason: d.reason }
+            : { health: "healthy" as const, status: "Available", rollout: "Complete", reason: "Available, rollout complete" }),
+        });
+        // With an HPA, the controller sets replicas back within its range.
+        if (d.hpa && (replicas < d.hpa.min || replicas > d.hpa.max)) {
+          later(3000, () => patchDeployment(id, { replicas: d.replicas }));
+          toast.show({ kind: "error", title: "Scale overridden by HPA", target: `${d.name} · ${d.cluster}`, detail: `HPA ${d.hpa.name} keeps replicas between ${d.hpa.min} and ${d.hpa.max}.` });
+        } else {
+          toast.show({ kind: "success", title: `Scaled to ${replicas}`, target: `${d.name} · ${d.cluster}`, env: d.env });
+        }
+      });
+    },
+    [deployments, later, patchDeployment, toast],
+  );
+
+  const rollbackDeployment = useCallback(
+    (id: string, rev: number) => {
+      const d = deployments.find((x) => x.id === id);
+      const target = d?.revisions.find((r) => r.rev === rev);
+      if (!d || !target) return;
+      const next = Math.max(...d.revisions.map((r) => r.rev)) + 1;
+      patchDeployment(id, {
+        health: "progressing",
+        rollout: "Progressing",
+        reason: `Rolling back to revision ${rev}`,
+        image: target.image,
+        updatedReplicas: 0,
+        revisions: [{ ...target, rev: next, age: "now" }, ...d.revisions.filter((r) => r.rev !== rev)],
+      });
+      later(4000, () => patchDeployment(id, { updatedReplicas: d.replicas, rollout: d.readyReplicas < d.replicas ? "Degraded" : "Complete", health: d.health, reason: d.reason }));
+      toast.show({ kind: "success", title: `Rolled back to revision ${rev}`, target: `${d.name} · ${d.cluster}`, env: d.env });
+    },
+    [deployments, later, patchDeployment, toast],
+  );
+
+  // Watch-like updates for the mock: usage numbers move, and the cart-web
+  // rollout that is in progress at start finishes after a while.
+  useEffect(() => {
+    const tick = setInterval(() => {
+      setAllPods((ps) =>
+        ps.map((p, i) =>
+          p.health === "healthy" && p.cpuMilli !== null && (i + Math.floor(Date.now() / 5000)) % 9 === 0
+            ? { ...p, cpuMilli: Math.max(1, Math.round(p.cpuMilli * (0.85 + Math.random() * 0.3))) }
+            : p,
+        ),
+      );
+    }, 5000);
+    const done = setTimeout(
+      () =>
+        setDeployments((ds) =>
+          ds.map((d) =>
+            d.name === "cart-web" && d.cluster === "prod-us-east-1"
+              ? { ...d, updatedReplicas: d.replicas, health: "healthy", status: "Available", rollout: "Complete", reason: "Available, rollout complete" }
+              : d,
+          ),
+        ),
+      12000,
+    );
+    return () => {
+      clearInterval(tick);
+      clearTimeout(done);
+    };
+  }, []);
 
   const value = useMemo<WorkspaceState>(() => {
     const selected = new Set(selectedClusterIds);
@@ -318,6 +408,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       connectCluster,
       deletePod,
       restartDeployment,
+      scaleDeployment,
+      rollbackDeployment,
+      setDeploymentPaused: (id, paused) =>
+        patchDeployment(
+          id,
+          paused
+            ? { health: "paused", rollout: "Paused", reason: "spec.paused=true" }
+            : { health: "healthy", rollout: "Complete", reason: "Available, rollout complete" },
+        ),
+      deleteDeployment: (id) => {
+        const d = deployments.find((x) => x.id === id);
+        setDeployments((ds) => ds.filter((x) => x.id !== id));
+        if (d) toast.show({ kind: "success", title: "Deployment deleted", target: `${d.name} · ${d.cluster}`, env: d.env });
+      },
       scenarios,
       setScenario: (key, on) => setScenarios((s) => ({ ...s, [key]: on })),
       simulateSlowList,
@@ -361,6 +465,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     connectCluster,
     deletePod,
     restartDeployment,
+    scaleDeployment,
+    rollbackDeployment,
+    patchDeployment,
+    toast,
     scenarios,
     simulateSlowList,
     tabs,

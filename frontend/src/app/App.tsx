@@ -36,7 +36,7 @@ function AppShell() {
   const { theme, density, tabs, activeTabId, activeTab, clusterById } = useWorkspace();
   const scopedCluster = activeTab?.cluster ? clusterById(activeTab.cluster) : undefined;
   // Single-cluster workspaces and investigations need the width: the sidebar collapses to a rail.
-  const railNav = activeTab?.kind === "investigation" || activeTab?.kind === "deployments";
+  const railNav = activeTab?.kind === "investigation" || (activeTab?.kind === "deployments" && !!activeTab.cluster);
 
   // Theme and density are document-level so portals (menus, tooltips) match.
   useEffect(() => {
@@ -79,7 +79,7 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
     case "investigation":
       return <InvestigationWorkspace />;
     case "deployments":
-      return <DeploymentsWorkspace cluster={tab.cluster ?? ""} namespace={tab.params?.namespace ?? ""} />;
+      return <DeploymentsWorkspace cluster={tab.cluster ?? ""} namespace={tab.params?.namespace ?? ""} active={active} />;
     default:
       return (
         <EmptyState className="flex-1" title={tab.title}>

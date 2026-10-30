@@ -186,9 +186,11 @@ function generateFiller(count: number): PodRow[] {
 export const pods: PodRow[] = [...seeds.map(toRow), ...generateFiller(412 - seeds.length)];
 
 // ---------------------------------------------------------------------------
-// Deployments (payments namespace on prod-eu-west-1)
+// Deployments: the payments namespace on prod-eu-west-1 (protected view) plus
+// the rest of the fleet shown in the multi-cluster explorer.
 
-type DeploySeed = [string, number, number, number, number, DeploymentRow["strategy"], number];
+type RolloutKind = "ok" | "deg" | "stall" | "prog" | "paused";
+type DeploySeed = [RolloutKind, string, string, string, number, number, number, number, DeploymentRow["strategy"], number, string];
 const rolling = (maxSurge: string, maxUnavailable: string): DeploymentRow["strategy"] => ({
   type: "RollingUpdate",
   maxSurge,
@@ -196,47 +198,89 @@ const rolling = (maxSurge: string, maxUnavailable: string): DeploymentRow["strat
 });
 const Y = 365 * D;
 
+const ROLLOUT: Record<RolloutKind, { health: Health; status: string; rollout: string; reason: string }> = {
+  ok: { health: "healthy", status: "Available", rollout: "Complete", reason: "Available, rollout complete" },
+  deg: { health: "failed", status: "Degraded", rollout: "Degraded", reason: "Available=False: MinimumReplicasUnavailable" },
+  stall: { health: "failed", status: "Degraded", rollout: "Stalled", reason: "Progressing=False: ProgressDeadlineExceeded" },
+  prog: { health: "progressing", status: "Progressing", rollout: "Progressing", reason: "Rolling out: 2 of 3 updated" },
+  paused: { health: "paused", status: "Available", rollout: "Paused", reason: "spec.paused=true" },
+};
+
 const deploySeeds: DeploySeed[] = [
-  // name, ready, replicas, up-to-date, available, strategy, age
-  ["checkout-api", 2, 4, 4, 2, rolling("1", "1"), 212 * D],
-  ["payments-gateway", 3, 3, 3, 3, rolling("25%", "25%"), Y],
-  ["fraud-scorer", 2, 2, 2, 2, rolling("1", "0"), 144 * D],
-  ["ledger-sync", 2, 2, 2, 2, { type: "Recreate" }, 96 * D],
-  ["refunds-api", 2, 2, 2, 2, rolling("25%", "25%"), 301 * D],
-  ["payouts-scheduler", 1, 1, 1, 1, { type: "Recreate" }, 88 * D],
-  ["currency-rates", 2, 2, 2, 2, rolling("25%", "25%"), Y],
-  ["webhook-dispatcher", 3, 3, 3, 3, rolling("1", "0"), 57 * D],
-  ["tax-calculator", 2, 2, 2, 2, rolling("25%", "25%"), 230 * D],
+  // kind, name, namespace, cluster, ready, replicas, up-to-date, available, strategy, age, image
+  ["deg", "checkout-api", "payments", "prod-eu-west-1", 2, 4, 4, 2, rolling("1", "1"), 212 * D, "v2.31.0"],
+  ["ok", "payments-gateway", "payments", "prod-eu-west-1", 3, 3, 3, 3, rolling("25%", "25%"), Y, "v3.14.2"],
+  ["ok", "fraud-scorer", "payments", "prod-eu-west-1", 2, 2, 2, 2, rolling("1", "0"), 144 * D, "v7.2.0"],
+  ["ok", "ledger-sync", "payments", "prod-eu-west-1", 2, 2, 2, 2, { type: "Recreate" }, 96 * D, "v1.7.3"],
+  ["ok", "refunds-api", "payments", "prod-eu-west-1", 2, 2, 2, 2, rolling("25%", "25%"), 301 * D, "v1.4.9"],
+  ["ok", "payouts-scheduler", "payments", "prod-eu-west-1", 1, 1, 1, 1, { type: "Recreate" }, 88 * D, "v0.6.2"],
+  ["ok", "currency-rates", "payments", "prod-eu-west-1", 2, 2, 2, 2, rolling("25%", "25%"), Y, "v0.12.1"],
+  ["ok", "webhook-dispatcher", "payments", "prod-eu-west-1", 3, 3, 3, 3, rolling("1", "0"), 57 * D, "v2.0.3"],
+  ["ok", "tax-calculator", "payments", "prod-eu-west-1", 2, 2, 2, 2, rolling("25%", "25%"), 230 * D, "v2.2.0"],
+  ["stall", "ledger-sync", "payments", "staging-eu-1", 1, 2, 1, 1, { type: "Recreate" }, 96 * D, "v1.8.0-rc1"],
+  ["prog", "cart-web", "storefront", "prod-us-east-1", 3, 3, 2, 3, rolling("1", "0"), 2 * Y, "v5.2.1"],
+  ["paused", "risk-rules-ui", "risk", "staging-eu-1", 1, 1, 0, 1, rolling("25%", "25%"), 41 * D, "v0.9.4"],
+  ["ok", "payments-gateway", "payments", "prod-us-east-1", 3, 3, 3, 3, rolling("25%", "25%"), Y, "v3.14.2"],
+  ["ok", "payments-gateway", "payments", "staging-eu-1", 1, 1, 1, 1, rolling("25%", "25%"), Y, "v3.15.0"],
+  ["ok", "checkout-api", "payments", "staging-eu-1", 2, 2, 2, 2, rolling("1", "1"), 212 * D, "v2.31.0"],
+  ["ok", "fraud-scorer", "risk", "prod-us-east-1", 2, 2, 2, 2, rolling("1", "0"), 144 * D, "v7.2.0"],
+  ["ok", "catalog-api", "catalog", "prod-us-east-1", 3, 3, 3, 3, rolling("25%", "25%"), 2 * Y, "v4.0.11"],
+  ["ok", "search-api", "catalog", "prod-us-east-1", 2, 2, 2, 2, rolling("25%", "25%"), 301 * D, "v2.6.3"],
+  ["ok", "invoice-api", "billing", "prod-us-east-1", 2, 2, 2, 2, rolling("25%", "25%"), 230 * D, "v1.22.0"],
+  ["ok", "notifications-worker", "messaging", "prod-eu-west-1", 2, 2, 2, 2, rolling("25%", "25%"), 88 * D, "v3.1.7"],
+  ["ok", "notifications-worker", "messaging", "staging-eu-1", 1, 1, 1, 1, rolling("25%", "25%"), 88 * D, "v3.2.0-rc2"],
+  ["ok", "cart-web", "storefront", "staging-eu-1", 2, 2, 2, 2, rolling("1", "0"), 2 * Y, "v5.3.0"],
 ];
 
-export const deployments: DeploymentRow[] = deploySeeds.map(([name, ready, replicas, upd, avail, strategy, age]) => ({
-  id: `prod-eu-west-1/payments/${name}`,
-  name,
-  namespace: "payments",
-  cluster: "prod-eu-west-1",
-  env: "prod",
-  health: ready < replicas ? "failed" : "healthy",
-  status: ready < replicas ? "Degraded" : "Available",
-  readyReplicas: ready,
-  replicas,
-  updatedReplicas: upd,
-  availableReplicas: avail,
-  strategy,
-  ageSeconds: age,
-}));
-
-/** What the kubeconfig user may do here (SelfSubjectAccessReview). */
-export function getAccessSummary(cluster: string, namespace: string, resource: string, verb: string): AccessSummary {
-  return { user: cluster.startsWith("prod") ? "sre-oncall" : "developer", verb, resource, namespace, allowed: true };
+function revisionsFor(name: string, image: string): DeploymentRow["revisions"] {
+  if (name === "checkout-api") {
+    return [
+      { rev: 14, image: "v2.31.0", age: "3d", sync: "8c41e2f" },
+      { rev: 13, image: "v2.30.4", age: "9d", sync: "51d0a7b" },
+      { rev: 12, image: "v2.30.3", age: "16d", sync: "0e9b44c" },
+    ];
+  }
+  return [{ rev: 3, image, age: "12d" }, { rev: 2, image: "previous", age: "40d" }];
 }
 
-/** Total Deployments across all namespaces of the cluster, for "9 of 86". */
+export const deployments: DeploymentRow[] = deploySeeds.map(
+  ([kind, name, namespace, cluster, ready, replicas, upd, avail, strategy, age, image]) => ({
+    id: `${cluster}/${namespace}/${name}`,
+    name,
+    namespace,
+    cluster,
+    env: envOf(cluster),
+    ...ROLLOUT[kind],
+    since: kind === "deg" ? "47m" : kind === "stall" ? "2h" : undefined,
+    readyReplicas: ready,
+    replicas,
+    updatedReplicas: upd,
+    availableReplicas: avail,
+    strategy,
+    ageSeconds: age,
+    image,
+    hpa: name === "checkout-api" && cluster === "prod-eu-west-1" ? { name: "checkout-api", min: 4, max: 8 } : undefined,
+    argoApp: cluster.startsWith("prod") ? name : undefined,
+    revisions: revisionsFor(name, image),
+    usage:
+      name === "checkout-api" && cluster === "prod-eu-west-1"
+        ? { cpuMilli: 770, cpuRequestMilli: 1000, memoryMiB: 956, memoryLimitMiB: 1024 }
+        : { cpuMilli: 60 * replicas, cpuRequestMilli: 200 * replicas, memoryMiB: 120 * replicas, memoryLimitMiB: 256 * replicas },
+  }),
+);
+
+/** Total Deployments across all namespaces and clusters, for "9 of 86". */
 export const deploymentTotal = 86;
+
+/** Namespaces the current identity cannot list, reported instead of silently hidden. */
+export const forbiddenNamespaces = [
+  { cluster: "prod-us-east-1", namespace: "kube-system", user: "sre-readonly", resource: "deployments" },
+];
 
 /** Facts the restart dialog shows for a Deployment. */
 export function getDeploymentState(d: DeploymentRow): { health: Health; text: string; mono?: string }[] {
-  if (d.name !== "checkout-api") {
-    return [{ health: "healthy", text: `All ${d.replicas} pods are ready.` }];
+  if (d.name !== "checkout-api" || d.cluster !== "prod-eu-west-1") {
+    return [{ health: d.readyReplicas < d.replicas ? "warning" : "healthy", text: `${d.readyReplicas} of ${d.replicas} pods are ready.` }];
   }
   return [
     {
@@ -250,6 +294,11 @@ export function getDeploymentState(d: DeploymentRow): { health: Health; text: st
     },
     { health: "warning", text: "has 2 of 4 endpoints ready.", mono: "Service checkout-api" },
   ];
+}
+
+/** What the kubeconfig user may do here (SelfSubjectAccessReview). */
+export function getAccessSummary(cluster: string, namespace: string, resource: string, verb: string): AccessSummary {
+  return { user: cluster.startsWith("prod") ? "sre-oncall" : "developer", verb, resource, namespace, allowed: true };
 }
 
 // ---------------------------------------------------------------------------

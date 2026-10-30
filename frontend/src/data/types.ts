@@ -28,7 +28,9 @@ export type Health =
   /** Status not reported: stale data, unreachable cluster. */
   | "unknown"
   /** Exists but runs nothing, e.g. an old ReplicaSet with 0 pods. */
-  | "idle";
+  | "idle"
+  /** Rollout paused on purpose (spec.paused). */
+  | "paused";
 
 export interface Cluster {
   /** Stable id; also the display name. */
@@ -100,6 +102,17 @@ export interface DeploymentRow {
   health: Health;
   /** Available · Degraded · Progressing */
   status: string;
+  /** Rollout state: Complete · Progressing · Stalled · Paused · Degraded. */
+  rollout: string;
+  /** Condition behind the state, e.g. "Available=False: MinimumReplicasUnavailable". */
+  reason: string;
+  since?: string;
+  /** Image tag of the main container. */
+  image: string;
+  hpa?: { name: string; min: number; max: number };
+  argoApp?: string;
+  revisions: { rev: number; image: string; age: string; sync?: string }[];
+  usage?: { cpuMilli: number; cpuRequestMilli: number; memoryMiB: number; memoryLimitMiB: number };
   readyReplicas: number;
   replicas: number;
   updatedReplicas: number;

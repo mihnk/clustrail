@@ -11,6 +11,7 @@ import { ClusterStateBanners, DisconnectedCluster, SkeletonRows, isOffline } fro
 import { ClusterPicker } from "@/components/cluster/ClusterPicker";
 import { InspectorPanel } from "@/components/ui/inspector-panel";
 import { useOverlays } from "@/app/shortcuts";
+import { useClusterGrouping } from "@/components/cluster/useClusterGrouping";
 import type { PodRow } from "@/data/types";
 import { FilterToken, RemovableFilterToken } from "@/components/ui/filter-token";
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
@@ -34,7 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ConnectionDot, EnvMarker, EnvironmentBadge } from "@/components/status/EnvironmentBadge";
+import { ConnectionDot, EnvMarker } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
@@ -95,7 +96,6 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   const [owner, setOwner] = useState<OwnerFilter>("any");
   const [labelFilters, setLabelFilters] = useState<string[]>([]);
   const [view, setView] = useState<ClusterView>("aggregated");
-  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
   const [health, setHealth] = useState<HealthFilter>("all");
   const [sorting, setSorting] = useState<SortingState>([{ id: "status", desc: false }]);
   const [userColumns, setUserColumns] = useState<VisibilityState>({});
@@ -234,51 +234,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     setHealth("all");
   };
 
-  const grouping = useMemo(
-    () =>
-      grouped
-        ? {
-            keys: selectedClusters.map((c) => c.id),
-            keyOf: (p: (typeof rows)[number]) => p.cluster,
-            collapsed: collapsedGroups,
-            onToggle: (key: string) =>
-              setCollapsedGroups((prev) => {
-                const next = new Set(prev);
-                if (next.has(key)) next.delete(key);
-                else next.add(key);
-                return next;
-              }),
-            renderHeader: (key: string, groupRows: typeof rows) => {
-              const c = clusterById(key);
-              const attn = groupRows.filter((p) => isAttention(p.health)).length;
-              return (
-                <>
-                  {c && <EnvMarker env={c.env} />}
-                  <span className="font-mono font-semibold text-fg">{key}</span>
-                  {c && <EnvironmentBadge env={c.env} />}
-                  {c?.protected && (
-                    <span className="flex items-center gap-1.5 whitespace-nowrap text-meta text-env-prod-ink">
-                      <Lock className="size-3" aria-hidden />
-                      Protected
-                    </span>
-                  )}
-                  <span className="truncate text-meta text-fg-muted">
-                    {c?.connection === "connected" ? c.summary : "Not connected"}
-                  </span>
-                  <div className="flex-1" />
-                  {attn > 0 && (
-                    <span className="whitespace-nowrap text-meta text-status-critical">
-                      {attn} {attn === 1 ? "needs" : "need"} attention
-                    </span>
-                  )}
-                  <span className="font-mono text-meta text-fg-muted">{groupRows.length}</span>
-                </>
-              );
-            },
-          }
-        : undefined,
-    [grouped, selectedClusters, collapsedGroups, clusterById],
-  );
+  const grouping = useClusterGrouping<PodRow>(grouped);
 
   const allConnected = selectedClusters.every((c) => c.connection === "connected");
   const offline = selectedClusters.filter(isOffline);

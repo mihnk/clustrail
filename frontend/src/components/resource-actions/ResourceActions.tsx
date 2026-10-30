@@ -81,13 +81,19 @@ export function ModifyMenuButton({
   target,
   cluster,
   size,
+  footnote,
+  includeObserve,
 }: {
   actions: ResourceAction[];
   target: ActionTarget;
   cluster: string;
   size?: "md" | "lg";
+  /** One line under the menu, e.g. protection and GitOps ownership. */
+  footnote?: string;
+  /** Show the Observe group too (the inspector's Modify menu in the explorer design). */
+  includeObserve?: boolean;
 }) {
-  const modify = actions.filter((a) => a.group === "modify");
+  const modify = includeObserve ? actions : actions.filter((a) => a.group === "modify");
   const button = (
     <Button variant={target.protected || target.readOnly ? "locked" : "default"} size={size}>
       {target.protected && <Lock aria-hidden />}
@@ -110,8 +116,9 @@ export function ModifyMenuButton({
       ) : (
         <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
       )}
-      <DropdownMenuContent align="end" className="w-[248px]">
+      <DropdownMenuContent align="end" className="w-[268px]">
         <ActionGroups actions={modify} target={target} kind="dropdown" />
+        {footnote && <p className="m-0 mt-1 border-t border-line px-2 pb-1 pt-1.5 text-meta leading-[1.4] text-fg-muted">{footnote}</p>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
