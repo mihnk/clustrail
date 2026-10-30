@@ -96,6 +96,7 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "sync", desc: false }]);
   const [selectedId, setSelectedId] = useState<string | null>("prod-eu-west-1/Application/payments-gateway");
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [autoHidden, setAutoHidden] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -282,6 +283,7 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
         <ResourceTable
           table={table}
           aria-label="GitOps objects"
+          onAutoHiddenChange={setAutoHidden}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
           onSelect={(id) => {
@@ -338,6 +340,7 @@ export function GitOpsWorkspace({ active }: { active: boolean }) {
           {outOfSync > 0 && <span className="text-status-warning">{outOfSync} OutOfSync</span>}
           {failing > 0 && <span className="text-status-critical">{failing} failing</span>}
           <div className="flex-1" />
+          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
           <span className="truncate max-[1360px]:hidden">Clustrail reads controller status; it never pushes to git</span>
         </div>
       </main>

@@ -4,6 +4,7 @@ import type { Cluster } from "@/data/types";
 import { rollbackPlan, type HelmRelease } from "@/data/helm";
 import { hunks, lineDiff } from "@/data/compare";
 import { Button, IconButton } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabCount } from "@/components/ui/tabs";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
@@ -25,6 +26,25 @@ function manifestFor(r: HelmRelease, appVersion: string, rev: number): string {
   return parts.join("\n");
 }
 
+/** Chart defaults merged under the user-supplied values (helm get values --all). */
+function computedValues(r: HelmRelease): string {
+  const defaults = `# chart defaults (${r.chart} ${r.chartVersion})
+nameOverride: ""
+fullnameOverride: ""
+podAnnotations: {}
+securityContext:
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+service:
+  type: ClusterIP
+  port: 8080
+nodeSelector: {}
+tolerations: []
+affinity: {}
+`;
+  return r.values.startsWith("#") ? defaults : `${defaults}# user-supplied\n${r.values}`;
+}
+
 export function HelmInspector({
   release: r,
   cluster,
@@ -41,6 +61,7 @@ export function HelmInspector({
   const [tab, setTab] = useState(r.status === "failed" ? "history" : "overview");
   const [target, setTarget] = useState<number | null>(lastGood?.rev ?? null);
   const [showDiff, setShowDiff] = useState(false);
+  const [valuesMode, setValuesMode] = useState<"user" | "computed">("user");
   const busy = r.status.startsWith("pending") && r.updatedSeconds < 60;
 
   useEffect(() => {
@@ -181,8 +202,24 @@ export function HelmInspector({
         </TabsContent>
 
         <TabsContent value="values" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">
-          <span className="text-meta text-fg-muted">User-supplied values of revision {r.revision}. Values that look like credentials are redacted.</span>
-          <pre className="selectable m-0 overflow-x-auto rounded-md bg-term-bg px-2.5 py-2 font-mono text-[11.5px] leading-[17px] text-term-fg">{r.values}</pre>
+          <div className="flex items-center gap-2">
+            <Segmented
+              aria-label="Values"
+              value={valuesMode}
+              onValueChange={setValuesMode}
+              options={[
+                { value: "user", label: "User-supplied" },
+                { value: "computed", label: "Computed" },
+              ]}
+            />
+          </div>
+          <span className="text-meta text-fg-muted">
+            {valuesMode === "user" ? "helm get values" : "helm get values --all: chart defaults merged with user values"} · revision {r.revision}. Values that look like
+            credentials are redacted.
+          </span>
+          <pre className="selectable m-0 overflow-x-auto rounded-md bg-term-bg px-2.5 py-2 font-mono text-[11.5px] leading-[17px] text-term-fg">
+            {valuesMode === "user" ? r.values : computedValues(r)}
+          </pre>
         </TabsContent>
 
         <TabsContent value="manifest" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3.5 py-3 data-[state=inactive]:hidden">

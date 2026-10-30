@@ -14,6 +14,7 @@ import {
   Lightbulb,
   Link2,
   Lock,
+  PanelLeft,
   Pin as PinIcon,
   Plus,
   RotateCcw,
@@ -79,6 +80,8 @@ export function InvestigationWorkspace() {
   const [notes, setNotes] = usePersistentState<string>(key("notes-md"), initialNotes);
   const [done, setDone] = usePersistentState<string[]>(key("steps"), ["p1", "p2"]);
   const [view, setView] = useState<View>("evidence");
+  // At 1280 the symptoms column collapses into a toggle.
+  const [symptomsOpen, setSymptomsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const evidence = useMemo<Evidence[]>(() => {
@@ -270,7 +273,10 @@ export function InvestigationWorkspace() {
 
       <div className="flex min-h-0 flex-1">
         {/* Symptoms and related objects */}
-        <section aria-label="Symptoms and objects" className="flex w-[288px] shrink-0 flex-col overflow-y-auto border-r border-line max-[1360px]:hidden">
+        <section
+          aria-label="Symptoms and objects"
+          className={cn("flex w-[288px] shrink-0 flex-col overflow-y-auto border-r border-line", !symptomsOpen && "max-[1360px]:hidden", symptomsOpen && "max-[1360px]:w-[260px]")}
+        >
           <ColumnHeader title="Observed symptoms" trailing={<span className="text-meta text-fg-muted">live</span>} />
           <div className="px-3.5 pb-2.5 pt-1">
             {symptoms.map((s, i) => (
@@ -295,6 +301,17 @@ export function InvestigationWorkspace() {
         {/* Observed facts */}
         <section aria-label="Observed facts" className="flex min-w-0 flex-1 flex-col">
           <ColumnHeader
+            lead={
+              <IconButton
+                aria-label={symptomsOpen ? "Hide symptoms and objects" : "Show symptoms and objects"}
+                aria-pressed={symptomsOpen}
+                title="Symptoms and related objects"
+                onClick={() => setSymptomsOpen(!symptomsOpen)}
+                className="-ml-1 hidden max-[1360px]:inline-flex"
+              >
+                <PanelLeft aria-hidden />
+              </IconButton>
+            }
             title="Observed facts"
             note="captured from the cluster · each links to its source"
             trailing={
@@ -376,11 +393,12 @@ export function InvestigationWorkspace() {
   );
 }
 
-function ColumnHeader({ title, note, trailing, border }: { title: string; note?: string; trailing?: ReactNode; border?: boolean }) {
+function ColumnHeader({ title, note, trailing, border, lead }: { title: string; note?: string; trailing?: ReactNode; border?: boolean; lead?: ReactNode }) {
   return (
     <div className={cn("flex h-[38px] shrink-0 items-center gap-2 border-b border-line px-3.5 text-ui", border && "border-t")}>
+      {lead}
       <span className="section-label">{title}</span>
-      {note && <span className="truncate text-meta text-fg-muted">{note}</span>}
+      {note && <span className="truncate text-meta text-fg-muted max-[1360px]:hidden">{note}</span>}
       <span className="flex-1" />
       {trailing}
     </div>

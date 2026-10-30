@@ -39,7 +39,7 @@ export function ClusterNavigation() {
   return (
     <aside
       aria-label="Navigation"
-      className="flex w-[220px] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line bg-surface-side px-2 py-2.5"
+      className="flex w-[220px] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line bg-surface-side px-2 py-2.5 max-[1360px]:w-[196px]"
     >
       <ClusterList />
 

@@ -29,7 +29,9 @@ export function InspectorPanel({
   active: boolean;
   children: ReactNode;
 }) {
-  const [width, setWidth] = usePersistentState(`inspector.${storageKey}.width`, defaultWidth);
+  // At 1280-wide windows the default gives 40px back to the table (380 → 340).
+  const fallback = typeof window !== "undefined" && window.innerWidth < 1360 ? Math.max(MIN, defaultWidth - 40) : defaultWidth;
+  const [width, setWidth] = usePersistentState(`inspector.${storageKey}.width`, fallback);
   const [collapsed, setCollapsed] = usePersistentState(`inspector.${storageKey}.collapsed`, false);
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export function InspectorPanel({
             setWidth(MIN);
           } else setWidth(Math.max(MIN, w));
         }}
-        onReset={() => setWidth(defaultWidth)}
+        onReset={() => setWidth(fallback)}
       />
       {children}
     </aside>

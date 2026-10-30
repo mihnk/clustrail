@@ -178,6 +178,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
   const [view, setView] = useState<"aggregated" | "by-cluster">("aggregated");
   const [sorting, setSorting] = useState<SortingState>([{ id: "rollout", desc: false }]);
   const [selectedId, setSelectedId] = useState<string | null>("prod-eu-west-1/payments/checkout-api");
+  const [autoHidden, setAutoHidden] = useState<string[]>([]);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [tab, setTab] = useState<DeploymentTab>("overview");
   const [scaleFocusSeq, setScaleFocusSeq] = useState(0);
@@ -423,6 +424,7 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
         <ResourceTable
           table={table}
           aria-label="Deployments"
+          onAutoHiddenChange={setAutoHidden}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
           onSelect={(id) => {
@@ -482,6 +484,8 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
             </span>
           )}
           {grouped && <span>Grouped by cluster</span>}
+          <div className="flex-1" />
+          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
         </div>
       </main>
 

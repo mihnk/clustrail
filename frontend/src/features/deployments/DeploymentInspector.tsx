@@ -122,7 +122,7 @@ export function DeploymentInspector({
             <ScrollText aria-hidden />
             Logs
           </Button>
-          <Button onClick={() => onTabChange("events")}>
+          <Button onClick={() => onTabChange("events")} className="max-[1360px]:hidden">
             <Activity aria-hidden />
             Events
           </Button>

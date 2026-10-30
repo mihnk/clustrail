@@ -75,6 +75,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "status", desc: false }]);
   const [selectedId, setSelectedId] = useState<string | null>("staging-eu-1/payments/payments-workers");
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [autoHidden, setAutoHidden] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const inClusters = useMemo(() => helmReleases.filter((r) => selectedClusterIds.includes(r.cluster)), [helmReleases, selectedClusterIds]);
@@ -248,6 +249,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
         <ResourceTable
           table={table}
           aria-label="Helm releases"
+          onAutoHiddenChange={setAutoHidden}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
           onSelect={(id) => {
@@ -277,6 +279,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
             </span>
           ))}
           <div className="flex-1" />
+          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
           <span className="truncate max-[1360px]:hidden" title={UNREADABLE_NAMESPACES.join(", ")}>
             Secrets in {UNREADABLE_NAMESPACES.length} namespaces not readable → those releases are not listed
           </span>

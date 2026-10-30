@@ -72,7 +72,7 @@ export function StatusBar() {
         // Investigations keep their own watches on the involved objects.
         <span className="whitespace-nowrap">Watching 12 objects · live</span>
       ) : (
-        <span className="truncate font-mono text-label">
+        <span className="truncate font-mono text-label max-[1360px]:hidden">
           {connected.map((c) => `${c.name} ${c.latencyMs}ms`).join(" · ")}
         </span>
       )}

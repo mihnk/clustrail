@@ -67,6 +67,7 @@ export function NodesWorkspace({ active }: { active: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "status", desc: false }]);
   const [selectedId, setSelectedId] = useState<string | null>("prod-eu-west-1/ip-10-42-3-17.eu-west-1.compute.internal");
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [autoHidden, setAutoHidden] = useState<string[]>([]);
   const [drainId, setDrainId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -265,6 +266,7 @@ export function NodesWorkspace({ active }: { active: boolean }) {
         <ResourceTable
           table={table}
           aria-label="Nodes"
+          onAutoHiddenChange={setAutoHidden}
           rowHeight={ROW_HEIGHT[density]}
           selectedId={selectedId}
           onSelect={(id) => {
@@ -289,6 +291,7 @@ export function NodesWorkspace({ active }: { active: boolean }) {
           </span>
           {attention > 0 && <span className="text-status-critical">{attention} need attention</span>}
           <div className="flex-1" />
+          {autoHidden.length > 0 && <span className="truncate">{autoHidden.join(", ")} hidden at this width</span>}
           <span>Usage: metrics-server · Allocatable: node status</span>
         </div>
       </main>
