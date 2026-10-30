@@ -3,7 +3,9 @@
 // Follow), interleaves them by timestamp and pushes batches to the UI.
 
 export type LogLevel = "INFO" | "WARN" | "ERROR" | "";
-export type SourceTag = "A" | "B" | "C" | "D";
+/** A source's short tag: A–D in the mock design, the pod name's distinct suffix on the desktop. */
+export type SourceTag = string;
+export type LogMarker = "failed" | "progressing" | "unknown" | "joined" | "left";
 
 export interface LogLine {
   /** Monotonic id: the line's position in the merged stream. */
@@ -13,17 +15,24 @@ export interface LogLine {
   container: string;
   level: LogLevel;
   msg: string;
-  /** Inline marker (restart, reconnect, stream end) instead of a log line. */
-  event?: { health: "failed" | "progressing" | "unknown" };
+  /** Inline marker (restart, reconnect, stream end, pod joined or left) instead of a log line. */
+  event?: { health: LogMarker };
 }
 
 export interface LogSource {
   tag: SourceTag;
   pod: string;
   containers: string[];
-  /** live · reconnecting · ended · off */
-  state: "live" | "reconnecting" | "ended" | "off";
+  /** live · reconnecting · ended · off · left (no longer followed) */
+  state: "live" | "reconnecting" | "ended" | "off" | "left";
   note?: string;
+  namespace?: string;
+  /** pod-template-hash or controller-revision-hash. */
+  revision?: string;
+  /** Joined after the stream started (local time, HH:MM:SS). */
+  joined?: string;
+  /** When it left (local time, HH:MM:SS). */
+  left?: string;
 }
 
 export const checkoutSources: LogSource[] = [
@@ -147,9 +156,38 @@ export function nextLines(fromId: number, count: number, liveTags: SourceTag[], 
   });
 }
 
-export const TAG_COLOR: Record<SourceTag, string> = {
+export const TAG_COLOR: Record<string, string> = {
   A: "#5BB8E8",
   B: "#D99CF0",
   C: "#E8C36D",
   D: "#9AA8B6",
 };
+
+// Distinct in lightness as well as hue, readable on both terminal backgrounds.
+const PALETTE = ["#3CC4D0", "#E8A33D", "#B48CF2", "#7EA6F6", "#4CC38A", "#F28B82", "#E3C35A", "#82B8F0", "#D99CF0", "#9AA8B6"];
+const assigned = new Map<string, string>();
+
+/** A tag's color: fixed for A–D, else the next palette color the first time a tag is seen. */
+export function tagColor(tag: SourceTag): string {
+  const fixed = TAG_COLOR[tag];
+  if (fixed) return fixed;
+  let c = assigned.get(tag);
+  if (!c) {
+    c = PALETTE[assigned.size % PALETTE.length]!;
+    assigned.set(tag, c);
+  }
+  return c;
+}
+
+/**
+ * Short, distinct tags for pods: the name's last segment ("x2kqp", "0"), or
+ * more segments when another pod already has that one.
+ */
+export function podTag(pod: string, taken: ReadonlySet<string>): SourceTag {
+  const parts = pod.split("-");
+  for (let n = 1; n <= parts.length; n++) {
+    const tag = parts.slice(-n).join("-");
+    if (!taken.has(tag)) return tag;
+  }
+  return pod;
+}

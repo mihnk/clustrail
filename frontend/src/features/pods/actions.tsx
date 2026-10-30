@@ -1,4 +1,5 @@
-import { Cable, Code, Layers, RotateCcw, ScrollText, SquareTerminal, Trash2 } from "lucide-react";
+import { Bug, Cable, Code, Layers, RotateCcw, ScrollText, SquareTerminal, Trash2 } from "lucide-react";
+import { openDebug } from "@/features/debug/DebugDialogs";
 import { backend } from "@/backend/client";
 import { openPortForward } from "@/features/portforward/PortForward";
 import type { ResourceAction } from "@/components/resource-actions/ResourceActions";
@@ -20,8 +21,9 @@ interface PodActionDeps {
   openYaml: (pod: PodRow) => void;
 }
 
-/** Owning Deployment name for a ReplicaSet-owned pod ("app-7d9f8b6c4" -> "app"). */
+/** Owning Deployment name: the owner itself on the desktop, else from the ReplicaSet ("app-7d9f8b6c4" -> "app"). */
 export function deploymentNameOf(pod: PodRow): string | null {
+  if (pod.owner?.kind === "Deployment") return pod.owner.name;
   if (pod.owner?.kind !== "ReplicaSet") return null;
   return pod.owner.name.replace(/-[a-z0-9]{8,10}$/, "");
 }
@@ -44,6 +46,15 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       // A shell can change the workload: it confirms like a mutation and is blocked in read-only contexts.
       disabled: deps.cluster?.readOnly || pod.readyContainers === 0,
       onSelect: () => deps.confirm(shellRequest(pod, deps.cluster, () => deps.openShell(pod))),
+    },
+    {
+      id: "debug",
+      group: "observe",
+      label: deps.cluster?.readOnly ? t("Debug container · read-only context") : t("Debug container…"),
+      icon: <Bug />,
+      // Distroless or crashing containers have no shell: an ephemeral container brings its own tools.
+      disabled: !backend || deps.cluster?.readOnly || pod.status !== "Running",
+      onSelect: () => openDebug({ kind: "pod", cluster: pod.cluster, namespace: pod.namespace, pod: pod.name }),
     },
     { id: "yaml", group: "observe", label: t("View YAML"), icon: <Code />, shortcut: "Y", onSelect: () => deps.openYaml(pod) },
     {

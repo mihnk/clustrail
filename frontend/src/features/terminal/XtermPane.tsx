@@ -15,6 +15,8 @@ export interface ExecTarget {
   pod: string;
   /** Empty: the pod's default container. */
   container: string;
+  /** Runs instead of the default shell (node shells chroot into the host). */
+  command?: string[];
 }
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -173,7 +175,7 @@ export const XtermPane = forwardRef<
     });
     let disposed = false;
     api
-      .startExec({ ...target, command: [], cols: term.cols, rows: term.rows })
+      .startExec({ ...target, command: target.command ?? [], cols: term.cols, rows: term.rows })
       .then((id) => {
         if (disposed) return void api.closeExec(id);
         execId = id;

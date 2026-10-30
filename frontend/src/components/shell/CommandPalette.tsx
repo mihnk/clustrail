@@ -17,6 +17,9 @@ import {
   Server,
   Settings,
   Sun,
+  TriangleAlert,
+  FileBadge,
+  ShieldCheck,
 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { IS_MOCK } from "@/data/mock";
@@ -134,6 +137,9 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       ],
       ["Helm releases", <LifeBuoy key="h" />, () => ws.openView({ kind: "helm", title: t("Helm releases") })],
       ["GitOps", <GitBranch key="g" />, () => ws.openView({ kind: "gitops", title: t("GitOps") })],
+      ["Warning events", <TriangleAlert key="w" />, () => ws.openView({ kind: "warnings", title: t("Warning events") })],
+      ["Certificates", <FileBadge key="cert" />, () => ws.openView({ kind: "certificates", title: t("Certificates") })],
+      ["Access", <ShieldCheck key="a" />, () => ws.openView({ kind: "access", title: t("Access") })],
       ["Connections", <KeyRound key="k" />, () => ws.openView({ kind: "connections", title: t("Connections") })],
       ["Settings", <Settings key="s" />, () => ws.openView({ kind: "settings", title: t("Settings") })],
     ];

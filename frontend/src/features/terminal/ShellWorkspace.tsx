@@ -17,8 +17,10 @@ import { EnvironmentBadge, EnvMarker } from "@/components/status/EnvironmentBadg
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { cn } from "@/lib/cn";
 import { isMac, modKey } from "@/lib/platform";
-import { backend } from "@/backend/client";
+import { backend, errorText } from "@/backend/client";
+import { useToast } from "@/components/ui/toast";
 import { XtermPane, type XtermHandle } from "./XtermPane";
+import type { SessionRequest } from "./session";
 import { t as tt, tn } from "@/i18n";
 
 export interface ShellSession {
@@ -38,7 +40,14 @@ export interface ShellSession {
   connection?: number;
   /** Desktop: when the current exec started, to tell a flapping session from a long-lived one. */
   connectedAt?: number;
+  /** Desktop: the command to exec instead of the default shell. */
+  command?: string[];
+  /** Desktop: a node shell pod Clustrail started; closing the session deletes it. */
+  nodeShell?: { node: string };
+  /** Desktop: an ephemeral debug container (it stays in the pod spec). */
+  debug?: boolean;
 }
+
 
 const PRESET: ShellSession[] = [
   {
@@ -88,6 +97,7 @@ const MAX_ATTEMPTS = 5;
  */
 export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean }) {
   const ws = useWorkspace();
+  const toast = useToast();
   const { openPalette } = useOverlays();
   // Desktop sessions start when you open a shell on a pod; the preset sessions are the mock design.
   const [sessions, setSessions] = useState<ShellSession[]>(backend ? [] : PRESET);
@@ -138,7 +148,14 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
   // Sessions requested from elsewhere (pod inspector, row menu) after confirmation.
   useEffect(() => {
     if (ws.reveal?.kind !== "session") return;
-    const [cluster = "", namespace = "", pod = "", container = "app"] = ws.reveal.id.split("/");
+    let req: SessionRequest;
+    if (ws.reveal.id.startsWith("{")) {
+      req = JSON.parse(ws.reveal.id) as SessionRequest;
+    } else {
+      const [cluster = "", namespace = "", pod = "", container = "app"] = ws.reveal.id.split("/");
+      req = { cluster, namespace, pod, container };
+    }
+    const { cluster, namespace, pod, container } = req;
     const id = `s${Date.now()}`;
     setSessions((ss) => [
       ...ss,
@@ -149,7 +166,10 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
         namespace,
         pod,
         container,
-        shell: "/bin/sh",
+        command: req.command,
+        nodeShell: req.nodeShell,
+        debug: req.debug,
+        shell: req.nodeShell ? "chroot /host" : "/bin/sh",
         state: "connected",
         openedAt: new Date().toTimeString().slice(0, 5),
         connection: 0,
@@ -178,6 +198,13 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
   });
 
   const closeSession = (id: string) => {
+    const closing = sessions.find((s) => s.id === id);
+    if (closing?.nodeShell && backend) {
+      // The privileged pod goes with the session; a failure is surfaced, never retried silently.
+      backend.deleteNodeShell(closing.cluster, closing.namespace, closing.pod).catch((e) =>
+        toast.show({ kind: "error", title: tt("Node shell pod not deleted"), target: `${closing.namespace}/${closing.pod} · ${closing.cluster}`, detail: errorText(e), copyText: `kubectl delete pod -n ${closing.namespace} ${closing.pod}` }),
+      );
+    }
     const rest = sessions.filter((s) => s.id !== id);
     setSessions(rest);
     if (id === activeId && rest[0]) setActiveId(rest[0].id);
@@ -346,7 +373,13 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                   <span className="text-fg-muted">›</span> <b className="font-semibold text-fg">{s.container}</b>
                 </span>
                 <div className="flex-1" />
-                <span className="font-mono text-fg-muted">{tt("uid 1000")}</span>
+                {s.nodeShell ? (
+                  <span className="font-mono text-status-warning">{tt("root on node {node}", { node: s.nodeShell.node })}</span>
+                ) : s.debug ? (
+                  <span className="font-mono text-fg-muted">{tt("debug container")}</span>
+                ) : (
+                  <span className="font-mono text-fg-muted">{tt("uid 1000")}</span>
+                )}
               </div>
               <div
                 className={cn("min-h-0 flex-1 bg-term-bg px-3.5 py-2.5", s.state !== "connected" && "opacity-45")}
@@ -364,7 +397,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                   onResize={(c, r) => setSize((m) => (m[s.id] === `${c}×${r}` ? m : { ...m, [s.id]: `${c}×${r}` }))}
                   onExit={(code, error) => onExit(s.id, code, error)}
                   connection={s.connection ?? 0}
-                  target={backend ? { cluster: s.cluster, namespace: s.namespace, pod: s.pod, container: s.container } : undefined}
+                  target={backend ? { cluster: s.cluster, namespace: s.namespace, pod: s.pod, container: s.container, command: s.command } : undefined}
                   onLeave={() => (document.querySelector('[role="tab"][aria-selected="true"]') as HTMLElement | null)?.focus()}
                 />
               </div>

@@ -16,15 +16,18 @@ import {
   Plus,
   Search,
   WrapText,
+  X,
 } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
-import { backend, EVENTS, onEvent, type LogBatch } from "@/backend/client";
+import { backend, EVENTS, onEvent, type LogBatch, type LogSourceSpec } from "@/backend/client";
+import type { DeploymentRow, PodRow } from "@/data/types";
 import { useLogLineLimit } from "./budget";
 import { usePersistentState } from "@/app/preferences";
 import {
   checkoutSources,
   initialBuffer,
   nextLines,
+  podTag,
   previousInstance,
   type LogLine,
   type LogSource,
@@ -48,11 +51,41 @@ import {
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { cn } from "@/lib/cn";
 import { LogView, TagChip } from "./LogView";
+import { AddSourceDialog } from "./AddSourceDialog";
 import { t as tt } from "@/i18n";
 
 const RANGES = ["5m", "15m", "1h", "6h", "all"] as const;
 const RANGE_SECONDS: Record<(typeof RANGES)[number], number> = { "5m": 300, "15m": 900, "1h": 3600, "6h": 21600, all: 0 };
-const TAGS: SourceTag[] = ["A", "B", "C", "D"];
+/** Split view shows at most this many pods side by side. */
+const SPLIT_MAX = 6;
+/** Pod owners the backend can turn into a selector (internal/kube/logsources.go). */
+const WORKLOAD_KINDS = new Set(["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job"]);
+
+const clockOf = (iso?: string) => (iso ? new Date(iso).toTimeString().slice(0, 8) : undefined);
+
+/**
+ * What a Logs tab follows on the desktop: its selector, its workload (found
+ * through the Deployment list or the pods' owner), or the one pod.
+ */
+export function initialSpecs(params: Record<string, string> | undefined, cluster: string | undefined, pods: PodRow[], deployments: DeploymentRow[]): LogSourceSpec[] {
+  const p = params ?? {};
+  const namespace = p.namespace ?? "";
+  if (p.selector) return [{ namespace, selector: p.selector }];
+  if (p.kind && p.workload) return [{ namespace, workload: `${p.kind}/${p.workload}` }];
+  if (p.workload) {
+    if (deployments.some((d) => d.cluster === cluster && d.namespace === namespace && d.name === p.workload)) return [{ namespace, workload: `Deployment/${p.workload}` }];
+    const owned = pods.find((x) => x.cluster === cluster && x.namespace === namespace && x.owner?.name === p.workload);
+    if (owned?.owner && WORKLOAD_KINDS.has(owned.owner.kind)) return [{ namespace, workload: `${owned.owner.kind}/${p.workload}` }];
+  }
+  const pod = p.pod ?? p.workload;
+  return pod ? [{ namespace, pods: [pod] }] : [];
+}
+
+function specLabel(s: LogSourceSpec): string {
+  if (s.workload) return s.workload;
+  if (s.selector) return s.selector;
+  return s.pods?.length === 1 ? `Pod/${s.pods[0]}` : tt("{n} pods", { n: s.pods?.length ?? 0 });
+}
 
 /**
  * Logs of a workload's pods: merged by timestamp or split per pod, follow
@@ -67,19 +100,18 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   // The per-stream buffer, lowered when many log tabs share Settings › Total log memory.
   const bufferLimit = useLogLineLimit(tab.id, bufferSetting);
 
-  // Desktop: the workload's pods (attention first), at most four sources. Mock: the checkout-api design.
-  const desktopPods = useMemo(() => {
-    if (!backend) return [];
-    return ws.allPods
-      .filter((p) => p.cluster === tab.cluster && p.namespace === namespace && (p.owner?.name === workload || p.name === workload || p.name === tab.params?.pod))
-      .sort((a, b) => Number(b.health !== "healthy") - Number(a.health !== "healthy") || a.name.localeCompare(b.name))
-      .slice(0, TAGS.length);
-  }, [backend ? ws.allPods.length : 0, tab.cluster, namespace, workload]);
-  const podsKey = desktopPods.map((p) => p.name).join(",");
-  const [sources, setSources] = useState<LogSource[]>(() =>
-    backend ? desktopPods.map((p, i) => ({ tag: TAGS[i]!, pod: p.name, containers: [], state: "live" })) : checkoutSources,
-  );
-  const [enabled, setEnabled] = useState<Set<SourceTag>>(() => (backend ? new Set(TAGS) : new Set(["A", "B", "C"])));
+  const [maxPods] = usePersistentState("logs.maxPods", 30);
+  // Desktop: what the stream follows; "Add source" appends, a source's × removes it. Mock: the checkout-api design.
+  const [specs, setSpecs] = useState<LogSourceSpec[]>(() => (backend ? initialSpecs(tab.params, tab.cluster, ws.allPods, ws.deployments) : []));
+  const specsKey = JSON.stringify(specs);
+  const [followNew, setFollowNew] = useState(true);
+  const [hideLeft, setHideLeft] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [counts, setCounts] = useState({ matched: 0, skipped: 0 });
+  const [sources, setSources] = useState<LogSource[]>(() => (backend ? [] : checkoutSources));
+  // Sources are on unless turned off, so pods that join show up.
+  const [disabled, setDisabled] = useState<Set<SourceTag>>(() => (backend ? new Set() : new Set(["D"])));
+  const isOn = (tag: SourceTag) => !disabled.has(tag);
   const [containers, setContainers] = useState<Record<string, Set<string>>>(
     (): Record<string, Set<string>> => (backend ? {} : { A: new Set(["api"]), B: new Set(["api"]), C: new Set(["api"]), D: new Set(["api"]) }),
   );
@@ -105,12 +137,27 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const [pausedAt, setPausedAt] = useState<{ count: number; time: string } | null>(backend ? null : { count: buffer.current.length, time: "12:01:17" });
   const nextId = useRef(buffer.current.length);
 
-  // Desktop: one backend stream for all sources; restarted when the instance or range changes.
+  // Desktop: one backend stream for all sources; restarted when the sources, instance or range change.
   useEffect(() => {
-    if (!backend || !tab.cluster || !desktopPods.length) return;
+    if (!backend || !tab.cluster || !specs.length) return;
     const api = backend;
-    const tagOf = new Map(desktopPods.map((p, i) => [p.name, TAGS[i]!]));
-    setSources(desktopPods.map((p, i) => ({ tag: TAGS[i]!, pod: p.name, containers: [], state: "live" })));
+    // Tags stay with a pod for the life of the stream: ns/pod → tag.
+    const tagOf = new Map<string, SourceTag>();
+    const taken = new Set<string>();
+    const tagFor = (ns: string, pod: string): SourceTag => {
+      const key = `${ns}/${pod}`;
+      let tag = tagOf.get(key);
+      if (!tag) {
+        tag = pod ? podTag(pod, taken) : "!";
+        taken.add(tag);
+        tagOf.set(key, tag);
+      }
+      return tag;
+    };
+    const defaultNs = specs[0]?.namespace ?? namespace;
+    setSources([]);
+    setContainers({});
+    setCounts({ matched: 0, skipped: 0 });
     buffer.current = [];
     nextId.current = 0;
     setDropped(0);
@@ -119,12 +166,33 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
     let stopped = false;
     const early: LogBatch[] = [];
     const ingest = (b: LogBatch) => {
+      if (b.pods) {
+        const members = b.pods;
+        setSources((ss) => {
+          const prev = new Map(ss.map((x) => [`${x.namespace}/${x.pod}`, x]));
+          return members.map((m) => {
+            const old = prev.get(`${m.namespace}/${m.pod}`);
+            const left = m.state === "left";
+            return {
+              tag: tagFor(m.namespace, m.pod),
+              pod: m.pod,
+              namespace: m.namespace,
+              containers: old?.containers ?? [],
+              state: left ? "left" : old && old.state !== "left" ? old.state : "live",
+              note: left ? m.reason : old?.note,
+              revision: m.revision,
+              joined: m.initial ? undefined : clockOf(m.joined),
+              left: clockOf(m.left),
+            };
+          });
+        });
+      }
+      if (b.matched !== undefined) setCounts((c) => (c.matched === b.matched && c.skipped === (b.skipped ?? 0) ? c : { matched: b.matched ?? 0, skipped: b.skipped ?? 0 }));
       const seen: Record<string, Set<string>> = {};
-      const lines = b.lines.flatMap<LogLine>((l) => {
-        const tag = tagOf.get(l.pod);
-        if (!tag) return [];
-        (seen[tag] ??= new Set()).add(l.container);
-        return [{ id: nextId.current++, ts: l.ts, tag, container: l.container, level: l.level, msg: l.msg, event: l.event ? { health: l.event } : undefined }];
+      const lines = b.lines.map<LogLine>((l) => {
+        const tag = tagFor(l.namespace ?? defaultNs, l.pod);
+        if (l.container) (seen[tag] ??= new Set()).add(l.container);
+        return { id: nextId.current++, ts: l.ts, tag, container: l.container, level: l.level, msg: l.msg, event: l.event ? { health: l.event } : undefined };
       });
       const buf = buffer.current;
       buf.push(...lines);
@@ -149,15 +217,17 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           return changed ? next : cur;
         });
       }
-      setSources((ss) =>
-        ss.map((src) => {
-          const states = (b.states ?? []).filter((st) => st.pod === src.pod);
-          const names = [...new Set([...src.containers, ...states.map((st) => st.container), ...(seen[src.tag] ?? [])])];
-          if (!states.length) return names.length === src.containers.length ? src : { ...src, containers: names };
-          const state = states.some((st) => st.state === "live") ? "live" : states.some((st) => st.state === "reconnecting") ? "reconnecting" : "ended";
-          return { ...src, containers: names, state, note: states.find((st) => st.note)?.note };
-        }),
-      );
+      if (b.states?.length || Object.keys(seen).length) {
+        setSources((ss) =>
+          ss.map((src) => {
+            const states = (b.states ?? []).filter((st) => st.pod === src.pod && (st.namespace ?? defaultNs) === src.namespace);
+            const names = [...new Set([...src.containers, ...states.map((st) => st.container), ...(seen[src.tag] ?? [])])];
+            if (!states.length || src.state === "left") return names.length === src.containers.length ? src : { ...src, containers: names };
+            const state = states.some((st) => st.state === "live") ? "live" : states.some((st) => st.state === "reconnecting") ? "reconnecting" : "ended";
+            return { ...src, containers: names, state, note: states.find((st) => st.note)?.note };
+          }),
+        );
+      }
       setVersion((v) => v + 1);
     };
     const off = onEvent<LogBatch>(EVENTS.logs, (b) => {
@@ -167,12 +237,15 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
     void api
       .startLogs({
         cluster: tab.cluster,
-        namespace,
-        pods: desktopPods.map((p) => p.name),
+        namespace: defaultNs,
+        pods: [],
+        sources: specs,
         containers: [],
         previous: instance === "previous",
         sinceSeconds: RANGE_SECONDS[range],
         tailLines: range === "all" ? 10_000 : 0,
+        maxPods,
+        followNew,
       })
       .then((id) => {
         if (stopped) return void api.stopLogs(id);
@@ -184,7 +257,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       off();
       if (streamId) void api.stopLogs(streamId);
     };
-  }, [podsKey, instance, range, tab.cluster]);
+  }, [specsKey, instance, range, tab.cluster, followNew, maxPods]);
 
   useEffect(() => {
     if (backend) return;
@@ -228,14 +301,16 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const visibleCount = paused && pausedAt ? Math.min(pausedAt.count, buffer.current.length) : buffer.current.length;
   const lines = useMemo(() => {
     const src =
-      instance === "previous" && !backend ? [...enabled].flatMap((t) => previousInstance(t)) : buffer.current.slice(0, visibleCount);
+      instance === "previous" && !backend ? sources.filter((x) => isOn(x.tag)).flatMap((x) => previousInstance(x.tag)) : buffer.current.slice(0, visibleCount);
+    const gone = hideLeft ? new Set(sources.filter((x) => x.state === "left").map((x) => x.tag)) : null;
     return src.filter(
       (l) =>
-        enabled.has(l.tag) &&
+        !disabled.has(l.tag) &&
+        !gone?.has(l.tag) &&
         (l.event || containers[l.tag]?.has(l.container)) &&
         (!onlyMatching || !matcher || l.event || (matcher.lastIndex = 0, matcher.test(l.msg))),
     );
-  }, [version, visibleCount, enabled, containers, instance, onlyMatching, matcher]);
+  }, [version, visibleCount, disabled, containers, instance, onlyMatching, matcher, hideLeft, sources]);
 
   const matches = useMemo(() => {
     if (!matcher) return [];
@@ -276,9 +351,12 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
     URL.revokeObjectURL(url);
   };
 
-  const live = sources.filter((s) => enabled.has(s.tag) && s.state === "live").length;
-  const reconnecting = sources.filter((s) => enabled.has(s.tag) && s.state === "reconnecting");
-  const ended = sources.filter((s) => enabled.has(s.tag) && s.state === "ended");
+  const live = sources.filter((s) => isOn(s.tag) && s.state === "live").length;
+  const reconnecting = sources.filter((s) => isOn(s.tag) && s.state === "reconnecting");
+  const ended = sources.filter((s) => isOn(s.tag) && s.state === "ended");
+  const leftCount = sources.filter((s) => s.state === "left").length;
+  const following = sources.length - leftCount;
+  const splitTags = sources.filter((s) => isOn(s.tag) && !(hideLeft && s.state === "left")).map((s) => s.tag).slice(0, SPLIT_MAX);
   // ~260 bytes per buffered line.
   const bytes = ((buffer.current.length * 260) / 1e6).toFixed(1);
   const sourceOf = (tag: SourceTag) => sources.find((s) => s.tag === tag);
@@ -288,35 +366,65 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       <aside aria-label={tt("Log sources")} className="flex w-[264px] shrink-0 flex-col gap-2.5 overflow-y-auto border-r border-line bg-surface-panel px-2.5 py-3">
         <div className="flex items-center px-1">
           <span className="section-label flex-1">{tt("Sources")}</span>
-          <Button size="sm" variant="ghost" disabled title={tt("Adding other workloads is not implemented in this build.")}>
-            <Plus aria-hidden />{tt("Add")}</Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!backend || !tab.cluster}
+            title={backend ? undefined : tt("Sources come from your clusters in the desktop app.")}
+            onClick={() => setAdding(true)}
+          >
+            <Plus aria-hidden />{tt("Add source")}</Button>
         </div>
         <div className="flex flex-col gap-0.5 rounded-lg border border-line p-2">
-          <div className="flex items-center gap-1.5 text-ui">
-            <Layers className="size-3.5 text-fg-muted" aria-hidden />
-            <span className="truncate font-mono font-semibold">{workload}</span>
-            {cluster && <EnvironmentBadge env={cluster.env} className="ml-auto" />}
-          </div>
+          {backend ? (
+            specs.map((sp, i) => (
+              <div key={`${i}:${specLabel(sp)}`} className="flex items-center gap-1.5 text-ui">
+                <Layers className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
+                <span className="min-w-0 flex-1 truncate font-mono font-semibold" title={`${sp.namespace} · ${specLabel(sp)}`}>
+                  {specLabel(sp)}
+                </span>
+                {i === 0 && cluster && <EnvironmentBadge env={cluster.env} />}
+                {specs.length > 1 && (
+                  <IconButton aria-label={tt("Remove source {v0}", { v0: specLabel(sp) })} className="size-5 [&_svg]:size-3" onClick={() => setSpecs(specs.filter((_, j) => j !== i))}>
+                    <X />
+                  </IconButton>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="flex items-center gap-1.5 text-ui">
+              <Layers className="size-3.5 text-fg-muted" aria-hidden />
+              <span className="truncate font-mono font-semibold">{workload}</span>
+              {cluster && <EnvironmentBadge env={cluster.env} className="ml-auto" />}
+            </div>
+          )}
           <span className="pb-1.5 pl-5 text-meta text-fg-muted">
-            {namespace} · {tab.cluster} · {sources.length}{" "}{tt("pods")}</span>
+            {[...new Set(backend ? specs.map((sp) => sp.namespace) : [namespace])].join(", ")} · {tab.cluster} ·{" "}
+            {backend ? tt("following {n} of {m} pods", { n: following, m: Math.max(counts.matched, following) }) : tt("{n} pods", { n: sources.length })}
+            {counts.skipped > 0 && <span className="text-status-warning">{" · "}{tt("{n} skipped (limit {max})", { n: counts.skipped, max: maxPods })}</span>}
+          </span>
+          {backend && sources.length === 0 && <span className="pl-5 text-meta text-fg-muted">{tt("Waiting for matching pods…")}</span>}
           {sources.map((s) => (
             <div key={s.tag}>
-              <label className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 text-ui">
+              <label className={cn("flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 text-ui", s.state === "left" && "opacity-60")}>
                 <Checkbox
-                  checked={enabled.has(s.tag)}
+                  checked={isOn(s.tag)}
                   aria-label={tt("Include {pod}", { pod: s.pod })}
                   onCheckedChange={(on) => {
-                    const next = new Set(enabled);
-                    if (on) next.add(s.tag);
-                    else next.delete(s.tag);
-                    setEnabled(next);
+                    const next = new Set(disabled);
+                    if (on) next.delete(s.tag);
+                    else next.add(s.tag);
+                    setDisabled(next);
                   }}
                 />
                 <TagChip tag={s.tag} />
-                <span className={cn("min-w-0 flex-1 truncate font-mono", !enabled.has(s.tag) && "text-fg-secondary")}>…{s.pod.split("-").pop()}</span>
-                <StreamState source={s} enabled={enabled.has(s.tag)} />
+                <span className={cn("min-w-0 flex-1 truncate font-mono", !isOn(s.tag) && "text-fg-secondary")} title={[s.pod, s.revision && `rev ${s.revision}`, s.joined && tt("joined {time}", { time: s.joined })].filter(Boolean).join(" · ")}>
+                  {s.tag.length > 1 ? <span className="text-fg-muted">{s.pod.slice(0, Math.max(0, s.pod.length - s.tag.length))}</span> : "…"}
+                  {s.tag.length > 1 ? s.tag : s.pod.split("-").pop()}
+                </span>
+                <StreamState source={s} enabled={isOn(s.tag)} />
               </label>
-              {enabled.has(s.tag) && (
+              {isOn(s.tag) && s.state !== "left" && s.containers.length > 1 && (
                 <div className="flex gap-1 pb-1.5 pl-[50px]">
                   {s.containers.map((c) => {
                     const on = containers[s.tag]?.has(c);
@@ -345,6 +453,18 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
             </div>
           ))}
         </div>
+        {backend && (
+          <div className="flex flex-col gap-1.5 px-1">
+            <label className="flex items-center gap-2 text-ui text-fg-secondary">
+              <Checkbox checked={followNew} aria-label={tt("Follow pods that start later")} onCheckedChange={(on) => setFollowNew(on === true)} />
+              {tt("Follow pods that start later")}
+            </label>
+            <label className="flex items-center gap-2 text-ui text-fg-secondary">
+              <Checkbox checked={hideLeft} aria-label={tt("Hide lines of pods that left")} onCheckedChange={(on) => setHideLeft(on === true)} />
+              {tt("Hide lines of pods that left")}
+            </label>
+          </div>
+        )}
         <div className="flex flex-col gap-1.5 px-1">
           <span className="section-label">{tt("Container instance")}</span>
           <Segmented
@@ -517,6 +637,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
             <LogView
               label={tt("Merged log stream")}
               lines={lines}
+              tagWidth={backend ? 52 : 22}
               showTimestamps={showTs}
               wrap={wrap}
               matcher={matcher}
@@ -528,8 +649,8 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
               scrollToId={currentMatch}
             />
           ) : (
-            <div className="grid min-h-0 flex-1 gap-px bg-line" style={{ gridTemplateColumns: `repeat(${Math.max(1, enabled.size)}, minmax(0, 1fr))` }}>
-              {[...enabled].sort().map((tag) => (
+            <div className="grid min-h-0 flex-1 gap-px bg-line" style={{ gridTemplateColumns: `repeat(${Math.max(1, splitTags.length)}, minmax(0, 1fr))` }}>
+              {splitTags.map((tag) => (
                 <div key={tag} className="flex min-h-0 flex-col bg-term-bg">
                   <div className="flex h-7 shrink-0 items-center gap-1.5 border-b border-line px-3 font-mono text-ui text-fg-secondary">
                     <TagChip tag={tag} />
@@ -538,6 +659,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
                   <LogView
                     label={tt("Logs of {v0}", { v0: sourceOf(tag)?.pod })}
                     lines={lines.filter((l) => l.tag === tag)}
+                    tagWidth={backend ? 52 : 22}
                     showTimestamps={showTs}
                     wrap={wrap}
                     matcher={matcher}
@@ -584,10 +706,21 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
               {s.note ? ` · ${s.note}` : ""})
             </span>
           ))}
+          {leftCount > 0 && <span>{tt("{n} left", { n: leftCount })}</span>}
+          {counts.skipped > 0 && <span className="text-status-warning">{tt("{n} pods not followed (limit {max})", { n: counts.skipped, max: maxPods })}</span>}
           <div className="flex-1" />
           <span className="hidden min-[1360px]:inline">{tt("Search scans the {v0} buffered lines · ‘Fetch full log’ reads more from the API", { v0: buffer.current.length.toLocaleString() })}</span>
         </div>
       </main>
+      {adding && tab.cluster && (
+        <AddSourceDialog
+          cluster={tab.cluster}
+          namespace={specs[0]?.namespace ?? namespace}
+          maxPods={maxPods}
+          onAdd={(spec) => setSpecs((cur) => [...cur, spec])}
+          onClose={() => setAdding(false)}
+        />
+      )}
     </div>
   );
 }
@@ -602,6 +735,7 @@ function StreamState({ source, enabled }: { source: LogSource; enabled: boolean 
     reconnecting: <span className="text-label text-status-warning">{tt("reconnecting")}</span>,
     ended: <span className="text-label text-fg-muted">{tt("ended · back-off")}</span>,
     off: <span className="text-meta text-fg-muted">{tt("off")}</span>,
+    left: <span className="text-label text-fg-muted" title={source.note}>{source.left ? tt("left {time}", { time: source.left }) : tt("left")}</span>,
   };
   return <>{map[source.state]}</>;
 }

@@ -29,6 +29,7 @@ type Manager struct {
 	attempts map[string]int
 	streams  streams
 	forwards forwards
+	shells   nodeShells
 	lists    listWatches
 	// StreamPods sends pods through the streaming hub instead of delta events (set by the app).
 	StreamPods bool

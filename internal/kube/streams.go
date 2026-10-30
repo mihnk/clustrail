@@ -29,26 +29,36 @@ const (
 )
 
 type LogsRequest struct {
-	Cluster      string   `json:"cluster"`
-	Namespace    string   `json:"namespace"`
-	Pods         []string `json:"pods"`
-	Containers   []string `json:"containers"`
-	Previous     bool     `json:"previous"`
-	SinceSeconds int64    `json:"sinceSeconds"`
-	TailLines    int64    `json:"tailLines"`
+	Cluster   string   `json:"cluster"`
+	Namespace string   `json:"namespace"`
+	Pods      []string `json:"pods"`
+	// Sources replace Namespace and Pods when set: workloads, label selectors
+	// and pods, each in its own namespace (logsources.go).
+	Sources      []LogSourceSpec `json:"sources,omitempty"`
+	Containers   []string        `json:"containers"`
+	Previous     bool            `json:"previous"`
+	SinceSeconds int64           `json:"sinceSeconds"`
+	TailLines    int64           `json:"tailLines"`
+	// MaxPods caps the pods followed at once (default 30); the newest win.
+	MaxPods int `json:"maxPods,omitempty"`
+	// FollowNew adds pods that start matching a selector after the stream began.
+	FollowNew bool `json:"followNew,omitempty"`
 }
 
 type LogLine struct {
+	Namespace string `json:"namespace,omitempty"`
 	Pod       string `json:"pod"`
 	Container string `json:"container"`
 	TS        string `json:"ts"`
 	Level     string `json:"level"`
 	Msg       string `json:"msg"`
-	// Event marks an inline marker (stream end, reconnect) with its health.
+	// Event marks an inline marker (stream end, reconnect) with its health,
+	// or "joined"/"left" when a pod starts or stops being followed.
 	Event string `json:"event,omitempty"`
 }
 
 type LogSourceState struct {
+	Namespace string `json:"namespace,omitempty"`
 	Pod       string `json:"pod"`
 	Container string `json:"container"`
 	State     string `json:"state"` // live · reconnecting · ended
@@ -59,6 +69,11 @@ type LogBatch struct {
 	ID     string           `json:"id"`
 	Lines  []LogLine        `json:"lines"`
 	States []LogSourceState `json:"states,omitempty"`
+	// Pods is every pod the stream has followed, sent when it changes.
+	Pods []LogPod `json:"pods,omitempty"`
+	// Matched and Skipped count the pods the sources match and those left out by MaxPods.
+	Matched int `json:"matched,omitempty"`
+	Skipped int `json:"skipped,omitempty"`
 }
 
 var levelRe = regexp.MustCompile(`\b(ERROR|ERR|FATAL|PANIC|WARN|WARNING|INFO|DEBUG)\b`)
@@ -97,6 +112,11 @@ type logStream struct {
 	lines   []LogLine
 	states  map[string]LogSourceState
 	dirty   bool
+	// Membership (logsources.go): ns/pod → the pod's entry and its followers.
+	pods      map[string]*followedPod
+	podsDirty bool
+	matched   int
+	skipped   int
 }
 
 type streams struct {
@@ -113,34 +133,30 @@ func (s *streams) next(prefix string) string {
 	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixMilli(), s.seq)
 }
 
-// StartLogs follows the logs of several pods (all containers unless listed).
-// Each container is its own stream; when one ends (container restart), it
-// reconnects to the new instance and an inline marker says so.
+// StartLogs follows the logs of pods (all containers unless listed): fixed
+// pods, or every pod a workload or label selector matches, joining and
+// leaving as pods come and go. Each container is its own stream; when one ends
+// (container restart), it reconnects to the new instance and an inline marker
+// says so.
 func (m *Manager) StartLogs(req LogsRequest) (string, error) {
 	c, err := m.conn(req.Cluster)
 	if err != nil {
 		return "", err
 	}
+	if len(req.Sources) == 0 {
+		req.Sources = []LogSourceSpec{{Namespace: req.Namespace, Pods: req.Pods}}
+	}
+	if req.MaxPods <= 0 {
+		req.MaxPods = defaultMaxLogPods
+	}
 	id := m.streams.next("logs")
 	ctx, cancel := context.WithCancel(c.ctx)
-	ls := &logStream{id: id, cluster: req.Cluster, cancel: cancel, states: map[string]LogSourceState{}}
+	ls := &logStream{id: id, cluster: req.Cluster, cancel: cancel, states: map[string]LogSourceState{}, pods: map[string]*followedPod{}}
 	m.streams.mu.Lock()
 	m.streams.logs[id] = ls
 	m.streams.mu.Unlock()
 
-	for _, podName := range req.Pods {
-		pod, err := c.client.CoreV1().Pods(req.Namespace).Get(ctx, podName, metav1.GetOptions{})
-		if err != nil {
-			ls.add(LogLine{Pod: podName, Msg: "cannot read pod: " + err.Error(), Event: "failed"})
-			continue
-		}
-		for _, ct := range pod.Spec.Containers {
-			if len(req.Containers) > 0 && !contains(req.Containers, ct.Name) {
-				continue
-			}
-			go m.followContainer(ctx, c, ls, req, podName, ct.Name)
-		}
-	}
+	go m.followSources(ctx, c, ls, req)
 	go func() {
 		t := time.NewTicker(logFlushInterval)
 		defer t.Stop()
@@ -154,15 +170,6 @@ func (m *Manager) StartLogs(req LogsRequest) (string, error) {
 		}
 	}()
 	return id, nil
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 func (ls *logStream) add(l LogLine) {
@@ -181,7 +188,7 @@ func (ls *logStream) state(st LogSourceState) {
 
 func (ls *logStream) flush(emit Emitter) {
 	ls.mu.Lock()
-	if !ls.dirty {
+	if !ls.dirty && !ls.podsDirty {
 		ls.mu.Unlock()
 		return
 	}
@@ -197,11 +204,16 @@ func (ls *logStream) flush(emit Emitter) {
 	for _, s := range ls.states {
 		states = append(states, s)
 	}
+	batch := LogBatch{ID: ls.id, Lines: lines, States: states, Matched: ls.matched, Skipped: ls.skipped}
+	if ls.podsDirty {
+		batch.Pods = ls.podList()
+		ls.podsDirty = false
+	}
 	ls.mu.Unlock()
-	emit.Emit(EventLogs, LogBatch{ID: ls.id, Lines: lines, States: states})
+	emit.Emit(EventLogs, batch)
 }
 
-func (m *Manager) followContainer(ctx context.Context, c *clusterConn, ls *logStream, req LogsRequest, pod, container string) {
+func (m *Manager) followContainer(ctx context.Context, c *clusterConn, ls *logStream, req LogsRequest, ns, pod, container string) {
 	opts := &corev1.PodLogOptions{Container: container, Timestamps: true, Follow: !req.Previous, Previous: req.Previous}
 	if req.SinceSeconds > 0 {
 		opts.SinceSeconds = &req.SinceSeconds
@@ -212,8 +224,8 @@ func (m *Manager) followContainer(ctx context.Context, c *clusterConn, ls *logSt
 	var last time.Time
 	restarts := -1
 	for attempt := 0; ctx.Err() == nil; attempt++ {
-		ls.state(LogSourceState{Pod: pod, Container: container, State: "live"})
-		rc, err := c.client.CoreV1().Pods(req.Namespace).GetLogs(pod, opts).Stream(ctx)
+		ls.state(LogSourceState{Namespace: ns, Pod: pod, Container: container, State: "live"})
+		rc, err := c.client.CoreV1().Pods(ns).GetLogs(pod, opts).Stream(ctx)
 		if err == nil {
 			sc := bufio.NewScanner(rc)
 			sc.Buffer(make([]byte, 64*1024), 1024*1024)
@@ -222,22 +234,22 @@ func (m *Manager) followContainer(ctx context.Context, c *clusterConn, ls *logSt
 				if !t.IsZero() {
 					last = t
 				}
-				ls.add(LogLine{Pod: pod, Container: container, TS: t.Local().Format("15:04:05.000"), Level: levelOf(msg), Msg: msg})
+				ls.add(LogLine{Namespace: ns, Pod: pod, Container: container, TS: t.Local().Format("15:04:05.000"), Level: levelOf(msg), Msg: msg})
 			}
 			rc.Close()
 		}
 		if ctx.Err() != nil || req.Previous {
 			if req.Previous && err != nil {
-				ls.add(LogLine{Pod: pod, Container: container, Msg: "No previous instance: " + err.Error(), Event: "unknown"})
+				ls.add(LogLine{Namespace: ns, Pod: pod, Container: container, Msg: "No previous instance: " + err.Error(), Event: "unknown"})
 			}
-			ls.state(LogSourceState{Pod: pod, Container: container, State: "ended"})
+			ls.state(LogSourceState{Namespace: ns, Pod: pod, Container: container, State: "ended"})
 			return
 		}
 		// The stream ended: the container restarted, the pod went away, or the connection dropped.
-		p, perr := c.client.CoreV1().Pods(req.Namespace).Get(ctx, pod, metav1.GetOptions{})
+		p, perr := c.client.CoreV1().Pods(ns).Get(ctx, pod, metav1.GetOptions{})
 		if perr != nil {
-			ls.add(LogLine{Pod: pod, Container: container, TS: time.Now().Format("15:04:05.000"), Msg: "Stream ended · pod is gone", Event: "unknown"})
-			ls.state(LogSourceState{Pod: pod, Container: container, State: "ended", Note: "pod deleted"})
+			ls.state(LogSourceState{Namespace: ns, Pod: pod, Container: container, State: "ended", Note: "pod deleted"})
+			ls.left(ns, pod, "pod deleted")
 			return
 		}
 		for _, cs := range p.Status.ContainerStatuses {
@@ -245,16 +257,16 @@ func (m *Manager) followContainer(ctx context.Context, c *clusterConn, ls *logSt
 				continue
 			}
 			if lt := cs.LastTerminationState.Terminated; lt != nil && int(cs.RestartCount) != restarts && restarts >= 0 {
-				ls.add(LogLine{Pod: pod, Container: container, TS: lt.FinishedAt.Local().Format("15:04:05.000"),
+				ls.add(LogLine{Namespace: ns, Pod: pod, Container: container, TS: lt.FinishedAt.Local().Format("15:04:05.000"),
 					Msg: fmt.Sprintf("Container %s terminated · %s · exit %d · %s", container, orDefault(lt.Reason, "Error"), lt.ExitCode, lt.FinishedAt.Local().Format("15:04:05")), Event: "failed"})
 			}
 			if restarts >= 0 && int(cs.RestartCount) != restarts {
-				ls.add(LogLine{Pod: pod, Container: container, TS: time.Now().Format("15:04:05.000"),
+				ls.add(LogLine{Namespace: ns, Pod: pod, Container: container, TS: time.Now().Format("15:04:05.000"),
 					Msg: fmt.Sprintf("Stream reconnected · new container instance (restart %d) · %s", cs.RestartCount, time.Now().Format("15:04:05")), Event: "progressing"})
 			}
 			restarts = int(cs.RestartCount)
 			if w := cs.State.Waiting; w != nil {
-				ls.state(LogSourceState{Pod: pod, Container: container, State: "reconnecting", Note: w.Reason})
+				ls.state(LogSourceState{Namespace: ns, Pod: pod, Container: container, State: "reconnecting", Note: w.Reason})
 			}
 		}
 		if !last.IsZero() {
@@ -412,4 +424,13 @@ func (m *Manager) CloseExec(id string) {
 		s.cancel()
 		_ = s.stdin.Close()
 	}
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }

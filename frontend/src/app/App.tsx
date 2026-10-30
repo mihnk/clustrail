@@ -21,6 +21,10 @@ import { LogsWorkspace } from "@/features/logs/LogsWorkspace";
 import { ResourceListWorkspace } from "@/features/resources/ResourceListWorkspace";
 import { ResourceDetailWorkspace } from "@/features/resources/ResourceDetailWorkspace";
 import { PortForwardHost } from "@/features/portforward/PortForward";
+import { DebugHost } from "@/features/debug/DebugDialogs";
+import { WarningsWorkspace } from "@/features/insights/WarningsWorkspace";
+import { CertificatesWorkspace } from "@/features/insights/CertificatesWorkspace";
+import { AccessWorkspace } from "@/features/insights/AccessWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
 // xterm.js and Monaco only load when a Shell or YAML tab renders.
@@ -72,6 +76,7 @@ export function App() {
                 <AppShell setupSummary={summary} onSetupTipsClosed={() => setSummary(null)} />
               ) : null}
               <PortForwardHost />
+              <DebugHost />
             </ShortcutsProvider>
           </ConfirmationProvider>
         </TooltipProvider>
@@ -189,6 +194,12 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <HelmWorkspace active={active} />;
     case "gitops":
       return <GitOpsWorkspace active={active} />;
+    case "warnings":
+      return <WarningsWorkspace active={active} />;
+    case "certificates":
+      return <CertificatesWorkspace active={active} />;
+    case "access":
+      return <AccessWorkspace active={active} />;
     case "connections":
       return <ConnectionsWorkspace active={active} />;
     case "settings":

@@ -86,11 +86,34 @@ through one Wails service (`internal/app.Workspace`) and its events.
   through the Eviction API (PDBs respected, refused evictions retried),
   server-side apply with dry run and resourceVersion conflicts, Helm rollback
   with the Helm SDK, Argo CD refresh/sync and Flux reconcile/suspend.
+- **Log sources** (`logsources.go`): a Logs tab follows a workload, a label
+  selector or fixed pods, in any mix. Selector sources are matched again every
+  3 s: pods that start later join the stream and pods that go away leave it,
+  each with an inline marker. At most 30 pods are followed (Settings › Logs),
+  the newest first; the tab says how many were skipped.
 - **Streams** (`streams.go`, `portforward.go`): follow logs per container
   (reconnecting across container restarts), interactive exec over WebSocket
   with SPDY fallback (a dropped shell reconnects with backoff), and port
   forwards to a pod, or a ready pod behind a Service or Deployment, that
   re-resolve the pod and keep their local port when it goes away.
+- **Workloads** (`workloads.go`): StatefulSets and DaemonSets restart like
+  `kubectl rollout restart`; StatefulSets scale through the scale
+  subresource; a CronJob runs now (`kubectl create job --from`, owned by the
+  CronJob) or is suspended and resumed; a Job lists its attempts, one pod per
+  retry, with exit codes and the reason it stopped.
+- **Debugging** (`debug.go`): a debug container is an ephemeral container
+  (`kubectl debug POD`, with `--target` and the same profiles); it cannot be
+  removed, and the dialog says so. A node shell is a privileged pod pinned to
+  the node with the host's PID, network and IPC namespaces and its root at
+  `/host`; it is deleted when the shell closes or Clustrail quits. Read-only
+  contexts offer neither; production and protected contexts ask for the
+  context name.
+- **Checks** (`insights.go`): Warning events across the selected clusters
+  (the context's namespace when RBAC denies cluster-wide); certificates and
+  tokens with an end date (the kubeconfig's client certificate or JWT, the API
+  server's certificate, every `kubernetes.io/tls` Secret; only names and dates
+  leave the backend); and an access matrix per namespace from
+  (Self)SubjectAccessReviews, with the bindings that name the identity.
 - **Update method** (`cluster.go`, `generic_watch.go`): informers and watches by
   default; in poll mode (Settings) every resource is listed every 30 s
   instead. After 5 minutes in the background watches pause and resume with a
@@ -135,6 +158,8 @@ frontend/
   src/features/pods/          Pods explorer and inspector
   src/features/deployments/   Deployments list and restart flow
   src/features/investigation/ Investigation workspace
+  src/features/insights/      Warning events, Certificates, Access
+  src/features/debug/         Debug container and node shell dialogs
   src/features/…               Clusters, Nodes, Logs, Shell, YAML, Compare, Helm, GitOps, Connections, Settings
   src/backend/                Wails client, desktop-mode detection, on-demand data hooks
   src/app/desktop.ts          Snapshot + delta sync and backend actions (desktop mode)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/mihnk/clustrail/internal/kube"
 	"github.com/mihnk/clustrail/internal/streaming"
@@ -54,6 +55,7 @@ func (w *Workspace) ServiceStartup(ctx context.Context, _ application.ServiceOpt
 
 func (w *Workspace) ServiceShutdown() error {
 	if w.m != nil {
+		w.m.CleanupNodeShells()
 		w.m.Shutdown()
 	}
 	return nil
@@ -131,6 +133,72 @@ func (w *Workspace) PreviewDrain(cluster, node string, opts kube.DrainOptions) (
 func (w *Workspace) DrainNode(cluster, node string, opts kube.DrainOptions) (string, error) {
 	job, err := w.m.DrainNode(cluster, node, opts, w.user)
 	return job, audit("drain node", cluster, node, err)
+}
+
+// StatefulSets, DaemonSets, Jobs and CronJobs.
+
+func (w *Workspace) RestartWorkload(cluster, kind, ns, name string) error {
+	return audit("restart "+strings.ToLower(kindName(kind)), cluster, target(ns, name), w.m.RestartWorkload(cluster, kind, ns, name))
+}
+
+func (w *Workspace) ScaleWorkload(cluster, kind, ns, name string, replicas int32) error {
+	return audit(fmt.Sprintf("scale %s to %d", strings.ToLower(kindName(kind)), replicas), cluster, target(ns, name), w.m.ScaleWorkload(cluster, kind, ns, name, replicas))
+}
+
+func (w *Workspace) WorkloadReplicas(cluster, kind, ns, name string) (int32, error) {
+	return w.m.WorkloadReplicas(cluster, kind, ns, name)
+}
+
+func (w *Workspace) TriggerCronJob(cluster, ns, name string) (string, error) {
+	job, err := w.m.TriggerCronJob(cluster, ns, name)
+	return job, audit("run cronjob now", cluster, target(ns, name), err)
+}
+
+func (w *Workspace) SetCronJobSuspended(cluster, ns, name string, suspended bool) error {
+	return audit(fmt.Sprintf("set cronjob suspend=%t", suspended), cluster, target(ns, name), w.m.SetCronJobSuspended(cluster, ns, name, suspended))
+}
+
+func (w *Workspace) JobStatus(cluster, ns, name string) (kube.JobStatus, error) {
+	return w.m.JobStatus(cluster, ns, name)
+}
+
+// Warnings, access and expiry.
+
+func (w *Workspace) ClusterWarnings(cluster string, sinceSec int) (kube.WarningList, error) {
+	return w.m.ClusterWarnings(cluster, sinceSec)
+}
+
+func (w *Workspace) AccessMatrix(cluster string, subject kube.AccessSubject, namespace string) (kube.AccessResult, error) {
+	return w.m.AccessMatrix(cluster, subject, namespace)
+}
+
+func (w *Workspace) Expiry(cluster string) (kube.ExpiryReport, error) { return w.m.Expiry(cluster) }
+
+// Debugging.
+
+func (w *Workspace) AddDebugContainer(req kube.DebugRequest) (kube.DebugContainer, error) {
+	dc, err := w.m.AddDebugContainer(req)
+	_ = audit(fmt.Sprintf("add debug container (image %s, profile %s, target %s)", req.Image, orDash(req.Profile), orDash(req.Target)), req.Cluster, target(req.Namespace, req.Pod), err)
+	return dc, err
+}
+
+func (w *Workspace) StartNodeShell(req kube.NodeShellRequest) (kube.NodeShell, error) {
+	ns, err := w.m.StartNodeShell(req)
+	_ = audit(fmt.Sprintf("start node shell (image %s)", req.Image), req.Cluster, req.Node, err)
+	return ns, err
+}
+
+func (w *Workspace) DeleteNodeShell(cluster, ns, pod string) error {
+	return audit("delete node shell", cluster, target(ns, pod), w.m.DeleteNodeShell(cluster, ns, pod))
+}
+
+func kindName(kind string) string { return kind[strings.LastIndex(kind, "/")+1:] }
+
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
 }
 
 // YAML.

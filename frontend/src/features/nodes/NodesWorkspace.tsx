@@ -1,6 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
-import { Box, Ban, ChevronDown, Code, Filter, Plus, Search, SearchX, Server, Trash2 } from "lucide-react";
+import { Box, Ban, ChevronDown, Code, Filter, Plus, Search, SearchX, Server, SquareTerminal, Trash2 } from "lucide-react";
+import { backend } from "@/backend/client";
+import { openDebug } from "@/features/debug/DebugDialogs";
 import { useWorkspace } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { isAttention } from "@/data/health";
@@ -122,6 +124,14 @@ export function NodesWorkspace({ active }: { active: boolean }) {
           icon: <Code />,
           shortcut: "Y",
           onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${n.name.split(".")[0]}`, cluster: n.cluster, params: { kind: "Node", name: n.name } }),
+        },
+        {
+          id: "shell",
+          group: "observe",
+          label: c?.readOnly ? tt("Node shell · read-only context") : tt("Node shell…"),
+          icon: <SquareTerminal />,
+          disabled: !backend || c?.readOnly || n.health === "failed",
+          onSelect: () => openDebug({ kind: "node", cluster: n.cluster, node: n.name }),
         },
         {
           id: "cordon",

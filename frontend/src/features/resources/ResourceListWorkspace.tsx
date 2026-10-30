@@ -37,6 +37,7 @@ import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { kindName, kubectlResource, listLabel, resourceTab } from "./kinds";
 import { SecretKeys } from "./SecretKeys";
+import { JobAttempts, ScaleDialog, workloadActions, type WorkloadTarget } from "./workloadActions";
 import { t as tt } from "@/i18n";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
@@ -143,6 +144,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [autoHidden, setAutoHidden] = useState<string[]>([]);
   const [deleted, setDeleted] = useState<ReadonlySet<string>>(new Set());
+  const [scaling, setScaling] = useState<WorkloadTarget | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Columns come from the first cluster that answered; other clusters' cells are matched by column name.
@@ -251,16 +253,55 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
   const command = (r: Row, verb: string) =>
     `kubectl --context ${clusterById(r.cluster)?.context ?? r.cluster} ${verb} ${kubectlResource(kind)} ${r.name}${r.namespace ? ` -n ${r.namespace}` : ""}`;
 
+  // A CronJob's SUSPEND column, where the server's table has it.
+  const suspendIndex = columns.findIndex((c) => c.name.toLowerCase() === "suspend");
+  const done = useCallback(
+    (r: Pick<Row, "name" | "cluster" | "env">) => (title: string, detail?: string) => {
+      toast.show({ kind: "success", title, target: `${detail ?? r.name} · ${r.cluster}`, env: r.env });
+      refresh();
+    },
+    [toast, refresh],
+  );
+  const failed = useCallback(
+    (r: Pick<Row, "name" | "cluster">) => (title: string, e: unknown) => toast.show({ kind: "error", title, target: `${r.name} · ${r.cluster}`, detail: errorText(e), copyText: errorText(e) }),
+    [toast],
+  );
+  const workloadTarget = useCallback(
+    (r: Row): WorkloadTarget => {
+      const c = clusterById(r.cluster);
+      return {
+        cluster: r.cluster,
+        env: r.env,
+        protected: c?.protected ?? false,
+        namespace: r.namespace ?? "",
+        name: r.name,
+        context: c?.context ?? r.cluster,
+        suspended: suspendIndex >= 0 ? r.cells[suspendIndex] === "True" : undefined,
+      };
+    },
+    [clusterById, suspendIndex],
+  );
+
   const actionsFor = useCallback(
     (r: Row): ResourceAction[] => {
       const c = clusterById(r.cluster);
       const params = { kind, namespace: r.namespace ?? "", name: r.name };
+      const target = workloadTarget(r);
+      const extra = workloadActions(kind, target, {
+        confirm,
+        openLogs: () => ws.openView({ kind: "logs", title: tt("Logs · {name}", { name: r.name }), cluster: r.cluster, params: { namespace: r.namespace ?? "", workload: r.name, kind: kindName(kind) } }),
+        openScale: () => setScaling(target),
+        done: done(r),
+        failed: failed(r),
+      });
       return [
+        ...extra.filter((a) => a.group === "observe"),
         { id: "open", group: "observe", label: tt("Open in tab"), icon: <PanelTop />, onSelect: () => ws.openView(resourceTab(r.cluster, kind, r.namespace ?? "", r.name)) },
         { id: "yaml", group: "observe", label: tt("View YAML"), icon: <Code />, shortcut: "Y", onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params }) },
         ...(kind === "Service"
           ? [{ id: "forward", group: "observe" as const, label: tt("Port forward…"), icon: <Cable />, onSelect: () => openPortForward({ cluster: r.cluster, namespace: r.namespace ?? "", kind: "Service", name: r.name }) }]
           : []),
+        ...extra.filter((a) => a.group === "modify"),
         { id: "edit", group: "modify", label: tt("Edit YAML…"), icon: <Pencil />, onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params: { ...params, mode: "edit" } }) },
         {
           id: "delete",
@@ -298,7 +339,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         },
       ];
     },
-    [clusterById, confirm, kind, ws, toast],
+    [clusterById, confirm, kind, ws, toast, workloadTarget, done, failed],
   );
 
   const rowActions = useCallback(
@@ -462,6 +503,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
           <GenericInspector row={selected} kind={kind} columns={columns.map((c) => c.name)} actions={actionsFor(selected)} onClose={() => setInspectorOpen(false)} />
         </InspectorPanel>
       )}
+      {scaling && <ScaleDialog kind={kind} target={scaling} onClose={() => setScaling(null)} confirm={confirm} done={done(scaling)} failed={failed(scaling)} />}
     </div>
   );
 }
@@ -515,6 +557,7 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
         <TabsList aria-label={tt("Sections")} className="mt-1 gap-3 px-3.5 pt-1.5">
           <TabsTrigger value="details">{tt("Details")}</TabsTrigger>
           {kind === "Secret" && <TabsTrigger value="data">{tt("Data")}</TabsTrigger>}
+          {kind === "batch/Job" && <TabsTrigger value="attempts">{tt("Attempts")}</TabsTrigger>}
           {!isEvent && (
             <TabsTrigger value="events">{tt("Events")}{" "}{events !== null && <TabCount>{events.length}</TabCount>}
             </TabsTrigger>
@@ -544,6 +587,11 @@ function GenericInspector({ row, kind, columns, actions, onClose }: { row: Row; 
             </div>
           )}
         </TabsContent>
+        {kind === "batch/Job" && (
+          <TabsContent value="attempts" className="min-h-0 flex-1 overflow-y-auto">
+            <JobAttempts cluster={row.cluster} namespace={row.namespace ?? ""} name={row.name} />
+          </TabsContent>
+        )}
         {kind === "Secret" && (
           <TabsContent value="data" className="min-h-0 flex-1 overflow-y-auto px-3.5 py-3">
             <SecretKeys cluster={row.cluster} namespace={row.namespace ?? ""} name={row.name} />

@@ -16,6 +16,9 @@ import {
   Settings,
   SquareTerminal,
   X,
+  TriangleAlert,
+  FileBadge,
+  ShieldCheck,
 } from "lucide-react";
 import { IS_MOCK } from "@/data/mock";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -223,6 +226,12 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
       return <LifeBuoy className={cls} aria-hidden />;
     case "gitops":
       return <GitBranch className={cls} aria-hidden />;
+    case "warnings":
+      return <TriangleAlert className={cls} aria-hidden />;
+    case "certificates":
+      return <FileBadge className={cls} aria-hidden />;
+    case "access":
+      return <ShieldCheck className={cls} aria-hidden />;
     case "connections":
       return <KeyRound className={cls} aria-hidden />;
     case "settings":

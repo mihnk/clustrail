@@ -140,6 +140,44 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       return [];
     case "ForwardablePorts":
       return [{ port: 80, name: "web", detail: "→ http" }];
+    case "ClusterWarnings":
+      return {
+        cluster: args[0],
+        scope: "",
+        events: [
+          { namespace: "payments", kind: "Pod", name: "checkout-api-7d9f8b6c4-x2kqp", reason: "BackOff", message: "Back-off restarting failed container api", count: 14, lastSeen: new Date(Date.now() - 60_000).toISOString(), source: "kubelet" },
+          { namespace: "payments", kind: "Deployment", name: "checkout-api", reason: "ProgressDeadlineExceeded", message: "ReplicaSet has timed out progressing.", count: 1, lastSeen: new Date(Date.now() - 600_000).toISOString() },
+        ],
+      };
+    case "Expiry":
+      return {
+        cluster: args[0],
+        items: [
+          { source: "secret", what: "TLS Secret", namespace: "web", name: "shop-tls", subject: "shop.example.com", issuer: "R11", dnsNames: ["shop.example.com"], notAfter: "2026-11-04T00:00:00Z", daysLeft: 4 },
+          { source: "kubeconfig", what: "Client certificate", subject: "sre-oncall", issuer: "kubernetes", notAfter: "2027-06-01T00:00:00Z", daysLeft: 214 },
+        ],
+        notes: ["API server certificate: dial tcp: i/o timeout"],
+      };
+    case "Namespaces":
+      return ["default", "payments"];
+    case "AccessMatrix": {
+      const verbs = ["get", "list", "watch", "create", "update", "patch", "delete"];
+      const resources = [
+        { group: "", resource: "pods", label: "pods", namespaced: true },
+        { group: "", resource: "secrets", label: "secrets", namespaced: true },
+      ];
+      return {
+        subject: args[1], user: "sre-oncall", groups: ["sre", "system:authenticated"], namespace: args[2], verbs, resources,
+        allowed: [verbs.map((v) => (["get", "list", "watch"].includes(v) ? "yes" : "no")), verbs.map(() => "no")],
+        bindings: [{ kind: "ClusterRoleBinding", name: "sre-view", role: "ClusterRole/view", via: "group sre" }],
+      };
+    }
+    case "AddDebugContainer": {
+      const req = args[0] as { namespace: string; pod: string };
+      return { namespace: req.namespace, pod: req.pod, container: "debugger-k2x9q" };
+    }
+    case "TriggerCronJob":
+      return "nightly-report-manual-10301200123";
     case "StartPortForward": {
       const req = args[0] as { cluster: string; namespace: string; kind: string; name: string; port: number };
       return { id: "pf-1", ...req, localPort: 54321, pod: "checkout-api-7d9f8b6c4-9rkzd", podPort: 8080, state: "active", started: "2026-10-30T00:00:00Z" };
@@ -219,6 +257,8 @@ class FakeStreams {
 export interface FakeBackend {
   /** Backend methods called so far, in order. */
   calls: string[];
+  /** The arguments of each call of a method, in order. */
+  argsOf: (method: string) => unknown[][];
   fixture: typeof fixture;
   /** Dispatches a backend event (clustrail:delta, clustrail:logs, …). */
   emit: (name: string, data: unknown) => Promise<void>;
@@ -253,6 +293,7 @@ export async function openDesktop(page: Page, opts: FakeOptions = {}): Promise<F
     (d as { clusters: unknown[] }).clusters = opts.clusters;
   }
   const calls: string[] = [];
+  const callArgs: { method: string; args: unknown[] }[] = [];
   const errors: string[] = [];
   let lists = 0;
   const watches = new Map<string, string>();
@@ -266,6 +307,7 @@ export async function openDesktop(page: Page, opts: FakeOptions = {}): Promise<F
     const method = body.args.methodName.split(".").pop()!;
     const args = body.args.args ?? [];
     calls.push(method);
+    callArgs.push({ method, args });
     if (method === "GetObject" && args[3] === "my-cronjob") return route.fulfill({ status: 500, contentType: "text/plain", body: 'cronjobs "my-cronjob" not found' });
     if (method === "StartListWatch") {
       // A watch: the id comes back first, then the backend's first update (a reset with every row).
@@ -300,6 +342,7 @@ export async function openDesktop(page: Page, opts: FakeOptions = {}): Promise<F
   await page.goto("/?backend=1");
   return {
     calls,
+    argsOf: (method: string) => callArgs.filter((c) => c.method === method).map((c) => c.args),
     errors,
     fixture: d.fx,
     emit,

@@ -136,6 +136,7 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
   const [scrollback, setScrollback] = usePersistentState("terminal.scrollback", 10_000);
   const [logTimestamps, setLogTimestamps] = usePersistentState("logs.timestamps", true);
   const [logWrap, setLogWrap] = usePersistentState("logs.wrap", false);
+  const [logMaxPods, setLogMaxPods] = usePersistentState("logs.maxPods", 30);
   const [repos, setRepos] = usePersistentState<HelmRepo[]>("settings.helmRepos", DEFAULT_REPOS);
   const [telemetry, setTelemetry] = usePersistentState("settings.telemetry", false);
   const [crashReports, setCrashReports] = usePersistentState<"ask" | "never" | "always">("settings.crashReports", "ask");
@@ -407,6 +408,11 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
           {show("log buffer per stream", "lines") && (
             <Setting label={tt("Log buffer per stream")} detail={tt("Oldest lines are dropped when full; the footer shows how many.")}>
               <NumberField label={tt("Log buffer per stream")} value={logBuffer} onChange={setLogBuffer} min={1000} max={1_000_000} />
+            </Setting>
+          )}
+          {show("pods per log stream", "selector") && (
+            <Setting label={tt("Pods per log stream")} detail={tt("A workload or label selector follows at most this many pods; when more match, the newest are followed.")}>
+              <NumberField label={tt("Pods per log stream")} value={logMaxPods} onChange={setLogMaxPods} min={1} max={100} />
             </Setting>
           )}
           {show("total log memory") && (

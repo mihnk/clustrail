@@ -228,29 +228,58 @@ export interface PortForwardInfo {
   started: string;
 }
 
+/** A log source: a workload ("Deployment/api"), a label selector or fixed pods, in one namespace. */
+export interface LogSourceSpec {
+  namespace: string;
+  workload?: string;
+  selector?: string;
+  pods?: string[];
+}
+
 export interface LogsRequest {
   cluster: string;
   namespace: string;
   pods: string[];
+  /** Replace namespace/pods when set. */
+  sources?: LogSourceSpec[];
   containers: string[];
   previous: boolean;
   sinceSeconds: number;
   tailLines: number;
+  /** At most this many pods are followed (default 30); the newest win. */
+  maxPods?: number;
+  /** Pods that start matching a selector later join the stream. */
+  followNew?: boolean;
 }
 
 export interface BackendLogLine {
+  namespace?: string;
   pod: string;
   container: string;
   ts: string;
   level: "INFO" | "WARN" | "ERROR" | "";
   msg: string;
-  event?: "failed" | "progressing" | "unknown";
+  event?: "failed" | "progressing" | "unknown" | "joined" | "left";
+}
+
+export interface LogPodInfo {
+  namespace: string;
+  pod: string;
+  state: "following" | "left";
+  joined?: string;
+  left?: string;
+  reason?: string;
+  revision?: string;
+  initial: boolean;
 }
 
 export interface LogBatch {
   id: string;
   lines: BackendLogLine[];
-  states?: { pod: string; container: string; state: "live" | "reconnecting" | "ended"; note?: string }[];
+  states?: { namespace?: string; pod: string; container: string; state: "live" | "reconnecting" | "ended"; note?: string }[];
+  pods?: LogPodInfo[];
+  matched?: number;
+  skipped?: number;
 }
 
 export interface ExecRequest {
@@ -268,6 +297,111 @@ export interface ExecOutput {
   data?: string;
   exit?: number;
   error?: string;
+}
+
+// Workloads (internal/kube/workloads.go).
+export interface JobAttempt {
+  pod: string;
+  phase: string;
+  health: "failed" | "progressing" | "completed" | "unknown";
+  reason?: string;
+  exitCode?: number;
+  started?: string;
+  duration?: string;
+  node?: string;
+}
+
+export interface JobStatus {
+  succeeded: number;
+  failed: number;
+  active: number;
+  completions: number;
+  backoffLimit: number;
+  condition?: string;
+  reason?: string;
+  message?: string;
+  attempts: JobAttempt[];
+  missing: number;
+}
+
+// Warnings, access and expiry (internal/kube/insights.go).
+export interface WarningEvent {
+  namespace?: string;
+  kind: string;
+  name: string;
+  reason: string;
+  message: string;
+  count: number;
+  firstSeen?: string;
+  lastSeen: string;
+  source?: string;
+}
+
+export interface WarningList {
+  cluster: string;
+  scope: string;
+  events: WarningEvent[];
+}
+
+export interface AccessSubject {
+  kind: "" | "User" | "Group" | "ServiceAccount";
+  name: string;
+  namespace?: string;
+}
+
+export interface AccessResult {
+  subject: AccessSubject;
+  user: string;
+  groups: string[];
+  namespace: string;
+  verbs: string[];
+  resources: { group: string; resource: string; subresource?: string; label: string; namespaced: boolean }[];
+  allowed: ("yes" | "no" | "n/a" | "error")[][];
+  bindings: { kind: string; name: string; namespace?: string; role: string; via: string }[];
+  bindingsNote?: string;
+}
+
+export interface ExpiryItem {
+  source: "kubeconfig" | "apiserver" | "secret";
+  what: string;
+  namespace?: string;
+  name?: string;
+  subject?: string;
+  issuer?: string;
+  dnsNames?: string[];
+  notAfter: string;
+  daysLeft: number;
+}
+
+export interface ExpiryReport {
+  cluster: string;
+  items: ExpiryItem[];
+  notes: string[];
+}
+
+// Debugging (internal/kube/debug.go).
+export interface DebugRequest {
+  cluster: string;
+  namespace: string;
+  pod: string;
+  image: string;
+  target: string;
+  profile: string;
+  command: string[];
+}
+
+export interface NodeShellRequest {
+  cluster: string;
+  node: string;
+  namespace: string;
+  image: string;
+}
+
+export interface NodeShellInfo {
+  namespace: string;
+  pod: string;
+  container: string;
+  command: string[];
 }
 
 // First-run setup (internal/kube/setup.go).
@@ -408,6 +542,21 @@ export const backendApi = {
   portForwards: () => call<PortForwardInfo[]>("PortForwards"),
   forwardablePorts: (cluster: string, kind: string, ns: string, name: string) =>
     call<{ port: number; name?: string; detail?: string }[]>("ForwardablePorts", cluster, kind, ns, name),
+
+  restartWorkload: (cluster: string, kind: string, ns: string, name: string) => call<void>("RestartWorkload", cluster, kind, ns, name),
+  scaleWorkload: (cluster: string, kind: string, ns: string, name: string, replicas: number) => call<void>("ScaleWorkload", cluster, kind, ns, name, replicas),
+  workloadReplicas: (cluster: string, kind: string, ns: string, name: string) => call<number>("WorkloadReplicas", cluster, kind, ns, name),
+  triggerCronJob: (cluster: string, ns: string, name: string) => call<string>("TriggerCronJob", cluster, ns, name),
+  setCronJobSuspended: (cluster: string, ns: string, name: string, suspended: boolean) => call<void>("SetCronJobSuspended", cluster, ns, name, suspended),
+  jobStatus: (cluster: string, ns: string, name: string) => call<JobStatus>("JobStatus", cluster, ns, name),
+
+  clusterWarnings: (cluster: string, sinceSec: number) => call<WarningList>("ClusterWarnings", cluster, sinceSec),
+  accessMatrix: (cluster: string, subject: AccessSubject, namespace: string) => call<AccessResult>("AccessMatrix", cluster, subject, namespace),
+  expiry: (cluster: string) => call<ExpiryReport>("Expiry", cluster),
+
+  addDebugContainer: (req: DebugRequest) => call<{ namespace: string; pod: string; container: string }>("AddDebugContainer", req),
+  startNodeShell: (req: NodeShellRequest) => call<NodeShellInfo>("StartNodeShell", req),
+  deleteNodeShell: (cluster: string, ns: string, pod: string) => call<void>("DeleteNodeShell", cluster, ns, pod),
 
   startLogs: (req: LogsRequest) => call<string>("StartLogs", req),
   stopLogs: (id: string) => call<void>("StopLogs", id),

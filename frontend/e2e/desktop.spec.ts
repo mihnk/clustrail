@@ -54,6 +54,81 @@ test("streams logs from the backend", async ({ page }) => {
     states: [{ pod: "checkout-api-7d9f8b6c4-x2kqp", container: "api", state: "reconnecting", note: "CrashLoopBackOff" }],
   });
   await expect(page.getByText("java.lang.OutOfMemoryError: Java heap space")).toBeVisible();
+
+  // The stream follows the Deployment by its selector; pods that start later join it.
+  const req = backend.argsOf("StartLogs")[0]![0] as { sources: { namespace: string; workload?: string }[]; followNew: boolean; maxPods: number };
+  expect(req.sources).toEqual([{ namespace: "payments", workload: "Deployment/checkout-api" }]);
+  expect(req.followNew).toBe(true);
+  expect(req.maxPods).toBe(30);
+  await backend.emit("clustrail:logs", {
+    id: "logs-1",
+    lines: [{ namespace: "payments", pod: "checkout-api-5b8c7f9d2-p4wnc", container: "", ts: "12:00:03.000", level: "", msg: "checkout-api-5b8c7f9d2-p4wnc joined", event: "joined" }],
+    pods: [
+      { namespace: "payments", pod: "checkout-api-7d9f8b6c4-x2kqp", state: "left", reason: "pod deleted", left: "2026-10-30T12:00:04Z", initial: true },
+      { namespace: "payments", pod: "checkout-api-7d9f8b6c4-9rkzd", state: "following", initial: true },
+      { namespace: "payments", pod: "checkout-api-5b8c7f9d2-p4wnc", state: "following", joined: "2026-10-30T12:00:03Z", revision: "5b8c7f9d2", initial: false },
+    ],
+    matched: 2,
+    skipped: 0,
+  });
+  await expect(visible(page, "checkout-api-5b8c7f9d2-p4wnc joined")).toBeVisible();
+  await expect(visible(page, "following 2 of 2 pods")).toBeVisible();
+  await expect(visible(page, /^left /)).toBeVisible();
+
+  // Another source: a label selector, previewed against the pods Clustrail watches.
+  await page.getByRole("button", { name: "Add source" }).click();
+  await page.getByRole("radio", { name: "Label selector" }).click();
+  await page.getByLabel("Selector").fill("app in (checkout-api");
+  await expect(visible(page, /invalid term/)).toBeVisible();
+  await page.getByLabel("Selector").fill("app=checkout-api");
+  await expect(visible(page, /pods\s*match now/)).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Add source" }).click();
+  await expect.poll(() => backend.argsOf("StartLogs").length).toBe(2);
+  const again = backend.argsOf("StartLogs")[1]![0] as { sources: unknown[] };
+  expect(again.sources).toEqual([
+    { namespace: "payments", workload: "Deployment/checkout-api" },
+    { namespace: "payments", selector: "app=checkout-api" },
+  ]);
+});
+
+test("warning events, certificates and access checks", async ({ page }) => {
+  await sidebar(page, /^Warning events/).click();
+  await expect(visible(page, "Back-off restarting failed container api")).toBeVisible();
+  await expect(visible(page, "×14")).toBeVisible();
+  await page.getByRole("button", { name: /ProgressDeadlineExceeded/ }).first().click();
+  await expect(page.getByText("Back-off restarting failed container api")).toHaveCount(0);
+
+  await sidebar(page, /^Certificates/).click();
+  await expect(visible(page, "4 days left")).toBeVisible();
+  await expect(visible(page, "web/shop-tls")).toBeVisible();
+  await expect(page.getByText("Client certificate")).toHaveCount(0);
+  await page.getByRole("radio", { name: "All" }).click();
+  await expect(visible(page, "Client certificate")).toBeVisible();
+  await expect(visible(page, /i\/o timeout/)).toBeVisible();
+
+  await sidebar(page, /^Access/).click();
+  await page.getByRole("button", { name: "Check access" }).click();
+  await expect(visible(page, "sre-view")).toBeVisible();
+  await expect(page.getByLabel("list pods: allowed")).toBeVisible();
+  await expect(page.getByLabel("delete secrets: denied")).toBeVisible();
+  // The context sets no namespace, so the check starts in default.
+  expect(backend.argsOf("AccessMatrix")[0]).toEqual(["prod-eu-west-1", { kind: "", name: "" }, "default"]);
+});
+
+test("runs a CronJob now", async ({ page }) => {
+  await page.keyboard.press("Control+j");
+  await page.keyboard.type("cj");
+  await page.keyboard.press("Enter");
+  await visible(page, "0 2 * * *").click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: /Suspend/ })).toBeVisible();
+  await page.getByRole("menuitem", { name: /Run now/ }).click();
+  // Production and protected: typed confirmation.
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm.getByText(/create job --from=cronjob\/nightly-report/)).toBeVisible();
+  await confirm.getByRole("textbox").fill("prod-eu-west-1/nightly-report");
+  await confirm.getByRole("button", { name: "Run now" }).click();
+  await expect.poll(() => backend.argsOf("TriggerCronJob")[0]).toEqual(["prod-eu-west-1", "payments", "nightly-report"]);
+  await expect(visible(page, "Job started")).toBeVisible();
 });
 
 test("tests a connection step by step", async ({ page }) => {
@@ -163,4 +238,23 @@ test("shows Secret keys and reveals a value only on request", async ({ page }) =
   await expect(visible(page, "hunter2")).toBeVisible();
   await page.getByRole("button", { name: "Hide" }).click();
   await expect(page.getByText("hunter2")).toHaveCount(0);
+});
+
+test("adds a debug container and opens a shell in it", async ({ page }) => {
+  await page.getByRole("tab", { name: /^Pods/ }).click();
+  await visible(page, "checkout-api-7d9f8b6c4-9rkzd").click({ button: "right" });
+  await page.getByRole("menuitem", { name: /Debug container/ }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("An ephemeral container cannot be removed", { exact: false })).toBeVisible();
+  await expect(dialog.getByText(/kubectl --context .* debug -n payments checkout-api-7d9f8b6c4-9rkzd -it --image=nicolaka\/netshoot:v0.13/)).toBeVisible();
+  const add = dialog.getByRole("button", { name: "Add debug container" });
+  // Production: the context name must be typed first.
+  await expect(add).toBeDisabled();
+  await dialog.getByRole("textbox").last().fill("prod-eu-west-1");
+  await add.click();
+  await expect.poll(() => backend.argsOf("AddDebugContainer")[0]).toEqual([
+    { cluster: "prod-eu-west-1", namespace: "payments", pod: "checkout-api-7d9f8b6c4-9rkzd", image: "nicolaka/netshoot:v0.13", target: "api", profile: "general", command: ["sh"] },
+  ]);
+  await expect.poll(() => backend.argsOf("StartExec").length).toBe(1);
+  expect(backend.argsOf("StartExec")[0]![0]).toMatchObject({ pod: "checkout-api-7d9f8b6c4-9rkzd", container: "debugger-k2x9q", command: ["sh"] });
 });

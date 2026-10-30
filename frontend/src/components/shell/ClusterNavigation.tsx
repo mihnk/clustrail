@@ -19,6 +19,9 @@ import {
   Plus,
   Route,
   Server,
+  TriangleAlert,
+  FileBadge,
+  ShieldCheck,
 } from "lucide-react";
 import { DEFAULT_INVESTIGATION, useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
@@ -122,6 +125,12 @@ export function ClusterNavigation() {
           ),
         )}
         <NavItem icon={<Plus />} label={t("New investigation")} onClick={newInvestigation} />
+      </NavSection>
+
+      <NavSection title={<span className="section-label">{t("Checks")}</span>}>
+        <NavItem icon={<TriangleAlert />} label={t("Warning events")} active={kind === "warnings"} onClick={() => openView({ kind: "warnings", title: t("Warning events") })} />
+        <NavItem icon={<FileBadge />} label={t("Certificates")} active={kind === "certificates"} onClick={() => openView({ kind: "certificates", title: t("Certificates") })} />
+        <NavItem icon={<ShieldCheck />} label={t("Access")} active={kind === "access"} onClick={() => openView({ kind: "access", title: t("Access") })} />
       </NavSection>
 
       <NavSection title={<span className="section-label">{t("Delivery")}</span>}>
