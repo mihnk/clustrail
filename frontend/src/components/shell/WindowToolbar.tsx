@@ -20,7 +20,7 @@ import {
 import { IS_MOCK } from "@/data/mock";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
-import type { Density, Theme } from "@/app/preferences";
+import type { Density, ThemePreference } from "@/app/preferences";
 import { Button, IconButton } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import {
@@ -218,7 +218,7 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
 }
 
 function SettingsMenu() {
-  const { theme, setTheme, density, setDensity, openView, scenarios, setScenario, simulateSlowList } = useWorkspace();
+  const { themePreference, setTheme, density, setDensity, openView, scenarios, setScenario, simulateSlowList } = useWorkspace();
   const { openHelp } = useOverlays();
   return (
     <DropdownMenu>
@@ -229,7 +229,8 @@ function SettingsMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Theme</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
+        <DropdownMenuRadioGroup value={themePreference} onValueChange={(v) => setTheme(v as ThemePreference)}>
+          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>

@@ -58,6 +58,13 @@ export interface Cluster {
   lastConnected?: string;
   /** While reconnecting: when data went stale and the retry loop state. */
   stale?: { since: number; attempt: number; nextRetrySec: number };
+  /** From the kubeconfig: API server URL, auth method and the file the context is defined in. */
+  server?: string;
+  auth?: string;
+  source?: string;
+  /** Kubernetes version and the identity RBAC sees (SelfSubjectReview), once connected. */
+  version?: string;
+  identity?: string;
 }
 
 export interface PodRow {

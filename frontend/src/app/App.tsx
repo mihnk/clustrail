@@ -13,6 +13,8 @@ import { InvestigationWorkspace } from "@/features/investigation/InvestigationWo
 import { CompareWorkspace } from "@/features/compare/CompareWorkspace";
 import { HelmWorkspace } from "@/features/helm/HelmWorkspace";
 import { GitOpsWorkspace } from "@/features/gitops/GitOpsWorkspace";
+import { ConnectionsWorkspace } from "@/features/connections/ConnectionsWorkspace";
+import { SettingsWorkspace } from "@/features/settings/SettingsWorkspace";
 import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspace";
 import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
@@ -22,6 +24,7 @@ import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 // xterm.js and Monaco only load when a Shell or YAML tab renders.
 const ShellWorkspace = lazy(() => import("@/features/terminal/ShellWorkspace").then((m) => ({ default: m.ShellWorkspace })));
 const YamlWorkspace = lazy(() => import("@/features/yaml/YamlWorkspace").then((m) => ({ default: m.YamlWorkspace })));
+import { usePersistentState } from "@/app/preferences";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
 
@@ -47,8 +50,11 @@ function AppShell() {
   // Single-cluster workspaces and investigations need the width: the sidebar collapses to a rail.
   // Investigations, single-cluster lists and tool tabs (Logs, Shell, YAML, Compare) need the width.
   const railNav =
-    ["investigation", "logs", "shell", "yaml", "compare"].includes(activeTab?.kind ?? "") ||
+    ["investigation", "logs", "shell", "yaml", "compare", "connections", "settings"].includes(activeTab?.kind ?? "") ||
     (activeTab?.kind === "deployments" && !!activeTab.cluster);
+
+  const [fontSize] = usePersistentState("settings.fontSize", 13);
+  const [reduceMotion] = usePersistentState("settings.reduceMotion", false);
 
   // Theme and density are document-level so portals (menus, tooltips) match.
   useEffect(() => {
@@ -56,7 +62,10 @@ function AppShell() {
     root.classList.remove("theme-dark", "theme-light", "density-compact", "density-comfortable");
     root.classList.add(`theme-${theme}`);
     if (density !== "default") root.classList.add(`density-${density}`);
-  }, [theme, density]);
+    root.classList.toggle("reduce-motion", reduceMotion);
+    // Type sizes are tokens in px; the interface size scales the whole document from the 13px base.
+    root.style.zoom = fontSize === 13 ? "" : String(fontSize / 13);
+  }, [theme, density, reduceMotion, fontSize]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-app text-fg">
@@ -113,6 +122,10 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <HelmWorkspace active={active} />;
     case "gitops":
       return <GitOpsWorkspace active={active} />;
+    case "connections":
+      return <ConnectionsWorkspace active={active} />;
+    case "settings":
+      return <SettingsWorkspace active={active} />;
     case "deployments":
       return <DeploymentsWorkspace cluster={tab.cluster ?? ""} namespace={tab.params?.namespace ?? ""} active={active} />;
     default:

@@ -1,3 +1,4 @@
+import { usePersistentState } from "@/app/preferences";
 import {
   useEffect,
   useLayoutEffect,
@@ -122,10 +123,11 @@ export function ResourceTable<T>({
   const menu = menuRowId && rowActions ? rowActions(menuRowId) : null;
   const width = useElementWidth(rootRef);
 
+  const [autoHide] = usePersistentState("settings.autoHideColumns", true);
   const visible = table.getVisibleLeafColumns();
   const columns = useMemo(
-    () => fitColumns(visible, width - (checked !== undefined ? 20 + columnGap : 0), columnGap, paddingX, fillMin),
-    [visible, width, columnGap, paddingX, fillMin, checked !== undefined],
+    () => (autoHide ? fitColumns(visible, width - (checked !== undefined ? 20 + columnGap : 0), columnGap, paddingX, fillMin) : visible),
+    [autoHide, visible, width, columnGap, paddingX, fillMin, checked !== undefined],
   );
   const autoHidden = useMemo(
     () => visible.filter((c) => !columns.includes(c)).map((c) => c.columnDef.meta?.label ?? c.id),

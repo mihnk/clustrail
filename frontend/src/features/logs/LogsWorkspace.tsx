@@ -66,8 +66,11 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const [instance, setInstance] = useState<"current" | "previous">(tab.params?.previous ? "previous" : "current");
   const [range, setRange] = useState<(typeof RANGES)[number]>("15m");
   const [layout, setLayout] = useState<"merged" | "split">("merged");
-  const [showTs, setShowTs] = useState(true);
-  const [wrap, setWrap] = useState(false);
+  // New log views start from the defaults in Settings › Logs & terminal.
+  const [defaultTs] = usePersistentState("logs.timestamps", true);
+  const [defaultWrap] = usePersistentState("logs.wrap", false);
+  const [showTs, setShowTs] = useState(defaultTs);
+  const [wrap, setWrap] = useState(defaultWrap);
   const [query, setQuery] = useState("");
   const [regex, setRegex] = useState(false);
   const [onlyMatching, setOnlyMatching] = useState(false);

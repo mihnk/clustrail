@@ -7,14 +7,14 @@ import type { AccessSummary, Cluster, DeploymentRow, Environment, Health, PodDet
 export const IS_MOCK = true;
 
 export const clusters: Cluster[] = [
-  { id: "prod-eu-west-1", name: "prod-eu-west-1", context: "arn:aws:eks:eu-west-1:482100000000:cluster/prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38, summary: "EKS 1.30 · eu-west-1", readOnly: false, metrics: "metrics-server" },
-  { id: "prod-us-east-1", name: "prod-us-east-1", context: "arn:aws:eks:us-east-1:482100000000:cluster/prod-us-east-1", env: "prod", protected: true, connection: "connected", latencyMs: 112, summary: "EKS 1.30 · us-east-1", readOnly: false, metrics: "metrics-server" },
-  { id: "staging-eu-1", name: "staging-eu-1", context: "gke_acme-staging_europe-west4_staging-eu-1", env: "stg", protected: false, connection: "connected", latencyMs: 64, summary: "GKE 1.31 · europe-west4", readOnly: false, metrics: "metrics-server" },
-  { id: "staging-perf", name: "staging-perf", context: "gke_acme-staging_europe-west4_staging-perf", env: "stg", protected: false, connection: "auth-expired", latencyMs: null, summary: null, readOnly: false, metrics: null,
+  { id: "prod-eu-west-1", name: "prod-eu-west-1", context: "arn:aws:eks:eu-west-1:482100000000:cluster/prod-eu-west-1", env: "prod", protected: true, connection: "connected", latencyMs: 38, summary: "EKS 1.30 · eu-west-1", readOnly: false, metrics: "metrics-server", server: "https://4F3A…C1.gr7.eu-west-1.eks.amazonaws.com", auth: "exec · aws eks", source: "~/.kube/config", version: "v1.30.4", identity: "sre-oncall" },
+  { id: "prod-us-east-1", name: "prod-us-east-1", context: "arn:aws:eks:us-east-1:482100000000:cluster/prod-us-east-1", env: "prod", protected: true, connection: "connected", latencyMs: 112, summary: "EKS 1.30 · us-east-1", readOnly: false, metrics: "metrics-server", server: "https://9B21…77.yl4.us-east-1.eks.amazonaws.com", auth: "exec · aws eks", source: "~/.kube/config", version: "v1.30.4", identity: "sre-readonly" },
+  { id: "staging-eu-1", name: "staging-eu-1", context: "gke_acme-staging_europe-west4_staging-eu-1", env: "stg", protected: false, connection: "connected", latencyMs: 64, summary: "GKE 1.31 · europe-west4", readOnly: false, metrics: "metrics-server", server: "https://34.90.118.21", auth: "exec · gcloud", source: "~/.kube/config", version: "v1.31.2", identity: "edit" },
+  { id: "staging-perf", name: "staging-perf", context: "gke_acme-staging_europe-west4_staging-perf", env: "stg", protected: false, connection: "auth-expired", latencyMs: null, summary: null, readOnly: false, metrics: null, server: "https://34.91.204.7", auth: "exec · gcloud", source: "~/work/acme-perf.yaml",
     error: "gke-gcloud-auth-plugin: token expired (Reauthentication required)",
     authHint: { plugin: "gke-gcloud-auth-plugin", command: "gcloud auth login" }, lastConnected: "2h ago" },
-  { id: "dev-shared", name: "dev-shared", context: "dev-shared", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null, readOnly: true, metrics: null, lastConnected: "3d ago" },
-  { id: "kind-local", name: "kind-local", context: "kind-kind-local", env: "dev", protected: false, connection: "unreachable", latencyMs: null, summary: null, readOnly: false, metrics: null,
+  { id: "dev-shared", name: "dev-shared", context: "dev-shared", env: "dev", protected: false, connection: "disconnected", latencyMs: null, summary: null, readOnly: true, metrics: null, lastConnected: "3d ago", server: "https://dev.acme.internal:6443", auth: "client cert", source: "~/.kube/config", version: "v1.29.6", identity: "admin" },
+  { id: "kind-local", name: "kind-local", context: "kind-kind-local", env: "dev", protected: false, connection: "unreachable", latencyMs: null, summary: null, readOnly: false, metrics: null, server: "https://127.0.0.1:6443", auth: "client cert", source: "~/.kube/kind-local.yaml",
     error: "dial tcp 127.0.0.1:6443: connect: connection refused", lastConnected: "3d ago" },
 ];
 

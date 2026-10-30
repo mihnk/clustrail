@@ -10,7 +10,7 @@ import { nodes as initialNodes, type NodeRow } from "@/data/nodes";
 import { helmReleases as initialReleases, helmHealth, type HelmRelease } from "@/data/helm";
 import { gitopsObjects as initialGitOps, gitopsHealth, type GitOpsObject } from "@/data/gitops";
 import { useToast } from "@/components/ui/toast";
-import { usePersistentState, type Density, type Theme } from "./preferences";
+import { useMediaQuery, usePersistentState, type Density, type Theme, type ThemePreference } from "./preferences";
 
 export type WorkspaceTabKind =
   | "clusters"
@@ -78,7 +78,9 @@ export interface RevealRequest {
 
 interface WorkspaceState {
   theme: Theme;
-  setTheme: (t: Theme) => void;
+  /** The stored choice; `theme` is what it resolves to. */
+  themePreference: ThemePreference;
+  setTheme: (t: ThemePreference) => void;
   density: Density;
   setDensity: (d: Density) => void;
 
@@ -97,6 +99,14 @@ interface WorkspaceState {
 
   /** Connect, retry or re-authenticate a cluster (mock: simulated outcome). */
   connectCluster: (id: string) => void;
+  /** Stops informers and drops the cache for this cluster; it stays listed. */
+  disconnectCluster: (id: string) => void;
+  /** Group and Clustrail protection, stored in Clustrail's settings (never in the kubeconfig). */
+  updateCluster: (id: string, patch: Partial<Pick<Cluster, "env" | "protected" | "readOnly">>) => void;
+  /** Hides the context in Clustrail; the kubeconfig file is not modified. */
+  hideCluster: (id: string) => void;
+  /** Adds a newly discovered context and connects to it. */
+  addCluster: (c: Cluster) => void;
 
   // Mock mutations. In the desktop build these are requests to the Go backend;
   // the UI then follows the resulting watch events.
@@ -143,6 +153,8 @@ interface WorkspaceState {
   revealResource: (kind: RevealRequest["kind"], id: string) => void;
 }
 
+const SYSTEM_NAMESPACES = ["kube-system", "kube-public", "kube-node-lease"];
+
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
 const initialTabs: WorkspaceTab[] = [
@@ -170,7 +182,10 @@ const RETRY_SECONDS = 4;
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
-  const [theme, setTheme] = usePersistentState<Theme>("theme", "dark");
+  const [themePreference, setTheme] = usePersistentState<ThemePreference>("theme", "dark");
+  const systemDark = useMediaQuery("(prefers-color-scheme: dark)");
+  const theme: Theme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
+  const [hideSystemNamespaces] = usePersistentState("settings.hideSystemNamespaces", true);
   const [density, setDensity] = usePersistentState<Density>("density", "default");
   const [selectedClusterIds, setSelectedClusterIds] = usePersistentState<string[]>(
     "selectedClusters",
@@ -228,6 +243,33 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       });
     },
     [clusters, later, patchCluster, toast],
+  );
+
+  const disconnectCluster = useCallback(
+    (id: string) => {
+      patchCluster(id, { connection: "disconnected", latencyMs: null, lastConnected: "now", stale: undefined });
+      setSelectedClusterIds(selectedClusterIds.filter((x) => x !== id));
+    },
+    [patchCluster, selectedClusterIds, setSelectedClusterIds],
+  );
+
+  const hideCluster = useCallback(
+    (id: string) => {
+      setClusters((cs) => cs.filter((c) => c.id !== id));
+      setSelectedClusterIds(selectedClusterIds.filter((x) => x !== id));
+    },
+    [selectedClusterIds, setSelectedClusterIds],
+  );
+
+  const addCluster = useCallback(
+    (c: Cluster) => {
+      setClusters((cs) => [...cs, { ...c, connection: "connecting" }]);
+      later(1500, () => {
+        patchCluster(c.id, { connection: "connected", latencyMs: 58, summary: "GKE 1.31 · europe-west4", version: "v1.31.2", identity: "edit", lastConnected: "now" });
+        toast.show({ kind: "success", title: "Connected", target: c.name, env: c.env });
+      });
+    },
+    [later, patchCluster, toast],
   );
 
   // Mock watch loss: the cluster retries every few seconds until the scenario is turned off.
@@ -623,6 +665,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
     return {
       theme,
+      themePreference,
       setTheme,
       density,
       setDensity,
@@ -635,7 +678,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // Keep the sidebar order (environment groups) regardless of selection order.
       selectedClusters: clusters.filter((c) => selected.has(c.id)),
       pods: allPods
-        .filter((p) => selected.has(p.cluster))
+        .filter((p) => selected.has(p.cluster) && !(hideSystemNamespaces && SYSTEM_NAMESPACES.includes(p.namespace)))
         // Without metrics.k8s.io there is no usage: never show 0, show nothing.
         .map((p) => (clusterById(p.cluster)?.metrics === null ? { ...p, cpuMilli: null, memoryMiB: null } : p)),
       allPods,
@@ -656,6 +699,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         toast.show({ kind: "success", title: "Pinned to investigation", target: "checkout-api restarts", action: { label: "Open investigation", onClick: () => setActiveTabId("inv-checkout-api") } });
       },
       connectCluster,
+      disconnectCluster,
+      updateCluster: patchCluster,
+      hideCluster,
+      addCluster,
       deletePod,
       restartDeployment,
       scaleDeployment,
@@ -704,7 +751,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, [
     theme,
+    themePreference,
     setTheme,
+    hideSystemNamespaces,
     density,
     setDensity,
     selectedClusterIds,
@@ -725,6 +774,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     pins,
     setPins,
     connectCluster,
+    disconnectCluster,
+    patchCluster,
+    hideCluster,
+    addCluster,
     deletePod,
     restartDeployment,
     scaleDeployment,

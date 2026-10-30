@@ -3,6 +3,7 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
+import { usePersistentState } from "@/app/preferences";
 import { MockShell, SCROLLBACK } from "./mockShell";
 
 export interface XtermHandle {
@@ -13,8 +14,6 @@ export interface XtermHandle {
   /** Visible output as text, for pinning to an investigation. */
   visibleText: () => string;
 }
-
-const SCROLLBACK_LINES = 10_000;
 
 /** xterm.js theme from the app's CSS tokens, so dark and light both apply. */
 function themeFromTokens(): ITheme {
@@ -54,6 +53,7 @@ export const XtermPane = forwardRef<
     onLeave: () => void;
   }
 >(function XtermPane({ sessionId, restore, cwd, themeKey, interactive, onResize, onExit, onLeave }, ref) {
+  const [scrollback] = usePersistentState("terminal.scrollback", 10_000);
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
@@ -70,7 +70,7 @@ export const XtermPane = forwardRef<
       fontSize: 13,
       lineHeight: 1.2,
       cursorBlink: true,
-      scrollback: SCROLLBACK_LINES,
+      scrollback,
       theme: themeFromTokens(),
       allowProposedApi: false,
     });
@@ -127,6 +127,10 @@ export const XtermPane = forwardRef<
   useEffect(() => {
     if (termRef.current) termRef.current.options.cursorBlink = interactive;
   }, [interactive]);
+
+  useEffect(() => {
+    if (termRef.current) termRef.current.options.scrollback = scrollback;
+  }, [scrollback]);
 
   useImperativeHandle(ref, () => ({
     copySelection: () => {
