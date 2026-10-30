@@ -32,7 +32,7 @@ const envGroups: { env: Environment; label: string }[] = [
 ];
 
 export function ClusterNavigation() {
-  const { pods, activeTab, openTab } = useWorkspace();
+  const { pods, activeTab, openTab, openView, clusters } = useWorkspace();
   const kind = activeTab?.kind;
   const attention = pods.filter((p) => isAttention(p.health)).length;
 
@@ -44,13 +44,14 @@ export function ClusterNavigation() {
       <ClusterList />
 
       <NavSection title={<><span className="section-label">Resources</span><Pin className="size-3.5 text-fg-muted" aria-label="Pinned" /></>}>
+        <NavItem icon={<Network />} label="Overview" active={kind === "clusters"} onClick={() => openView({ kind: "clusters", title: "Clusters" })} trailing={<NavCount>{clusters.length}</NavCount>} />
         <NavItem icon={<Box />} label="Pods" active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{pods.length}</NavCount></>} />
-        <NavItem icon={<Layers />} label="Deployments" active={kind === "deployments"} onClick={() => openTab("deployments-prod-eu-west-1")} trailing={<><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
+        <NavItem icon={<Layers />} label="Deployments" active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })} trailing={<><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
         <NavItem icon={<Network />} label="Services" trailing={<NavCount>74</NavCount>} />
         <NavItem icon={<Globe />} label="Ingresses" trailing={<NavCount>19</NavCount>} />
         <NavItem icon={<FileText />} label="ConfigMaps" trailing={<NavCount>203</NavCount>} />
         <NavItem icon={<Activity />} label="Events" trailing={<CountPill tone="warning" className="ml-auto">23</CountPill>} />
-        <NavItem icon={<Server />} label="Nodes" trailing={<NavCount>38</NavCount>} />
+        <NavItem icon={<Server />} label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={<><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
         <NavItem icon={<LayoutGrid />} label="All resource kinds" muted trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />
       </NavSection>
 
@@ -60,8 +61,8 @@ export function ClusterNavigation() {
       </NavSection>
 
       <NavSection title={<span className="section-label">Delivery</span>}>
-        <NavItem icon={<LifeBuoy />} label="Helm releases" trailing={<NavCount>31</NavCount>} />
-        <NavItem icon={<GitBranch />} label="GitOps" trailing={<CountPill tone="warning" className="ml-auto">2 drift</CountPill>} />
+        <NavItem icon={<LifeBuoy />} label="Helm releases" active={kind === "helm"} onClick={() => openView({ kind: "helm", title: "Helm releases" })} trailing={<><CountPill tone="critical" className="ml-auto">1</CountPill><NavCount className="ml-1.5">31</NavCount></>} />
+        <NavItem icon={<GitBranch />} label="GitOps" active={kind === "gitops"} onClick={() => openView({ kind: "gitops", title: "GitOps" })} trailing={<CountPill tone="warning" className="ml-auto">2 drift</CountPill>} />
       </NavSection>
     </aside>
   );

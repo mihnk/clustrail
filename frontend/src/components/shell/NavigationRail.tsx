@@ -9,21 +9,25 @@ import { cn } from "@/lib/cn";
  * narrow windows). Same destinations as the sidebar, icon-only with tooltips.
  */
 export function NavigationRail() {
-  const { selectedClusterIds, activeTab, openTab } = useWorkspace();
+  const { selectedClusterIds, activeTab, openTab, openView } = useWorkspace();
   const kind = activeTab?.kind;
   return (
     <nav
       aria-label="Navigation (collapsed)"
       className="flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface-side py-2.5"
     >
-      <RailButton label={`Clusters: ${selectedClusterIds.length} selected`}>
+      <RailButton
+        label={`Clusters: ${selectedClusterIds.length} selected`}
+        active={kind === "clusters"}
+        onClick={() => openView({ kind: "clusters", title: "Clusters" })}
+      >
         <span className="font-mono text-label font-semibold text-fg-secondary">{selectedClusterIds.length}</span>
       </RailButton>
       <Divider />
       <RailButton label="Pods" active={kind === "pods"} onClick={() => openTab("pods")}>
         <Box />
       </RailButton>
-      <RailButton label="Deployments" active={kind === "deployments"} onClick={() => openTab("deployments-prod-eu-west-1")}>
+      <RailButton label="Deployments" active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })}>
         <Layers />
       </RailButton>
       <RailButton label="Services">
@@ -32,7 +36,7 @@ export function NavigationRail() {
       <RailButton label="Events">
         <Activity />
       </RailButton>
-      <RailButton label="Nodes">
+      <RailButton label="Nodes" active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })}>
         <Server />
       </RailButton>
       <RailButton label="All resource kinds">
@@ -42,10 +46,10 @@ export function NavigationRail() {
       <RailButton label="Investigations" active={kind === "investigation"} onClick={() => openTab("inv-checkout-api")}>
         <Route />
       </RailButton>
-      <RailButton label="Helm releases">
+      <RailButton label="Helm releases" active={kind === "helm"} onClick={() => openView({ kind: "helm", title: "Helm releases" })}>
         <LifeBuoy />
       </RailButton>
-      <RailButton label="GitOps">
+      <RailButton label="GitOps" active={kind === "gitops"} onClick={() => openView({ kind: "gitops", title: "GitOps" })}>
         <GitBranch />
       </RailButton>
     </nav>

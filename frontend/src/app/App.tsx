@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PodsWorkspace } from "@/features/pods/PodsWorkspace";
 import { InvestigationWorkspace } from "@/features/investigation/InvestigationWorkspace";
 import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspace";
+import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
@@ -67,6 +68,8 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
   switch (tab.kind) {
     case "pods":
       return <PodsWorkspace active={active} />;
+    case "clusters":
+      return <ClustersWorkspace active={active} />;
     case "resource":
       return (
         <EmptyState className="flex-1" icon={<Layers />} title={`${tab.title} · ${tab.subtitle}`}>

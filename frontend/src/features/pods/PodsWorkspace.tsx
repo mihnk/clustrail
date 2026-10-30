@@ -291,6 +291,11 @@ export function PodsWorkspace({ active }: { active: boolean }) {
 
   // A resource picked elsewhere (command palette, links): select it and make sure filters don't hide it.
   useEffect(() => {
+    if (reveal?.kind === "filter" && reveal.id.startsWith("pods:")) {
+      clearFilters();
+      setQuery(reveal.id.slice("pods:".length));
+      return;
+    }
     if (reveal?.kind !== "pod") return;
     if (!rows.some((p) => p.id === reveal.id)) clearFilters();
     setSelectedId(reveal.id);

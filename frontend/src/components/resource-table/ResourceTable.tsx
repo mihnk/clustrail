@@ -35,7 +35,6 @@ declare module "@tanstack/react-table" {
   }
 }
 
-const FILL_MIN = 220;
 const OVERSCAN = 12;
 const GROUP_HEIGHT = 32;
 
@@ -47,6 +46,8 @@ export interface ResourceTableGrouping<T> {
   onToggle: (key: string) => void;
   /** Header content after the chevron. */
   renderHeader: (key: string, rows: T[]) => ReactNode;
+  /** Optional content before the chevron, e.g. a group selection checkbox. */
+  renderLeading?: (key: string, rows: T[]) => ReactNode;
 }
 
 export interface ResourceTableProps<T> {
@@ -69,6 +70,8 @@ export interface ResourceTableProps<T> {
   onCheckedChange?: (ids: Set<string>) => void;
   /** Extra row styling, e.g. stale rows from a reconnecting cluster. */
   rowClassName?: (row: T) => string | undefined;
+  /** Narrowest the flexible column may get before lower-priority columns hide. */
+  fillMin?: number;
   /** Grid spacing; 8/12 for explorers, wider for single-cluster lists. */
   columnGap?: number;
   paddingX?: number;
@@ -98,6 +101,7 @@ export function ResourceTable<T>({
   checked,
   onCheckedChange,
   rowClassName,
+  fillMin = 220,
   columnGap = 8,
   paddingX = 12,
   "aria-label": ariaLabel,
@@ -112,8 +116,8 @@ export function ResourceTable<T>({
 
   const visible = table.getVisibleLeafColumns();
   const columns = useMemo(
-    () => fitColumns(visible, width - (checked !== undefined ? 20 + columnGap : 0), columnGap, paddingX),
-    [visible, width, columnGap, paddingX, checked !== undefined],
+    () => fitColumns(visible, width - (checked !== undefined ? 20 + columnGap : 0), columnGap, paddingX, fillMin),
+    [visible, width, columnGap, paddingX, fillMin, checked !== undefined],
   );
   const autoHidden = useMemo(
     () => visible.filter((c) => !columns.includes(c)).map((c) => c.columnDef.meta?.label ?? c.id),
@@ -315,6 +319,10 @@ export function ResourceTable<T>({
                         style={{ height: GROUP_HEIGHT, transform: `translateY(${v.start}px)` }}
                       >
                         <div role="gridcell" className="flex h-full min-w-0 flex-1 items-center gap-2 px-3 text-cell">
+                          {grouping!.renderLeading?.(
+                            it.key,
+                            it.rows.map((r) => r.original),
+                          )}
                           <button
                             type="button"
                             aria-expanded={!collapsed}
@@ -429,13 +437,19 @@ function HeaderCell<T>({ column }: { column: Column<T, unknown> }) {
 const rowDomId = (index: number) => `resource-row-${index}`;
 
 /** Drop the lowest-priority columns until the flexible column has room. */
-function fitColumns<T>(columns: Column<T, unknown>[], width: number, gap: number, padX: number): Column<T, unknown>[] {
+function fitColumns<T>(
+  columns: Column<T, unknown>[],
+  width: number,
+  gap: number,
+  padX: number,
+  fillMin: number,
+): Column<T, unknown>[] {
   if (width <= 0) return columns;
   const shown = [...columns];
   const required = (cs: Column<T, unknown>[]) =>
     cs.reduce((sum, c) => {
       const w = c.columnDef.meta?.width ?? 80;
-      return sum + (w === "fill" ? FILL_MIN : w);
+      return sum + (w === "fill" ? fillMin : w);
     }, 0) +
     gap * Math.max(0, cs.length - 1) +
     padX * 2;

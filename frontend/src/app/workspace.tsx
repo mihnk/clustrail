@@ -48,7 +48,8 @@ export interface MockScenarios {
 
 /** A request from another view (command palette, links) to select a resource in its explorer. */
 export interface RevealRequest {
-  kind: "pod" | "deployment" | "node" | "cluster";
+  /** "filter": id is "<view kind>:<filter text>", e.g. "pods:cluster:prod-eu-west-1". */
+  kind: "pod" | "deployment" | "node" | "cluster" | "filter";
   id: string;
   seq: number;
 }
@@ -67,6 +68,8 @@ interface WorkspaceState {
   selectedClusters: Cluster[];
   /** Pods from the selected clusters. Filtering by view happens per tab. */
   pods: PodRow[];
+  /** Pods from every connected cluster, for per-cluster counts. */
+  allPods: PodRow[];
   deployments: DeploymentRow[];
 
   /** Connect, retry or re-authenticate a cluster (mock: simulated outcome). */
@@ -310,6 +313,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .filter((p) => selected.has(p.cluster))
         // Without metrics.k8s.io there is no usage: never show 0, show nothing.
         .map((p) => (clusterById(p.cluster)?.metrics === null ? { ...p, cpuMilli: null, memoryMiB: null } : p)),
+      allPods,
       deployments,
       connectCluster,
       deletePod,
