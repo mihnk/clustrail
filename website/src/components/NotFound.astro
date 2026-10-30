@@ -1,0 +1,30 @@
+---
+import Base from '../layouts/Base.astro';
+import type { Locale } from '../i18n/ui';
+import { localizePath, useTranslations } from '../i18n/utils';
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+---
+
+<Base
+  locale={locale}
+  path="404"
+  title={t('notfound.title')}
+  description={t('site.description')}
+  noindex
+>
+  <div class="wrap notfound">
+    <span class="eyebrow">404</span>
+    <h1>{t('notfound.heading')}</h1>
+    <p class="lead">{t('notfound.text')}</p>
+    <div class="ctas">
+      <a class="btn btn-primary" href={localizePath('', locale)}>
+        {t('notfound.home')}
+      </a>
+    </div>
+  </div>
+</Base>

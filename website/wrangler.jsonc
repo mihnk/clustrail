@@ -1,0 +1,13 @@
+// Cloudflare Workers static assets: the built site, no Worker code.
+// Workers Builds runs `npm ci && npm run build` in website/, then `wrangler deploy`.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "clustrail",
+  "compatibility_date": "2026-10-01",
+  "send_metrics": false,
+  "assets": {
+    "directory": "./dist",
+    // Unknown paths get the nearest 404.html (/tr/404.html under /tr/) with status 404.
+    "not_found_handling": "404-page",
+  },
+}

@@ -1,0 +1,126 @@
+---
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+import '../styles/global.css';
+import Icons from '../components/Icons.astro';
+import Mark from '../components/Mark.astro';
+import { locales, localeNames, localeTags, type Locale } from '../i18n/ui';
+import { localizePath, useTranslations } from '../i18n/utils';
+
+interface Props {
+  locale: Locale;
+  /** Path without a locale prefix: '' for the homepage, '404' for the 404. */
+  path: string;
+  title: string;
+  description: string;
+  /** Keep non-canonical pages (404) out of search results. */
+  noindex?: boolean;
+}
+
+const { locale, path, title, description, noindex = false } = Astro.props;
+const t = useTranslations(locale);
+
+const canonical = new URL(localizePath(path, locale), Astro.site);
+const ogImage = new URL('/og.png', Astro.site);
+const home = localizePath('', locale);
+
+const alternates = noindex
+  ? []
+  : locales.map((code) => ({ code, href: new URL(localizePath(path, code), Astro.site).href }));
+
+const repo = 'https://github.com/mihnk/clustrail';
+---
+
+<!doctype html>
+<html lang={localeTags[locale]}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex" />}
+    {alternates.map(({ code, href }) => (
+      <link rel="alternate" hreflang={localeTags[code]} href={href} />
+    ))}
+    {alternates.length > 0 && (
+      <link
+        rel="alternate"
+        hreflang="x-default"
+        href={new URL(localizePath(path, 'en'), Astro.site).href}
+      />
+    )}
+
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#0b0e11" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f7f8" media="(prefers-color-scheme: light)" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Clustrail" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:locale" content={locale === 'tr' ? 'tr_TR' : 'en_US'} />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <Icons />
+    <header class="top">
+      <div class="wrap">
+        <a class="brand" href={home} aria-label={t('nav.home')}>
+          <Mark size={28} />
+          clustrail <small>by mihnk</small>
+        </a>
+        <nav aria-label={t('nav.label')}>
+          <a href={`${home}#clusters`}>{t('nav.clusters')}</a>
+          <a href={`${home}#safety`}>{t('nav.safety')}</a>
+          <a href={`${home}#investigate`}>{t('nav.investigate')}</a>
+          <a href={`${home}#tools`}>{t('nav.tools')}</a>
+          <a href={`${home}#open-source`}>{t('nav.oss')}</a>
+        </nav>
+        <nav class="lang" aria-label={t('lang.label')}>
+          {locales.map((code) => (
+            <a
+              href={localizePath(path, code)}
+              hreflang={localeTags[code]}
+              lang={localeTags[code]}
+              aria-current={code === locale ? 'true' : undefined}
+              title={localeNames[code]}
+            >
+              {code}
+            </a>
+          ))}
+        </nav>
+        <a class="btn" href={repo}>
+          <svg class="ic" aria-hidden="true">
+            <use href="#i-gh"></use>
+          </svg>
+          GitHub
+        </a>
+      </div>
+    </header>
+
+    <main id="top">
+      <slot />
+    </main>
+
+    <footer class="foot">
+      <div class="wrap">
+        <a class="brand" href={home}>
+          <Mark size={24} />
+          clustrail
+        </a>
+        <nav aria-label={t('footer.label')}>
+          <a href={repo}>GitHub</a>
+          <a href={`${repo}/issues`}>{t('footer.issues')}</a>
+          <a href="https://mihnk.org">mihnk.org</a>
+        </nav>
+        <span>{t('footer.note')}</span>
+      </div>
+    </footer>
+  </body>
+</html>

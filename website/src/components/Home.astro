@@ -1,0 +1,422 @@
+---
+import Base from '../layouts/Base.astro';
+import AppWindow from './AppWindow.astro';
+import type { Locale, UIKey } from '../i18n/ui';
+import { useTranslations } from '../i18n/utils';
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+const repo = 'https://github.com/mihnk/clustrail';
+
+const why: { title: UIKey; items: UIKey[] }[] = [
+  { title: 'why.see', items: ['why.see.1', 'why.see.2', 'why.see.3'] },
+  {
+    title: 'why.investigate',
+    items: ['why.investigate.1', 'why.investigate.2', 'why.investigate.3'],
+  },
+  { title: 'why.operate', items: ['why.operate.1', 'why.operate.2', 'why.operate.3'] },
+];
+// Helm and GitOps are product names: not translated.
+const tools: { icon: string; title: string; text: UIKey }[] = [
+  { icon: 'i-logs', title: t('tl.logs'), text: 'tl.logs.text' },
+  { icon: 'i-term', title: t('tl.term'), text: 'tl.term.text' },
+  { icon: 'i-code', title: t('tl.yaml'), text: 'tl.yaml.text' },
+  { icon: 'i-scale', title: t('tl.compare'), text: 'tl.compare.text' },
+  { icon: 'i-layers', title: t('tl.workloads'), text: 'tl.workloads.text' },
+  { icon: 'i-node', title: t('tl.nodes'), text: 'tl.nodes.text' },
+  { icon: 'i-helm', title: 'Helm', text: 'tl.helm.text' },
+  { icon: 'i-git', title: 'GitOps', text: 'tl.gitops.text' },
+];
+const never: { icon: string; text: UIKey }[] = [
+  { icon: 'i-user-x', text: 'lf.account' },
+  { icon: 'i-home', text: 'lf.agents' },
+  { icon: 'i-key', text: 'lf.creds' },
+  { icon: 'i-x', text: 'lf.telemetry' },
+  { icon: 'i-git', text: 'lf.git' },
+  { icon: 'i-trail', text: 'lf.diagnoses' },
+];
+const faq: [UIKey, UIKey][] = [
+  ['fq.free.q', 'fq.free.a'],
+  ['fq.install.q', 'fq.install.a'],
+  ['fq.rbac.q', 'fq.rbac.a'],
+  ['fq.platforms.q', 'fq.platforms.a'],
+  ['fq.languages.q', 'fq.languages.a'],
+  ['fq.when.q', 'fq.when.a'],
+];
+const prodTag = '<span class="tag tag-prod">PROD</span>';
+---
+
+<Base locale={locale} path="" title={t('site.title')} description={t('site.description')}>
+  <div class="wrap">
+    <section class="hero">
+      <span class="eyebrow">{t('hero.eyebrow')}</span>
+      <h1 set:html={t('hero.title')} />
+      <p class="lead">{t('hero.lead')}</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href={repo}>
+          <svg class="ic" aria-hidden="true">
+            <use href="#i-gh"></use>
+          </svg>
+          {t('hero.follow')}
+        </a>
+        <a class="btn" href="#clusters">
+          {t('hero.how')}
+          <svg class="ic" aria-hidden="true">
+            <use href="#i-arrow"></use>
+          </svg>
+        </a>
+      </div>
+      <p class="status">
+        <span class="dot" aria-hidden="true"></span>
+        {t('hero.status')}
+      </p>
+      <AppWindow label={t('hero.shot')} />
+      <p class="caption">{t('hero.caption')}</p>
+    </section>
+  </div>
+
+  <section class="band" aria-labelledby="why">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">{t('why.eyebrow')}</span>
+        <h2 id="why">{t('why.title')}</h2>
+      </div>
+      <div class="trail">
+        {why.map((col) => (
+          <div>
+            <h3>{t(col.title)}</h3>
+            <ul>
+              {col.items.map((k) => (
+                <li>{t(k)}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="clusters" aria-labelledby="mc">
+    <div class="wrap split">
+      <div class="copy">
+        <span class="eyebrow">{t('mc.eyebrow')}</span>
+        <h2 id="mc">{t('mc.title')}</h2>
+        <p class="muted">{t('mc.lead')}</p>
+        <ul class="facts">
+          {(['mc.1', 'mc.2', 'mc.3'] as const).map((k) => (
+            <li>
+              <svg class="ic" aria-hidden="true">
+                <use href="#i-check" />
+              </svg>
+              <span>{t(k)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="panel" role="img" aria-label={t('mc.panel')}>
+        <div class="ph">
+          Clusters <span style="margin-left:auto">{t('mc.selected')}</span>
+        </div>
+        <div class="pick" aria-hidden="true">
+          <div class="g">
+            <span class="tag tag-prod">PROD</span>Production
+            <svg class="ic t-prod" style="width:14px;height:14px;margin-left:auto">
+              <use href="#i-lock"></use>
+            </svg>
+          </div>
+          <div class="c">
+            <i class="cb"></i>prod-eu-west-1<span>EKS 1.30 · 38ms</span>
+          </div>
+          <div class="c h">
+            <i class="cb"></i>prod-us-east-1<span>EKS 1.30 · 112ms</span>
+          </div>
+          <div class="g">
+            <span class="tag tag-stg">STG</span>Staging
+          </div>
+          <div class="c">
+            <i class="cb"></i>staging-eu-1<span>GKE 1.31 · 64ms</span>
+          </div>
+          <div class="c" style="color:var(--fg-2)">
+            <i class="cb off"></i>staging-perf<span class="t-warn">credentials expired</span>
+          </div>
+          <div class="g">
+            <span class="tag tag-dev">DEV</span>Development
+          </div>
+          <div class="c" style="color:var(--fg-2)">
+            <i class="cb off"></i>kind-local<span>not connected</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="safety" aria-labelledby="ps">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">{t('ps.eyebrow')}</span>
+        <h2 id="ps">{t('ps.title')}</h2>
+        <p class="lead">{t('ps.lead')}</p>
+      </div>
+      <div class="levels">
+        <div class="lv">
+          <h3>
+            <svg class="ic" aria-hidden="true">
+              <use href="#i-shield"></use>
+            </svg>
+            {t('ps.standard')}
+          </h3>
+          <p>{t('ps.standard.text')}</p>
+        </div>
+        <div class="lv on">
+          <h3>
+            <svg class="ic t-prod" aria-hidden="true">
+              <use href="#i-lock"></use>
+            </svg>
+            {t('ps.protected')}
+          </h3>
+          <p set:html={t('ps.protected.text')} />
+        </div>
+        <div class="lv">
+          <h3>
+            <svg class="ic" aria-hidden="true">
+              <use href="#i-eye"></use>
+            </svg>
+            {t('ps.readonly')}
+          </h3>
+          <p>{t('ps.readonly.text')}</p>
+        </div>
+      </div>
+      <div class="confirm">
+        <ul class="facts">
+          <li>
+            <svg class="ic" aria-hidden="true">
+              <use href="#i-check"></use>
+            </svg>
+            <span set:html={t('ps.1').replace('{prod}', prodTag)} />
+          </li>
+          <li>
+            <svg class="ic" aria-hidden="true">
+              <use href="#i-check"></use>
+            </svg>
+            <span>{t('ps.2')}</span>
+          </li>
+          <li>
+            <svg class="ic" aria-hidden="true">
+              <use href="#i-check"></use>
+            </svg>
+            <span>{t('ps.3')}</span>
+          </li>
+        </ul>
+        <div class="dlg" role="img" aria-label={t('ps.dialog')}>
+          <div class="hatch" style="height:4px" aria-hidden="true"></div>
+          <div class="body" aria-hidden="true">
+            <b style="font-size:15px">
+              Restart deployment <span class="mono">checkout-api</span>?
+            </b>
+            <span style="display:flex;gap:8px;align-items:center;color:var(--fg-2);font-size:12.5px">
+              <span class="tag tag-prod">PROD</span>
+              <span class="mono">prod-eu-west-1</span> · payments · 4 replicas
+            </span>
+            <span style="color:var(--fg-2)">
+              PodDisruptionBudget allows 0 disruptions. Ready capacity can drop during the rollout.
+            </span>
+            <div class="code">
+              kubectl --context prod-eu-west-1 -n payments rollout restart deployment/checkout-api
+            </div>
+            <span style="font-size:12.5px;color:var(--fg-2)">
+              Type{' '}
+              <b class="mono" style="color:var(--fg)">
+                prod-eu-west-1/checkout-api
+              </b>{' '}
+              to confirm
+            </span>
+            <div class="field">prod-eu-west-1/checkout-api</div>
+          </div>
+          <div class="ft" aria-hidden="true">
+            <span>Cancel</span>
+            <span class="danger">Restart deployment</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="investigate" aria-labelledby="iv">
+    <div class="wrap split">
+      <div class="copy">
+        <span class="eyebrow">{t('iv.eyebrow')}</span>
+        <h2 id="iv">{t('iv.title')}</h2>
+        <p class="muted">{t('iv.lead')}</p>
+        <ul class="facts">
+          {(['iv.1', 'iv.2', 'iv.3'] as const).map((k) => (
+            <li>
+              <svg class="ic" aria-hidden="true">
+                <use href="#i-check" />
+              </svg>
+              <span>{t(k)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="panel" role="img" aria-label={t('iv.panel')}>
+        <div class="ph">
+          <svg class="ic t-err" style="width:14px;height:14px" aria-hidden="true">
+            <use href="#i-trail"></use>
+          </svg>
+          checkout-api · 2 of 4 pods unhealthy
+        </div>
+        <div class="inv" aria-hidden="true">
+          <div>
+            <span class="eyebrow" style="font-size:10.5px">
+              Observed facts
+            </span>
+            <div class="evc">
+              <span class="k">
+                <b>E1</b>POD STATUS
+              </span>
+              <span>
+                Last termination <b>OOMKilled</b>, exit 137, on 2 pods
+              </span>
+            </div>
+            <div class="evc">
+              <span class="k">
+                <b>E3</b>METRICS-SERVER
+              </span>
+              <span>Healthy pods at 90% of the 256Mi limit</span>
+            </div>
+            <div class="evc">
+              <span class="k">
+                <b>E5</b>SHELL OUTPUT
+              </span>
+              <span class="mono" style="font-size:11.5px">
+                JAVA_TOOL_OPTIONS=-Xmx384m
+              </span>
+            </div>
+          </div>
+          <div>
+            <span class="eyebrow" style="font-size:10.5px">
+              Hypotheses · by people
+            </span>
+            <div class="hyp">
+              <span style="display:flex;gap:6px;align-items:center">
+                <b class="mono" style="color:var(--accent);font-size:11px">
+                  H1
+                </b>
+                <span class="tag" style="color:var(--info);box-shadow:inset 0 0 0 1px var(--info)">
+                  Supported
+                </span>
+              </span>
+              <span>JVM heap is set larger than the container limit.</span>
+              <span style="font:500 11px/1 var(--mono);color:var(--fg-3)">E1 · E3 · E5</span>
+            </div>
+            <div class="hyp">
+              <span style="display:flex;gap:6px;align-items:center">
+                <b class="mono" style="color:var(--fg-3);font-size:11px">
+                  H2
+                </b>
+                <span class="tag tag-dev">Open</span>
+              </span>
+              <span>Cache refresh grew after the 11:00 traffic peak.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="tools" aria-labelledby="tl">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">{t('tl.eyebrow')}</span>
+        <h2 id="tl">{t('tl.title')}</h2>
+      </div>
+      <div class="tools">
+        {tools.map((tool) => (
+          <div>
+            <h3>
+              <svg class="ic" aria-hidden="true">
+                <use href={`#${tool.icon}`} />
+              </svg>
+              {tool.title}
+            </h3>
+            <p>{t(tool.text)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="lf">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">{t('lf.eyebrow')}</span>
+        <h2 id="lf">{t('lf.title')}</h2>
+        <p class="lead">{t('lf.lead')}</p>
+      </div>
+      <ul class="never">
+        {never.map((item) => (
+          <li>
+            <svg class="ic" aria-hidden="true">
+              <use href={`#${item.icon}`} />
+            </svg>
+            <span set:html={t(item.text)} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="band" id="open-source" aria-labelledby="os">
+    <div class="wrap oss">
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <span class="eyebrow">{t('os.eyebrow')}</span>
+        <h2 id="os">{t('os.title')}</h2>
+        <p class="lead">{t('os.lead')}</p>
+        <div class="ctas">
+          <a class="btn btn-primary" href={repo}>
+            <svg class="ic" aria-hidden="true">
+              <use href="#i-gh"></use>
+            </svg>
+            {t('os.star')}
+          </a>
+          <a class="btn" href={`${repo}/issues`}>
+            {t('os.issue')}
+          </a>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <span class="eyebrow">{t('os.built')}</span>
+        <div class="stack">
+          <span>Go</span>
+          <span>Wails</span>
+          <span>React</span>
+          <span>TypeScript</span>
+          <span>client-go</span>
+        </div>
+        <p class="muted" style="font-size:15px">
+          {t('os.stack')}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="fq">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">{t('fq.eyebrow')}</span>
+        <h2 id="fq">{t('fq.title')}</h2>
+      </div>
+      <div class="faq">
+        {faq.map(([q, a]) => (
+          <details>
+            <summary>{t(q)}</summary>
+            <p>{t(a)}</p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,37 @@
+---
+// The Route mark without its tile. Colors follow the theme: on dark the route
+// is trail cyan with light stops; on light it is the deeper cyan with dark stops.
+interface Props {
+  size: number;
+}
+const { size } = Astro.props;
+---
+
+<svg class="mark" width={size} height={size} viewBox="8 8 48 48" aria-hidden="true">
+  <path d="M46 17H27L17 27V37L27 47H46" class="route"></path>
+  <circle cx="46.5" cy="17" r="5.4" class="origin"></circle>
+  <circle cx="46.5" cy="47" r="6.6" class="stop"></circle>
+</svg>
+
+<style>
+  .mark {
+    flex: none;
+  }
+  .route {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 8;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .origin {
+    fill: var(--bg);
+    stroke: var(--mark-ink);
+    stroke-width: 3.4;
+  }
+  .stop {
+    fill: var(--mark-ink);
+    stroke: var(--bg);
+    stroke-width: 2.6;
+  }
+</style>

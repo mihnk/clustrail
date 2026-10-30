@@ -13,6 +13,12 @@ frontend/bindings/
 frontend/test-results/
 frontend/playwright-report/
 
+# Website
+website/node_modules/
+website/dist/
+website/.astro/
+website/.wrangler/
+
 # Editors / OS
 .DS_Store
 .idea/

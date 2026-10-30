@@ -4,6 +4,8 @@ A free, open-source Kubernetes desktop workspace. Clustrail connects to your
 clusters with your own kubeconfig. It needs no in-cluster agent, no account and
 no SaaS backend.
 
+Website: [clustrail.mihnk.org](https://clustrail.mihnk.org) (source in `website/`).
+
 > **Status:** early development. The desktop app connects to the contexts in
 > your kubeconfig. Opened in a plain browser (Vite dev server), the UI runs on
 > mock data instead and the status bar says `MOCK DATA`.
@@ -116,6 +118,7 @@ internal/streaming/           Hub (shared subscriptions, coalescing), stream pro
 internal/mock/                Deterministic synthetic pod provider for benchmarks
 internal/diagnostics/         Process stats (CPU, heap, GC, goroutines)
 hack/bench.sh                 In-app benchmarks against synthetic clusters
+website/                      Product page (Astro, deployed to Cloudflare Workers)
 docs/                         Performance architecture and benchmark results
 build/                        App icon, macOS Info.plist, Windows installer (NSIS), Linux .desktop
 hack/kind-smoke.sh            Local kind cluster with workloads that exercise the app
