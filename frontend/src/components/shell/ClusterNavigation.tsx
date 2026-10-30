@@ -22,6 +22,8 @@ import {
   TriangleAlert,
   FileBadge,
   ShieldCheck,
+  HardDrive,
+  Waypoints,
 } from "lucide-react";
 import { DEFAULT_INVESTIGATION, useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
@@ -106,6 +108,7 @@ export function ClusterNavigation() {
         {list("networking.k8s.io/Ingress", <Globe />, <NavCount>19</NavCount>)}
         {list("ConfigMap", <FileText />, <NavCount>203</NavCount>)}
         {real && list("Secret", <KeyRound />)}
+        {real && <NavItem icon={<HardDrive />} label={t("Storage")} active={kind === "storage"} onClick={() => openView({ kind: "storage", title: t("Storage") })} />}
         {list("Event", <Activity />, <CountPill tone="warning" className="ml-auto">23</CountPill>)}
         <NavItem icon={<Server />} label={t("Nodes")} active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={real ? count(nodesAttention, nodeRows.length, "warning") : <><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
         <NavItem icon={<LayoutGrid />} label={t("All resource kinds")} onClick={openKinds} trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />
@@ -139,6 +142,7 @@ export function ClusterNavigation() {
         />
         <NavItem icon={<FileBadge />} label={t("Certificates")} active={kind === "certificates"} onClick={() => openView({ kind: "certificates", title: t("Certificates") })} />
         <NavItem icon={<ShieldCheck />} label={t("Access")} active={kind === "access"} onClick={() => openView({ kind: "access", title: t("Access") })} />
+        <NavItem icon={<Waypoints />} label={t("Network policies")} active={kind === "network"} onClick={() => openView({ kind: "network", title: t("Network policies") })} />
       </NavSection>
 
       <NavSection title={<span className="section-label">{t("Delivery")}</span>}>

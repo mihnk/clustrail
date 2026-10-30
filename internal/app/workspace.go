@@ -178,6 +178,37 @@ func (w *Workspace) WarningCount(cluster string, sinceSec int) (int, error) {
 
 func (w *Workspace) Expiry(cluster string) (kube.ExpiryReport, error) { return w.m.Expiry(cluster) }
 
+// Helm upgrade, storage and network policies.
+
+func (w *Workspace) HelmUpgradeSource(cluster, ns, name string) (kube.HelmUpgradeSource, error) {
+	return w.m.HelmUpgradeSource(cluster, ns, name)
+}
+
+func (w *Workspace) PlanHelmUpgrade(req kube.HelmUpgradeRequest) (kube.HelmUpgradePlan, error) {
+	return w.m.PlanHelmUpgrade(req)
+}
+
+func (w *Workspace) UpgradeRelease(req kube.HelmUpgradeRequest) (string, error) {
+	job, err := w.m.UpgradeRelease(req)
+	version := "installed chart"
+	if req.Version != "" {
+		version = req.Repo + " " + req.Version
+	}
+	// Values are not logged: they may hold credentials.
+	_ = audit(fmt.Sprintf("helm upgrade (%s, atomic=%t)", version, req.Atomic), req.Cluster, target(req.Namespace, req.Name), err)
+	return job, err
+}
+
+func (w *Workspace) Storage(cluster string) (kube.StorageReport, error) { return w.m.Storage(cluster) }
+
+func (w *Workspace) PodNetworkPolicies(cluster, ns, pod string) (kube.NetPolView, error) {
+	return w.m.PodNetworkPolicies(cluster, ns, pod)
+}
+
+func (w *Workspace) CheckConnection(cluster, srcNS, srcPod, dstNS, dstPod, dstIP string, port int32, protocol string) (kube.ConnectionCheck, error) {
+	return w.m.CheckConnection(cluster, srcNS, srcPod, dstNS, dstPod, dstIP, port, protocol)
+}
+
 // Debugging.
 
 func (w *Workspace) AddDebugContainer(req kube.DebugRequest) (kube.DebugContainer, error) {

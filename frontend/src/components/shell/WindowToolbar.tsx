@@ -19,6 +19,9 @@ import {
   TriangleAlert,
   FileBadge,
   ShieldCheck,
+  ArrowUpCircle,
+  HardDrive,
+  Waypoints,
 } from "lucide-react";
 import { IS_MOCK } from "@/data/mock";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -232,6 +235,12 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
       return <FileBadge className={cls} aria-hidden />;
     case "access":
       return <ShieldCheck className={cls} aria-hidden />;
+    case "helm-upgrade":
+      return <ArrowUpCircle className={cls} aria-hidden />;
+    case "storage":
+      return <HardDrive className={cls} aria-hidden />;
+    case "network":
+      return <Waypoints className={cls} aria-hidden />;
     case "connections":
       return <KeyRound className={cls} aria-hidden />;
     case "settings":

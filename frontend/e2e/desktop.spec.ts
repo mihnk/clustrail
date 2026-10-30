@@ -267,3 +267,56 @@ test("adds a debug container and opens a shell in it", async ({ page }) => {
   await expect.poll(() => backend.argsOf("StartExec").length).toBe(1);
   expect(backend.argsOf("StartExec")[0]![0]).toMatchObject({ pod: "checkout-api-7d9f8b6c4-9rkzd", container: "debugger-k2x9q", command: ["sh", "-c", "nslookup checkout-api; sh"] });
 });
+
+test("upgrades a Helm release after previewing what changes", async ({ page }) => {
+  await palette(page, "Helm releases");
+  await visible(page, "payments-workers").click({ button: "right" });
+  await page.getByRole("menuitem", { name: /Upgrade/ }).click();
+  const values = page.getByRole("textbox", { name: "Values" });
+  await expect(values).toHaveValue(/\[redacted by Clustrail\]/);
+  // Nothing can be upgraded before a preview.
+  const upgrade = page.getByRole("button", { name: "Upgrade…" });
+  await expect(upgrade).toBeDisabled();
+  await values.fill("replicaCount: 3\nimage:\n  tag: 1.8.4\ndb:\n  password: '[redacted by Clustrail]'\n");
+  await page.getByRole("button", { name: "Preview changes" }).click();
+  await expect(visible(page, "1 changed")).toBeVisible();
+  await expect(visible(page, /\+\s+image: ghcr\.io\/acme\/payments-workers:1\.8\.4/)).toBeVisible();
+  await expect(visible(page, /objects are deleted by this upgrade: ServiceMonitor\/payments-workers-v2/)).toBeVisible();
+  expect(backend.argsOf("PlanHelmUpgrade")[0]![0]).toMatchObject({ cluster: "prod-eu-west-1", namespace: "payments", name: "payments-workers", wait: true, atomic: true, timeoutSec: 300 });
+  // Editing after the preview asks for a new one.
+  await values.fill("replicaCount: 4\n");
+  await expect(upgrade).toBeDisabled();
+  await page.getByRole("button", { name: "Preview changes" }).click();
+  await expect(upgrade).toBeEnabled();
+  await upgrade.click();
+  const confirm = page.getByRole("alertdialog");
+  await confirm.getByRole("textbox").fill("prod-eu-west-1/payments-workers");
+  await confirm.getByRole("button", { name: "Upgrade" }).click();
+  await expect.poll(() => backend.argsOf("UpgradeRelease").length).toBe(1);
+  expect((backend.argsOf("UpgradeRelease")[0]![0] as { values: string }).values).toBe("replicaCount: 4\n");
+});
+
+test("storage: pending claims, usage and who mounts what", async ({ page }) => {
+  await palette(page, "Storage");
+  await expect(visible(page, "ProvisioningFailed ×6 · could not create volume")).toBeVisible();
+  await expect(visible(page, "93%")).toBeVisible();
+  await expect(visible(page, "1 not bound")).toBeVisible();
+  await visible(page, "data-ledger-db-0").click();
+  await expect(visible(page, "StatefulSet/ledger-db")).toBeVisible();
+  await page.getByRole("radio", { name: "Storage classes" }).click();
+  await expect(visible(page, "WaitForFirstConsumer")).toBeVisible();
+});
+
+test("network policies of a pod, and a connection check", async ({ page }) => {
+  await page.getByRole("tab", { name: /^Pods/ }).click();
+  await visible(page, "checkout-api-7d9f8b6c4-9rkzd").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Network policies" }).click();
+  await expect(visible(page, "Pods app=gateway in namespaces zone=edge")).toBeVisible();
+  await expect(visible(page, /runs Cilium, which enforces them/)).toBeVisible();
+  await expect(visible(page, "open: no policy selects it")).toBeVisible();
+  await page.getByLabel("To pod (namespace/name) or IP").fill("payments/checkout-api-7d9f8b6c4-h2pqs");
+  await page.getByLabel("Port").fill("5432");
+  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await expect(visible(page, "Denied")).toBeVisible();
+  expect(backend.argsOf("CheckConnection")[0]).toEqual(["prod-eu-west-1", "payments", "checkout-api-7d9f8b6c4-9rkzd", "payments", "checkout-api-7d9f8b6c4-h2pqs", "", 5432, "TCP"]);
+});

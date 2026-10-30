@@ -200,6 +200,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
             // Desktop: an empty container means the pod's default container.
             revealResource("session", `${p.cluster}/${p.namespace}/${p.name}/${backend ? "" : p.owner ? "api" : "app"}`);
           },
+          openNetwork: (p) => openView({ kind: "network", title: tt("Network policies"), cluster: p.cluster, params: { namespace: p.namespace, pod: p.name } }),
           openLogs: (p) =>
             openView({
               kind: "logs",

@@ -20,6 +20,8 @@ import {
   TriangleAlert,
   FileBadge,
   ShieldCheck,
+  HardDrive,
+  Waypoints,
 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { IS_MOCK } from "@/data/mock";
@@ -140,6 +142,8 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       ["Warning events", <TriangleAlert key="w" />, () => ws.openView({ kind: "warnings", title: t("Warning events") })],
       ["Certificates", <FileBadge key="cert" />, () => ws.openView({ kind: "certificates", title: t("Certificates") })],
       ["Access", <ShieldCheck key="a" />, () => ws.openView({ kind: "access", title: t("Access") })],
+      ["Storage", <HardDrive key="st" />, () => ws.openView({ kind: "storage", title: t("Storage") })],
+      ["Network policies", <Waypoints key="np" />, () => ws.openView({ kind: "network", title: t("Network policies") })],
       ["Connections", <KeyRound key="k" />, () => ws.openView({ kind: "connections", title: t("Connections") })],
       ["Settings", <Settings key="s" />, () => ws.openView({ kind: "settings", title: t("Settings") })],
     ];

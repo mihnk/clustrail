@@ -178,6 +178,42 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       const req = args[0] as { namespace: string; pod: string };
       return { namespace: req.namespace, pod: req.pod, container: "debugger-k2x9q" };
     }
+    case "HelmUpgradeSource":
+      return {
+        chart: "payments-workers", version: "2.4.0", appVersion: "1.9.0", revision: 8,
+        values: "replicaCount: 3\nimage:\n  tag: 1.9.0\ndb:\n  password: '[redacted by Clustrail]'\n",
+        defaults: "replicaCount: 1\n",
+        versions: [{ repo: "acme", version: "2.5.0", appVersion: "1.10.0" }],
+      };
+    case "PlanHelmUpgrade":
+      return {
+        chart: "payments-workers", version: "2.4.0", appVersion: "1.9.0", hooks: 0, valueKeys: ["image"],
+        objects: [
+          { kind: "Deployment", name: "payments-workers", namespace: "payments", change: "changed", before: "spec:\n  image: ghcr.io/acme/payments-workers:1.9.0\n  replicas: 3", after: "spec:\n  image: ghcr.io/acme/payments-workers:1.8.4\n  replicas: 3" },
+          { kind: "ServiceMonitor", name: "payments-workers-v2", namespace: "payments", change: "removed", before: "kind: ServiceMonitor" },
+          { kind: "Service", name: "payments-workers", namespace: "payments", change: "unchanged", before: "kind: Service", after: "kind: Service" },
+        ],
+      };
+    case "UpgradeRelease":
+      return "helm-up-1";
+    case "Storage":
+      return {
+        cluster: args[0], scope: "", usage: "kubelet", notes: [],
+        claims: [
+          { id: `${args[0]}/payments/data-ledger-db-2`, namespace: "payments", name: "data-ledger-db-2", phase: "Pending", health: "warning", class: "gp3", requested: "100Gi", accessModes: ["ReadWriteOnce"], created: "2026-10-30T00:00:00Z", pods: [{ name: "ledger-db-2", phase: "Pending" }], reason: "ProvisioningFailed ×6 · could not create volume" },
+          { id: `${args[0]}/payments/data-ledger-db-0`, namespace: "payments", name: "data-ledger-db-0", phase: "Bound", health: "healthy", volume: "pvc-8f2c", class: "gp3", requested: "100Gi", capacity: "100Gi", accessModes: ["ReadWriteOnce"], created: "2026-03-30T00:00:00Z", pods: [{ name: "ledger-db-0", phase: "Running", node: "node-1", owner: "StatefulSet/ledger-db" }], usedBytes: 93, capacityBytes: 100 },
+        ],
+        volumes: [{ name: "pvc-8f2c", phase: "Bound", health: "healthy", capacity: "100Gi", class: "gp3", claim: "payments/data-ledger-db-0", reclaimPolicy: "Delete", accessModes: ["ReadWriteOnce"], source: "csi · ebs.csi.aws.com", created: "2026-03-30T00:00:00Z" }],
+        classes: [{ name: "gp3", provisioner: "ebs.csi.aws.com", reclaimPolicy: "Delete", bindingMode: "WaitForFirstConsumer", expansion: true, default: true, claims: 2 }],
+      };
+    case "PodNetworkPolicies":
+      return {
+        namespace: args[1], pod: args[2], labels: { app: "checkout-api" }, plugin: "Cilium", enforced: "yes", all: ["allow-gateway", "default-deny"],
+        ingress: { isolated: true, policies: ["default-deny", "allow-gateway"], rules: [{ policy: "allow-gateway", rule: 1, peers: "Pods app=gateway in namespaces zone=edge", ports: "TCP 8080", pods: 2 }] },
+        egress: { isolated: false, policies: [], rules: [] },
+      };
+    case "CheckConnection":
+      return { allowed: false, egress: true, egressVia: "no policy selects the pod", ingress: false, ingressVia: "denied: selected by default-deny and no rule matches" };
     case "TriggerCronJob":
       return "nightly-report-manual-10301200123";
     case "StartPortForward": {

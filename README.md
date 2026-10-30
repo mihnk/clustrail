@@ -110,6 +110,21 @@ through one Wails service (`internal/app.Workspace`) and its events.
   `/host`; it is deleted when the shell closes or Clustrail quits. Read-only
   contexts offer neither; production and protected contexts ask for the
   context name.
+- **Helm upgrade** (`helm_upgrade.go`): edit the release's user-supplied
+  values (credential-like keys stay `[redacted by Clustrail]` and keep their
+  live value), optionally pick another chart version from a repository in
+  Helm's `repositories.yaml`, and preview: a server-side dry run diffed object
+  by object against the deployed manifest, Secret values hidden. Upgrade runs
+  with `--wait`/`--atomic`/`--timeout` as chosen, after a typed confirmation
+  on protected and production contexts.
+- **Storage** (`storage.go`): claims, volumes and storage classes with the
+  pods that mount each claim, why a claim is not Bound (its newest event), and
+  how full each volume is from the kubelet's stats (`nodes/proxy`), when
+  allowed.
+- **Network policies** (`netpol.go`): for one pod, which policies select it
+  and what each rule lets in and out, with the network plugin found in
+  kube-system and whether it enforces policies; a check says whether one
+  connection (pod or IP, port, protocol) is allowed and by which rule.
 - **Checks** (`insights.go`): Warning events across the selected clusters
   (the context's namespace when RBAC denies cluster-wide); certificates and
   tokens with an end date (the kubeconfig's client certificate or JWT, the API
@@ -161,6 +176,8 @@ frontend/
   src/features/deployments/   Deployments list and restart flow
   src/features/investigation/ Investigation workspace
   src/features/insights/      Warning events, Certificates, Access
+  src/features/storage/       Claims, volumes and storage classes
+  src/features/network/       Network policies of a pod and connection checks
   src/features/debug/         Debug container and node shell dialogs
   src/features/…               Clusters, Nodes, Logs, Shell, YAML, Compare, Helm, GitOps, Connections, Settings
   src/backend/                Wails client, desktop-mode detection, on-demand data hooks

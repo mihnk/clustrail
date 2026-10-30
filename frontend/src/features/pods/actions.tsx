@@ -1,4 +1,4 @@
-import { Bug, Cable, Code, Layers, RotateCcw, ScrollText, SquareTerminal, Trash2 } from "lucide-react";
+import { Bug, Cable, Code, Layers, RotateCcw, ScrollText, SquareTerminal, Trash2, Waypoints } from "lucide-react";
 import { openDebug } from "@/features/debug/DebugDialogs";
 import { backend } from "@/backend/client";
 import { openPortForward } from "@/features/portforward/PortForward";
@@ -19,6 +19,8 @@ interface PodActionDeps {
   openLogs: (pod: PodRow) => void;
   openShell: (pod: PodRow) => void;
   openYaml: (pod: PodRow) => void;
+  /** Opens the network policies of the pod. */
+  openNetwork?: (pod: PodRow) => void;
 }
 
 /** Owning Deployment name: the owner itself on the desktop, else from the ReplicaSet ("app-7d9f8b6c4" -> "app"). */
@@ -57,6 +59,9 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       onSelect: () => openDebug({ kind: "pod", cluster: pod.cluster, namespace: pod.namespace, pod: pod.name }),
     },
     { id: "yaml", group: "observe", label: t("View YAML"), icon: <Code />, shortcut: "Y", onSelect: () => deps.openYaml(pod) },
+    ...(deps.openNetwork
+      ? [{ id: "network", group: "observe" as const, label: t("Network policies"), icon: <Waypoints />, disabled: !backend, onSelect: () => deps.openNetwork!(pod) }]
+      : []),
     {
       id: "forward",
       group: "observe",

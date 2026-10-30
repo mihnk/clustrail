@@ -25,6 +25,9 @@ import { DebugHost } from "@/features/debug/DebugDialogs";
 import { WarningsWorkspace } from "@/features/insights/WarningsWorkspace";
 import { CertificatesWorkspace } from "@/features/insights/CertificatesWorkspace";
 import { AccessWorkspace } from "@/features/insights/AccessWorkspace";
+import { HelmUpgradeWorkspace } from "@/features/helm/HelmUpgradeWorkspace";
+import { StorageWorkspace } from "@/features/storage/StorageWorkspace";
+import { NetworkWorkspace } from "@/features/network/NetworkWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
 // xterm.js and Monaco only load when a Shell or YAML tab renders.
@@ -116,7 +119,7 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
   // Single-cluster workspaces and investigations need the width: the sidebar collapses to a rail.
   // Investigations, single-cluster lists and tool tabs (Logs, Shell, YAML, Compare) need the width.
   const railNav =
-    ["investigation", "logs", "shell", "yaml", "compare", "connections", "settings"].includes(activeTab?.kind ?? "") ||
+    ["investigation", "logs", "shell", "yaml", "compare", "helm-upgrade", "connections", "settings"].includes(activeTab?.kind ?? "") ||
     (activeTab?.kind === "deployments" && !!activeTab.cluster);
 
   const [fontSize] = usePersistentState("settings.fontSize", 13);
@@ -200,6 +203,12 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <CertificatesWorkspace active={active} />;
     case "access":
       return <AccessWorkspace active={active} />;
+    case "helm-upgrade":
+      return <HelmUpgradeWorkspace tab={tab} active={active} />;
+    case "storage":
+      return <StorageWorkspace active={active} />;
+    case "network":
+      return <NetworkWorkspace tab={tab} active={active} />;
     case "connections":
       return <ConnectionsWorkspace active={active} />;
     case "settings":

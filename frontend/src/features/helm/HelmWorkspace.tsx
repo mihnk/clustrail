@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
-import { History, LifeBuoy, Search, SearchX } from "lucide-react";
+import { ArrowUpCircle, History, LifeBuoy, Search, SearchX } from "lucide-react";
+import { upgradeTab } from "./upgradeTab";
 import { useWorkspace } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { isAttention } from "@/data/health";
@@ -129,6 +130,14 @@ export function HelmWorkspace({ active }: { active: boolean }) {
       const lastGood = r.history.find((h) => h.rev !== r.revision && (h.status === "deployed" || h.status === "superseded"));
       return [
         {
+          id: "upgrade",
+          group: "modify",
+          label: tt("Upgrade…"),
+          icon: <ArrowUpCircle />,
+          disabled: !backend,
+          onSelect: () => ws.openView(upgradeTab(r)),
+        },
+        {
           id: "rollback",
           group: "modify",
           label: lastGood ? tt("Roll back to {rev}…", { rev: lastGood.rev }) : tt("Roll back…"),
@@ -138,7 +147,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
         },
       ];
     },
-    [requestRollback],
+    [requestRollback, ws],
   );
 
   const rowActions = useCallback(

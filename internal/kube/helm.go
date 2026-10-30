@@ -467,15 +467,7 @@ type HelmRepository struct {
 // HelmRepositories lists the repositories the Helm CLI on this machine knows.
 // Clustrail reads them to decide whether a chart can be upgraded; it does not change them.
 func HelmRepositories() ([]HelmRepository, error) {
-	path := os.Getenv("HELM_REPOSITORY_CONFIG")
-	if path == "" {
-		dir, err := os.UserConfigDir()
-		if err != nil {
-			return nil, err
-		}
-		path = filepath.Join(dir, "helm", "repositories.yaml")
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(helmRepositoryConfig())
 	if os.IsNotExist(err) {
 		return []HelmRepository{}, nil
 	}
@@ -492,4 +484,16 @@ func HelmRepositories() ([]HelmRepository, error) {
 		f.Repositories = []HelmRepository{}
 	}
 	return f.Repositories, nil
+}
+
+// helmRepositoryConfig is the path of Helm's repositories.yaml.
+func helmRepositoryConfig() string {
+	if path := os.Getenv("HELM_REPOSITORY_CONFIG"); path != "" {
+		return path
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "repositories.yaml"
+	}
+	return filepath.Join(dir, "helm", "repositories.yaml")
 }

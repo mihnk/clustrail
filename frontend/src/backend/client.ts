@@ -379,6 +379,137 @@ export interface ExpiryReport {
   notes: string[];
 }
 
+// Helm upgrade (internal/kube/helm_upgrade.go).
+export interface HelmUpgradeRequest {
+  cluster: string;
+  namespace: string;
+  name: string;
+  values: string;
+  repo?: string;
+  version?: string;
+  wait: boolean;
+  atomic: boolean;
+  timeoutSec: number;
+}
+
+export interface HelmUpgradeSource {
+  chart: string;
+  version: string;
+  appVersion: string;
+  revision: number;
+  values: string;
+  defaults: string;
+  versions: { repo: string; version: string; appVersion?: string }[];
+  versionsNote?: string;
+}
+
+export interface HelmObjectChange {
+  kind: string;
+  name: string;
+  namespace?: string;
+  change: "changed" | "added" | "removed" | "unchanged";
+  before?: string;
+  after?: string;
+}
+
+export interface HelmUpgradePlan {
+  chart: string;
+  version: string;
+  appVersion: string;
+  objects: HelmObjectChange[];
+  hooks: number;
+  notes?: string;
+  valueKeys: string[];
+}
+
+// Storage (internal/kube/storage.go).
+export interface StorageClaim {
+  id: string;
+  namespace: string;
+  name: string;
+  phase: string;
+  health: "healthy" | "warning" | "failed" | "terminating";
+  volume?: string;
+  class?: string;
+  requested: string;
+  capacity?: string;
+  accessModes: string[];
+  volumeMode?: string;
+  created: string;
+  pods: { name: string; phase: string; node?: string; owner?: string }[];
+  reason?: string;
+  usedBytes?: number;
+  capacityBytes?: number;
+}
+
+export interface StorageVolume {
+  name: string;
+  phase: string;
+  health: "healthy" | "warning" | "failed" | "idle" | "unknown";
+  capacity: string;
+  class?: string;
+  claim?: string;
+  reclaimPolicy: string;
+  accessModes: string[];
+  source: string;
+  created: string;
+  reason?: string;
+}
+
+export interface StorageClassInfo {
+  name: string;
+  provisioner: string;
+  reclaimPolicy: string;
+  bindingMode: string;
+  expansion: boolean;
+  default: boolean;
+  claims: number;
+}
+
+export interface StorageReport {
+  cluster: string;
+  scope: string;
+  claims: StorageClaim[];
+  volumes: StorageVolume[];
+  classes: StorageClassInfo[];
+  usage: string;
+  notes: string[];
+}
+
+// Network policies (internal/kube/netpol.go).
+export interface NetPolRule {
+  policy: string;
+  rule: number;
+  peers: string;
+  ports: string;
+  pods: number;
+}
+
+export interface NetPolDirection {
+  isolated: boolean;
+  policies: string[];
+  rules: NetPolRule[];
+}
+
+export interface NetPolView {
+  namespace: string;
+  pod: string;
+  labels: Record<string, string>;
+  ingress: NetPolDirection;
+  egress: NetPolDirection;
+  plugin: string;
+  enforced: "yes" | "no" | "unknown";
+  all: string[];
+}
+
+export interface ConnectionCheck {
+  allowed: boolean;
+  egress: boolean;
+  egressVia: string;
+  ingress: boolean;
+  ingressVia: string;
+}
+
 // Debugging (internal/kube/debug.go).
 export interface DebugRequest {
   cluster: string;
@@ -554,6 +685,14 @@ export const backendApi = {
   warningCount: (cluster: string, sinceSec: number) => call<number>("WarningCount", cluster, sinceSec),
   accessMatrix: (cluster: string, subject: AccessSubject, namespace: string) => call<AccessResult>("AccessMatrix", cluster, subject, namespace),
   expiry: (cluster: string) => call<ExpiryReport>("Expiry", cluster),
+
+  helmUpgradeSource: (cluster: string, ns: string, name: string) => call<HelmUpgradeSource>("HelmUpgradeSource", cluster, ns, name),
+  planHelmUpgrade: (req: HelmUpgradeRequest) => call<HelmUpgradePlan>("PlanHelmUpgrade", req),
+  upgradeRelease: (req: HelmUpgradeRequest) => call<string>("UpgradeRelease", req),
+  storage: (cluster: string) => call<StorageReport>("Storage", cluster),
+  podNetworkPolicies: (cluster: string, ns: string, pod: string) => call<NetPolView>("PodNetworkPolicies", cluster, ns, pod),
+  checkConnection: (cluster: string, srcNS: string, srcPod: string, dstNS: string, dstPod: string, dstIP: string, port: number, protocol: string) =>
+    call<ConnectionCheck>("CheckConnection", cluster, srcNS, srcPod, dstNS, dstPod, dstIP, port, protocol),
 
   addDebugContainer: (req: DebugRequest) => call<{ namespace: string; pod: string; container: string }>("AddDebugContainer", req),
   startNodeShell: (req: NodeShellRequest) => call<NodeShellInfo>("StartNodeShell", req),

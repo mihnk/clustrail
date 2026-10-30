@@ -3,6 +3,8 @@ import { ArrowUpCircle, Code, Diff, History, Info, LifeBuoy, Lock, X } from "luc
 import type { Cluster } from "@/data/types";
 import { planFromManifests, rollbackPlan, type HelmRelease, type RollbackPlan } from "@/data/helm";
 import { backend } from "@/backend/client";
+import { useWorkspace } from "@/app/workspace";
+import { upgradeTab } from "./upgradeTab";
 import { useHelmRevision, type HelmRevisionInfo } from "@/backend/hooks";
 import { hunks, lineDiff } from "@/data/compare";
 import { Button, IconButton } from "@/components/ui/button";
@@ -63,6 +65,7 @@ export function HelmInspector({
   onClose: () => void;
   onRollback: (rev: number, plan: RollbackPlan) => void;
 }) {
+  const ws = useWorkspace();
   const current = r.history[0]!;
   const lastGood = r.history.find((h) => h.rev !== r.revision && (h.status === "deployed" || h.status === "superseded"));
   const [tab, setTab] = useState(r.status === "failed" ? "history" : "overview");
@@ -156,8 +159,9 @@ export function HelmInspector({
             <Code aria-hidden />{t("Manifest")}</Button>
           <div className="flex-1" />
           <Button
-            disabled
-            title={r.repoKnown ? t("Upgrades run from your CI pipeline in this build") : t("Chart repository for {v0}{chart} is not configured", { v0: backend ? "" : "acme/", chart: r.chart })}
+            disabled={!backend || busy || cluster?.readOnly}
+            title={!backend ? t("Upgrades run against your clusters in the desktop app.") : cluster?.readOnly ? t("Read-only context") : undefined}
+            onClick={() => ws.openView(upgradeTab(r))}
           >
             <ArrowUpCircle aria-hidden />{t("Upgrade…")}</Button>
           <Button
@@ -337,9 +341,9 @@ export function HelmInspector({
           {!r.repoKnown && (
             <div role="status" className="flex gap-2 rounded-lg bg-status-progressing-soft px-2.5 py-2 text-ui">
               <Info className="mt-px size-3.5 shrink-0 text-status-progressing" aria-hidden />
-              <span>{t("Upgrade needs the chart. Add the repo that hosts")}{" "}
+              <span>{t("Upgrades with new values use the installed chart. Other chart versions need the repo that hosts")}{" "}
                 <span className="font-mono">{backend ? r.chart : t("acme/{chart}", { chart: r.chart })}</span>{" "}
-                {backend ? t("with helm repo add, or upgrade from your CI pipeline.") : t("in Settings › Helm, or upgrade from your CI pipeline.")}
+                {backend ? t("(helm repo add, helm repo update).") : t("in Settings › Helm, or upgrade from your CI pipeline.")}
               </span>
             </div>
           )}

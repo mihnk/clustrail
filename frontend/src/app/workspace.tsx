@@ -32,6 +32,9 @@ export type WorkspaceTabKind =
   | "helm"
   | "gitops"
   | "warnings"
+  | "helm-upgrade"
+  | "storage"
+  | "network"
   | "certificates"
   | "access"
   | "connections"
@@ -50,7 +53,7 @@ export interface WorkspaceTab {
 
 const SAVED_TABS = "workspace.desktop.tabs";
 /** Tabs that reopen on launch. Streams (Logs, Shell) and unsaved drafts (Create) start fresh. */
-const RESTORABLE: WorkspaceTabKind[] = ["clusters", "pods", "deployments", "nodes", "helm", "gitops", "warnings", "certificates", "access", "connections", "settings", "list", "yaml", "investigation", "compare"];
+const RESTORABLE: WorkspaceTabKind[] = ["clusters", "pods", "deployments", "nodes", "helm", "gitops", "warnings", "certificates", "access", "storage", "network", "connections", "settings", "list", "yaml", "investigation", "compare"];
 const DEFAULT_TABS: WorkspaceTab[] = [
   { id: "clusters", kind: "clusters", title: tt("Clusters") },
   { id: "pods", kind: "pods", title: tt("Pods") },
@@ -66,7 +69,7 @@ function launchTabs(): { tabs: WorkspaceTab[]; active: string } {
 }
 
 /** Explorer kinds have one tab each; tool tabs (Logs, Shell, YAML, Compare) open per target. */
-const SINGLETON_KINDS: WorkspaceTabKind[] = ["clusters", "pods", "nodes", "helm", "gitops", "warnings", "certificates", "access", "connections", "settings"];
+const SINGLETON_KINDS: WorkspaceTabKind[] = ["clusters", "pods", "nodes", "helm", "gitops", "warnings", "certificates", "access", "storage", "network", "connections", "settings"];
 
 export interface MockScenarios {
   /** prod-us-east-1 loses its watch: rows go stale while it retries. */
@@ -758,6 +761,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
               (t.cluster === spec.cluster && JSON.stringify(t.params ?? {}) === JSON.stringify(spec.params ?? {}))),
       );
       if (existing) {
+        // A singleton opened for something else (Network policies of another pod) takes the new target.
+        if (spec.params && JSON.stringify(existing.params ?? {}) !== JSON.stringify(spec.params)) {
+          setTabs(tabs.map((t) => (t.id === existing.id ? { ...t, cluster: spec.cluster ?? t.cluster, params: spec.params } : t)));
+        }
         setActiveTabId(existing.id);
         return existing.id;
       }

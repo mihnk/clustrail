@@ -2,7 +2,6 @@ package kube
 
 import (
 	"fmt"
-	"log/slog"
 	"time"
 
 	"helm.sh/helm/v4/pkg/action"
@@ -54,9 +53,8 @@ func (m *Manager) RollbackRelease(cluster, ns, name string, revision int) (strin
 	if err != nil {
 		return "", err
 	}
-	cfg := action.NewConfiguration()
-	cfg.SetLogger(slog.DiscardHandler)
-	if err := cfg.Init(restGetter{cfg: c.rest, namespace: ns}, ns, "secret"); err != nil {
+	cfg, err := helmConfig(c, ns)
+	if err != nil {
 		return "", err
 	}
 	rb := action.NewRollback(cfg)
