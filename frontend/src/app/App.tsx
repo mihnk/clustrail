@@ -10,6 +10,7 @@ import { StatusBar } from "@/components/shell/StatusBar";
 import { EmptyState } from "@/components/EmptyState";
 import { PodsWorkspace } from "@/features/pods/PodsWorkspace";
 import { InvestigationWorkspace } from "@/features/investigation/InvestigationWorkspace";
+import { CompareWorkspace } from "@/features/compare/CompareWorkspace";
 import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspace";
 import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
@@ -104,6 +105,8 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       );
     case "investigation":
       return <InvestigationWorkspace />;
+    case "compare":
+      return <CompareWorkspace tab={tab} active={active} />;
     case "deployments":
       return <DeploymentsWorkspace cluster={tab.cluster ?? ""} namespace={tab.params?.namespace ?? ""} active={active} />;
     default:
