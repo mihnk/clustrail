@@ -22,6 +22,7 @@ import { MetricsChart } from "@/components/charts/MetricsChart";
 import { EmptyState } from "@/components/EmptyState";
 import { formatMemory } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { useWorkspace } from "@/app/workspace";
 
 export type InspectorTab = "overview" | "containers" | "events" | "logs" | "yaml" | "metrics" | "related";
 
@@ -46,6 +47,7 @@ export function PodInspector({
   onOpenOwner: (kind: string, name: string) => void;
   themeKey: string;
 }) {
+  const ws = useWorkspace();
   const { pod } = detail;
   const investigateTarget = detail.ownerChain.find((o) => o.kind === "Deployment")?.name ?? pod.name;
 
@@ -185,11 +187,44 @@ export function PodInspector({
           <RelatedList relations={detail.relations} />
         </TabPanel>
 
-        {(["logs", "yaml", "metrics"] as const).map((t) => (
-          <TabPanel key={t} value={t}>
-            <EmptyState title="Not available yet">This view is not implemented in this build.</EmptyState>
-          </TabPanel>
-        ))}
+        <TabPanel value="logs">
+          <EmptyState
+            title="Logs open in their own tab"
+            action={
+              <Button
+                onClick={() =>
+                  ws.openView({
+                    kind: "logs",
+                    title: `Logs · ${pod.owner?.name ?? pod.name}`,
+                    cluster: pod.cluster,
+                    params: { namespace: pod.namespace, workload: pod.owner?.name ?? pod.name, pod: pod.name },
+                  })
+                }
+              >
+                Open logs
+              </Button>
+            }
+          >
+            Follow, search and pin lines from every container of this pod.
+          </EmptyState>
+        </TabPanel>
+        <TabPanel value="yaml">
+          <EmptyState
+            title="YAML opens in its own tab"
+            action={
+              <Button
+                onClick={() =>
+                  ws.openView({ kind: "yaml", title: `YAML · ${pod.name}`, cluster: pod.cluster, params: { kind: "Pod", namespace: pod.namespace, name: pod.name } })
+                }
+              >
+                Open YAML
+              </Button>
+            }
+          />
+        </TabPanel>
+        <TabPanel value="metrics">
+          <MemorySection detail={detail} themeKey={themeKey} />
+        </TabPanel>
       </Tabs>
 
       <div className="border-t border-line px-3.5 py-2.5">
