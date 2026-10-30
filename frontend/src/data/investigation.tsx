@@ -149,3 +149,66 @@ export const checkoutInvestigation: Investigation = {
   ],
   initiallyDone: ["c1"],
 };
+
+// ---------------------------------------------------------------------------
+// Evidence-and-hypotheses layout (B7).
+
+export interface Symptom {
+  health: "failed" | "warning";
+  text: ReactNode;
+  plain: string;
+  fact: string;
+}
+
+export interface Hypothesis {
+  id: string;
+  text: string;
+  status: "Open" | "Supported" | "Refuted";
+  evidence: string[];
+  author: string;
+  at: string;
+}
+
+export interface Step {
+  id: string;
+  text: string;
+  action?: "compare" | "source";
+}
+
+export const symptoms: Symptom[] = [
+  { health: "failed", text: "2 of 4 replicas available", plain: "2 of 4 replicas available", fact: "47m" },
+  { health: "failed", text: <>Container {m("api")} in CrashLoopBackOff on 2 pods</>, plain: "Container api in CrashLoopBackOff on 2 pods", fact: "now" },
+  { health: "failed", text: "Last termination OOMKilled, exit 137", plain: "Last termination OOMKilled, exit 137", fact: "×25" },
+  { health: "warning", text: "Readiness probe 503", plain: "Readiness probe 503", fact: "×17" },
+  { health: "warning", text: "Service endpoints 2/4 ready", plain: "Service endpoints 2/4 ready", fact: "now" },
+];
+
+export const initialHypotheses: Hypothesis[] = [
+  {
+    id: "H1",
+    text: "JVM max heap (-Xmx384m) is larger than the container memory limit (256Mi), so the container can be OOM-killed before the JVM limits itself.",
+    status: "Supported",
+    evidence: ["E1", "E3", "E5"],
+    author: "you",
+    at: "12:07",
+  },
+  {
+    id: "H2",
+    text: "Price cache refresh grows the heap faster since ~11:00. Unverified: no heap data before Clustrail started sampling.",
+    status: "Open",
+    evidence: ["E4"],
+    author: "you",
+    at: "12:11",
+  },
+];
+
+export const initialNotes =
+  "12:09 Paged #payments-oncall. Not restarting: PDB is at 0 and a restart keeps the 256Mi limit.\n12:14 Asked owner to confirm intended heap size in git.";
+
+export const steps: Step[] = [
+  { id: "p1", text: "Read previous container logs" },
+  { id: "p2", text: "Check limits vs JVM settings" },
+  { id: "p3", text: "Compare with staging-eu-1", action: "compare" },
+  { id: "p4", text: "Find heap setting in git source", action: "source" },
+  { id: "p5", text: "Check same Deployment in prod-us-east-1" },
+];

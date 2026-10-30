@@ -63,7 +63,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const [sources, setSources] = useState<LogSource[]>(checkoutSources);
   const [enabled, setEnabled] = useState<Set<SourceTag>>(new Set(["A", "B", "C"]));
   const [containers, setContainers] = useState<Record<string, Set<string>>>({ A: new Set(["api"]), B: new Set(["api"]), C: new Set(["api"]), D: new Set(["api"]) });
-  const [instance, setInstance] = useState<"current" | "previous">("current");
+  const [instance, setInstance] = useState<"current" | "previous">(tab.params?.previous ? "previous" : "current");
   const [range, setRange] = useState<(typeof RANGES)[number]>("15m");
   const [layout, setLayout] = useState<"merged" | "split">("merged");
   const [showTs, setShowTs] = useState(true);
