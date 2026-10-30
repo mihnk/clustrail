@@ -16,8 +16,9 @@ import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
 import { LogsWorkspace } from "@/features/logs/LogsWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
-// xterm.js only loads when a Shell tab renders.
+// xterm.js and Monaco only load when a Shell or YAML tab renders.
 const ShellWorkspace = lazy(() => import("@/features/terminal/ShellWorkspace").then((m) => ({ default: m.ShellWorkspace })));
+const YamlWorkspace = lazy(() => import("@/features/yaml/YamlWorkspace").then((m) => ({ default: m.YamlWorkspace })));
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
 
@@ -87,6 +88,12 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return (
         <Suspense fallback={<EmptyState className="flex-1" title="Loading terminal…" />}>
           <ShellWorkspace tab={tab} active={active} />
+        </Suspense>
+      );
+    case "yaml":
+      return (
+        <Suspense fallback={<EmptyState className="flex-1" title="Loading editor…" />}>
+          <YamlWorkspace tab={tab} active={active} />
         </Suspense>
       );
     case "resource":

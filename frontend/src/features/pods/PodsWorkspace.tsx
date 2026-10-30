@@ -181,6 +181,13 @@ export function PodsWorkspace({ active }: { active: boolean }) {
           restartDeployment,
           openTab,
           hasTab: (tabId) => tabs.some((t) => t.id === tabId),
+          openYaml: (p) =>
+            openView({
+              kind: "yaml",
+              title: `YAML · ${p.name.split("-").slice(-1)[0]}`,
+              cluster: p.cluster,
+              params: { kind: "Pod", namespace: p.namespace, name: p.name },
+            }),
           openShell: (p) => {
             openView({ id: "shell", kind: "shell", title: "Shell", cluster: p.cluster });
             revealResource("session", `${p.cluster}/${p.namespace}/${p.name}/${p.owner ? "api" : "app"}`);

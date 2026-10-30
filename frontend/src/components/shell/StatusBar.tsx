@@ -23,7 +23,9 @@ export function StatusBar() {
         ? "Read-only stream · protected mode does not apply to logs"
         : activeTab?.kind === "shell"
           ? "Shell commands are not checked by Clustrail · RBAC: pods/exec"
-          : null;
+          : activeTab?.kind === "yaml"
+            ? "Edits apply with server-side apply · protected mode asks first"
+            : null;
     return (
       <footer className="flex h-6 shrink-0 items-center gap-4 border-t border-line bg-surface-side px-3 text-meta text-fg-muted">
         <span className="flex items-center gap-1.5 whitespace-nowrap">

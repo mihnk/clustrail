@@ -25,7 +25,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.3.0",
-    "uplot": "^1.6.32"
+    "uplot": "^1.6.32",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",

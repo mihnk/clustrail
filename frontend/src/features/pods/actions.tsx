@@ -14,6 +14,7 @@ interface PodActionDeps {
   hasTab: (id: string) => boolean;
   openLogs: (pod: PodRow) => void;
   openShell: (pod: PodRow) => void;
+  openYaml: (pod: PodRow) => void;
 }
 
 /** Owning Deployment name for a ReplicaSet-owned pod ("app-7d9f8b6c4" -> "app"). */
@@ -42,7 +43,7 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       disabled: deps.cluster?.readOnly || pod.readyContainers === 0,
       onSelect: () => deps.confirm(shellRequest(pod, deps.cluster, () => deps.openShell(pod))),
     },
-    { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", disabled: true },
+    { id: "yaml", group: "observe", label: "View YAML", icon: <Code />, shortcut: "Y", onSelect: () => deps.openYaml(pod) },
     {
       id: "owner",
       group: "observe",

@@ -140,6 +140,13 @@ const initialTabs: WorkspaceTab[] = [
   { id: "inv-checkout-api", kind: "investigation", title: "Investigation · checkout-api" },
   { id: "shell", kind: "shell", title: "Shell · 9rkzd", cluster: "prod-eu-west-1" },
   {
+    id: "yaml-checkout-api",
+    kind: "yaml",
+    title: "YAML · checkout-api",
+    cluster: "prod-eu-west-1",
+    params: { kind: "Deployment", namespace: "payments", name: "checkout-api" },
+  },
+  {
     id: "deployments-prod-eu-west-1",
     kind: "deployments",
     title: "Deployments",
