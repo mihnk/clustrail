@@ -417,11 +417,33 @@ func toYAML(v map[string]any, empty string) string {
 	if len(v) == 0 {
 		return empty
 	}
-	b, err := yaml.Marshal(redact(v))
+	r := redact(v)
+	b, err := yaml.Marshal(r)
 	if err != nil {
-		return err.Error()
+		// YAML refuses some strings (control characters). JSON is YAML too,
+		// and escapes them: the values still round-trip. Never return the
+		// error as the text: in the upgrade editor it would become the values.
+		if b, err = json.MarshalIndent(r, "", "  "); err != nil {
+			return "# values could not be shown: " + strings.ReplaceAll(err.Error(), "\n", " ") + "\n"
+		}
+		return escapeYAMLControls(string(b))
 	}
 	return string(b)
+}
+
+// escapeYAMLControls writes the characters a YAML parser refuses (DEL and the
+// C1 controls, which JSON leaves as they are) as \u escapes. In JSON they can
+// only be inside strings, where the escape means the same character.
+func escapeYAMLControls(s string) string {
+	var out strings.Builder
+	for _, r := range s {
+		if r == 0x7f || (r >= 0x80 && r <= 0x9f && r != 0x85) {
+			fmt.Fprintf(&out, "\\u%04x", r)
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
 }
 
 // GetHelmRevision returns the stored manifest, values and hooks of one revision.

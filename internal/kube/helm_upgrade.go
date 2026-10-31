@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -135,6 +136,10 @@ func (m *Manager) HelmUpgradeSource(cluster, ns, name string) (HelmUpgradeSource
 		Values:   toYAML(rel.Config, "{}\n"),
 		Defaults: toYAML(rel.Chart.Values, "{}\n"),
 		Versions: []HelmChartVersion{},
+	}
+	if strings.HasPrefix(src.Values, "# values could not be shown") {
+		// Editing a comment would upgrade with no values at all.
+		return HelmUpgradeSource{}, fmt.Errorf("the release's values cannot be shown for editing: %s", strings.TrimPrefix(strings.TrimSpace(src.Values), "# values could not be shown: "))
 	}
 	src.Versions, src.VersionsNote = chartVersions(md.Name)
 	return src, nil
@@ -438,6 +443,9 @@ type manifestDoc struct {
 	secret                      map[string]string // data and stringData, for Secrets
 }
 
+// secretKind finds a Secret in a document that is not valid YAML.
+var secretKind = regexp.MustCompile(`(?m)^\s*kind:\s*["']?Secret["']?\s*(#.*)?$`)
+
 func splitManifest(manifest, defaultNS string) map[string]manifestDoc {
 	out := map[string]manifestDoc{}
 	for _, part := range strings.Split("\n"+manifest, "\n---") {
@@ -451,10 +459,17 @@ func splitManifest(manifest, defaultNS string) map[string]manifestDoc {
 				Name      string `json:"name"`
 				Namespace string `json:"namespace"`
 			} `json:"metadata"`
-			Data       map[string]string `json:"data"`
-			StringData map[string]string `json:"stringData"`
+			// Values are read as any: an unquoted number in a Secret (which
+			// Helm keeps in the manifest of a failed release) must not make
+			// the document unreadable, and so left as it is.
+			Data       map[string]any `json:"data"`
+			StringData map[string]any `json:"stringData"`
 		}
 		if yaml.Unmarshal([]byte(text), &meta) != nil || meta.Kind == "" {
+			if secretKind.MatchString(text) {
+				// A Secret that cannot be read is never shown as it is.
+				out[fmt.Sprintf("Secret/%s/(unreadable %d)", defaultNS, len(out))] = manifestDoc{kind: "Secret", name: "(unreadable)", namespace: defaultNS, secret: map[string]string{}}
+			}
 			continue
 		}
 		d := manifestDoc{kind: meta.Kind, name: meta.Metadata.Name, namespace: meta.Metadata.Namespace, text: text}
@@ -464,10 +479,10 @@ func splitManifest(manifest, defaultNS string) map[string]manifestDoc {
 		if meta.Kind == "Secret" {
 			d.secret = map[string]string{}
 			for k, v := range meta.Data {
-				d.secret["data."+k] = v
+				d.secret["data."+k] = fmt.Sprint(v)
 			}
 			for k, v := range meta.StringData {
-				d.secret["stringData."+k] = base64.StdEncoding.EncodeToString([]byte(v))
+				d.secret["stringData."+k] = base64.StdEncoding.EncodeToString([]byte(fmt.Sprint(v)))
 			}
 		}
 		out[d.kind+"/"+d.namespace+"/"+d.name] = d
@@ -479,8 +494,8 @@ func splitManifest(manifest, defaultNS string) map[string]manifestDoc {
 // ones that differ from the other side so a change still shows.
 func maskManifestSecret(d manifestDoc, other map[string]string) string {
 	var obj map[string]any
-	if yaml.Unmarshal([]byte(d.text), &obj) != nil {
-		return "# Secret (values hidden)"
+	if yaml.Unmarshal([]byte(d.text), &obj) != nil || obj == nil {
+		return "# Secret (values hidden: Clustrail could not read this document)"
 	}
 	for _, field := range []string{"data", "stringData"} {
 		m, _ := obj[field].(map[string]any)
@@ -648,7 +663,9 @@ func containsLine(text, line string) bool {
 // maskSecretsInManifest hides the values of every Secret in a rendered
 // manifest (Helm revision views); other documents are kept as they are.
 func maskSecretsInManifest(manifest string) string {
-	parts := strings.Split(manifest, "\n---")
+	// Helm's manifest starts with "---": a leading newline makes the first
+	// document split like the others, so its "# Source:" comment is kept too.
+	parts := strings.Split("\n"+manifest, "\n---")
 	for i, part := range parts {
 		docs := splitManifest(part, "")
 		for _, d := range docs {
@@ -670,5 +687,5 @@ func maskSecretsInManifest(manifest string) string {
 			parts[i] = "\n" + masked + "\n"
 		}
 	}
-	return strings.Join(parts, "\n---")
+	return strings.TrimPrefix(strings.Join(parts, "\n---"), "\n")
 }
