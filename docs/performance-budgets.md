@@ -34,7 +34,8 @@ Xvfb), which overstates rendering cost.
 | Data freshness, change in Go → painted (API wait excluded) | typical p95 ≤ 250 ms, heavy p95 ≤ 750 ms | 282 ms p95 (10k pods, 1,000 changes/s); 3.4 s p95 (20 clusters) | `hack/bench.sh storm`, `multi` |
 | Scrolling under heavy load, 60 Hz display | frame p95 ≤ 20 ms | 107 ms (native 10k, Linux/Xvfb); 33 ms (Chromium) | `hack/bench.sh table`, `storm` |
 | Open a warm 10k-row table | p95 ≤ 300 ms | not measured separately yet | — |
-| First 10k-row view, local deterministic source | p95 ≤ 1 s (cold and warm apart) | 1.9 s (native, Linux/Xvfb) | `hack/bench.sh table` |
+| First 10k-row view, local deterministic source | p95 ≤ 1 s (cold and warm apart) | 1.06 s median, 1.05–1.06 (was 1.41 s, 1.21–1.65; native, Linux/Xvfb, [before](benchmarks/data/startup-linux-before/) / [after](benchmarks/data/startup-linux-after/)) | `hack/bench.sh table` |
+| JavaScript parsed at start | ≤ 500 KB | 980 KB, 301 KB gzipped (was 1,396 / 421 KB); Turkish strings +112 KB only in Turkish | `npm run build` (index + App chunks) |
 | Visible, 5 clusters, nothing changing | all app processes ≤ 1 % of one core | 9.2 % (Linux/Xvfb; was 12.2 %) — [idle results](benchmarks/idle-results.md) | `hack/bench.sh idle` |
 | Background (hidden), no active log or terminal | all app processes ≤ 0.3 % of one core | **0.1 %** (was 1.5 %) | `hack/bench.sh idle` |
 | Hidden window with no active job | zero periodic UI queries and zero paints after the pause | **0** page callbacks and DOM changes | `hack/bench.sh idle` (page callbacks, DOM changes) |

@@ -1742,4 +1742,5 @@ export const tr: Record<string, string> = {
   "Reload view": "Görünümü yeniden yükle",
   "The error is in Clustrail's log.": "Hata Clustrail'in logunda.",
   "The other tabs keep working. The error is in Clustrail's log.": "Diğer sekmeler çalışmaya devam ediyor. Hata Clustrail'in logunda.",
+  "Loading…": "Yükleniyor…",
 };

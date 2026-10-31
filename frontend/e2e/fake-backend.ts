@@ -398,6 +398,9 @@ export async function openDesktop(page: Page, opts: FakeOptions = {}): Promise<F
   await page.goto("/?backend=1");
   await page.evaluate(() => localStorage.clear());
   await page.goto("/?backend=1");
+  // The app renders after the backend check and its own module load: tests
+  // that type a shortcut first must not press it before there is a page.
+  await page.waitForFunction(() => (document.getElementById("root")?.childElementCount ?? 0) > 0);
   return {
     calls,
     argsOf: (method: string) => callArgs.filter((c) => c.method === method).map((c) => c.args),

@@ -1,19 +1,24 @@
 import { createElement, Fragment, type ReactNode } from "react";
-import { tr } from "./tr";
 
 // UI translation. The English text is the key, so components stay readable and
 // a missing translation shows the English original. Placeholders: {name}.
 //
-// The language is read once, when this module loads (before any component or
-// module-level label is evaluated), from the same preference Settings writes.
-// Changing it reloads the window; open tabs are restored on launch.
+// The language is read once, when this module loads, from the same preference
+// Settings writes. Changing it reloads the window; open tabs are restored on
+// launch. The Turkish strings load only when Turkish is used (loadLanguage),
+// before the app's modules, so module-level labels are translated too.
 
 export type Language = "en" | "tr";
 export type LanguageSetting = "system" | Language;
 
 export const LANGUAGE_PREFERENCE = "settings.language";
 
-const DICTIONARIES: Record<Language, Record<string, string> | null> = { en: null, tr };
+const DICTIONARIES: Record<Language, Record<string, string> | null> = { en: null, tr: null };
+
+/** Loads the strings of the current language. English (the keys) needs none. */
+export async function loadLanguage(): Promise<void> {
+  if (current === "tr" && !DICTIONARIES.tr) DICTIONARIES.tr = (await import("./tr")).tr;
+}
 
 /** The language a setting resolves to; "system" follows the OS (navigator.language). */
 export function resolveLanguage(setting: LanguageSetting): Language {
@@ -44,7 +49,7 @@ export function locale(): string {
   return current === "tr" ? "tr-TR" : "en-US";
 }
 
-/** For tests: switch without reloading. */
+/** For tests: switch without reloading (then loadLanguage). */
 export function setLanguage(lang: Language): void {
   current = lang;
   if (typeof document !== "undefined") document.documentElement.lang = lang;

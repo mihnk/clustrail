@@ -9,43 +9,45 @@ import { NavigationRail } from "@/components/shell/NavigationRail";
 import { StatusBar } from "@/components/shell/StatusBar";
 import { EmptyState } from "@/components/EmptyState";
 import { PodsWorkspace } from "@/features/pods/PodsWorkspace";
-import { InvestigationWorkspace } from "@/features/investigation/InvestigationWorkspace";
-import { CompareWorkspace } from "@/features/compare/CompareWorkspace";
-import { HelmWorkspace } from "@/features/helm/HelmWorkspace";
-import { GitOpsWorkspace } from "@/features/gitops/GitOpsWorkspace";
-import { ConnectionsWorkspace } from "@/features/connections/ConnectionsWorkspace";
-import { SettingsWorkspace } from "@/features/settings/SettingsWorkspace";
 import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspace";
 import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
 import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
-import { LogsWorkspace } from "@/features/logs/LogsWorkspace";
-import { ResourceListWorkspace } from "@/features/resources/ResourceListWorkspace";
-import { ResourceDetailWorkspace } from "@/features/resources/ResourceDetailWorkspace";
 import { PortForwardHost } from "@/features/portforward/PortForward";
 import { DebugHost } from "@/features/debug/DebugDialogs";
-import { WarningsWorkspace } from "@/features/insights/WarningsWorkspace";
-import { CertificatesWorkspace } from "@/features/insights/CertificatesWorkspace";
-import { AccessWorkspace } from "@/features/insights/AccessWorkspace";
-import { HelmUpgradeWorkspace } from "@/features/helm/HelmUpgradeWorkspace";
-import { StorageWorkspace } from "@/features/storage/StorageWorkspace";
-import { NetworkWorkspace } from "@/features/network/NetworkWorkspace";
-import { ServiceChainWorkspace } from "@/features/chain/ServiceChainWorkspace";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
 // xterm.js and Monaco only load when a Shell or YAML tab renders.
 const ShellWorkspace = lazy(() => import("@/features/terminal/ShellWorkspace").then((m) => ({ default: m.ShellWorkspace })));
 const YamlWorkspace = lazy(() => import("@/features/yaml/YamlWorkspace").then((m) => ({ default: m.YamlWorkspace })));
 const CreateResourceWorkspace = lazy(() => import("@/features/resources/CreateResourceWorkspace").then((m) => ({ default: m.CreateResourceWorkspace })));
+// Views that are not needed at start load when first opened: a smaller first bundle
+// parses faster. Pods, Clusters, Nodes and Deployments, the starting views, stay in it.
+const InvestigationWorkspace = lazy(() => import("@/features/investigation/InvestigationWorkspace").then((m) => ({ default: m.InvestigationWorkspace })));
+const CompareWorkspace = lazy(() => import("@/features/compare/CompareWorkspace").then((m) => ({ default: m.CompareWorkspace })));
+const HelmWorkspace = lazy(() => import("@/features/helm/HelmWorkspace").then((m) => ({ default: m.HelmWorkspace })));
+const GitOpsWorkspace = lazy(() => import("@/features/gitops/GitOpsWorkspace").then((m) => ({ default: m.GitOpsWorkspace })));
+const ConnectionsWorkspace = lazy(() => import("@/features/connections/ConnectionsWorkspace").then((m) => ({ default: m.ConnectionsWorkspace })));
+const SettingsWorkspace = lazy(() => import("@/features/settings/SettingsWorkspace").then((m) => ({ default: m.SettingsWorkspace })));
+const LogsWorkspace = lazy(() => import("@/features/logs/LogsWorkspace").then((m) => ({ default: m.LogsWorkspace })));
+const ResourceListWorkspace = lazy(() => import("@/features/resources/ResourceListWorkspace").then((m) => ({ default: m.ResourceListWorkspace })));
+const ResourceDetailWorkspace = lazy(() => import("@/features/resources/ResourceDetailWorkspace").then((m) => ({ default: m.ResourceDetailWorkspace })));
+const WarningsWorkspace = lazy(() => import("@/features/insights/WarningsWorkspace").then((m) => ({ default: m.WarningsWorkspace })));
+const CertificatesWorkspace = lazy(() => import("@/features/insights/CertificatesWorkspace").then((m) => ({ default: m.CertificatesWorkspace })));
+const AccessWorkspace = lazy(() => import("@/features/insights/AccessWorkspace").then((m) => ({ default: m.AccessWorkspace })));
+const HelmUpgradeWorkspace = lazy(() => import("@/features/helm/HelmUpgradeWorkspace").then((m) => ({ default: m.HelmUpgradeWorkspace })));
+const StorageWorkspace = lazy(() => import("@/features/storage/StorageWorkspace").then((m) => ({ default: m.StorageWorkspace })));
+const NetworkWorkspace = lazy(() => import("@/features/network/NetworkWorkspace").then((m) => ({ default: m.NetworkWorkspace })));
+const ServiceChainWorkspace = lazy(() => import("@/features/chain/ServiceChainWorkspace").then((m) => ({ default: m.ServiceChainWorkspace })));
+const DiagnosticsPanel = lazy(() => import("@/features/bench/DiagnosticsPanel").then((m) => ({ default: m.DiagnosticsPanel })));
+const SetupFlow = lazy(() => import("@/features/setup/SetupFlow").then((m) => ({ default: m.SetupFlow })));
+const SetupTips = lazy(() => import("@/features/setup/SetupTips").then((m) => ({ default: m.SetupTips })));
 import { usePersistentState } from "@/app/preferences";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
 import { useBackendSync } from "./backendSync";
 import { backend } from "@/backend/client";
-import { DiagnosticsPanel } from "@/features/bench/DiagnosticsPanel";
-import { runBenchmark } from "@/features/bench/runner";
 import { t } from "@/i18n";
-import { SetupFlow, type SetupSummary } from "@/features/setup/SetupFlow";
-import { SetupTips } from "@/features/setup/SetupTips";
+import type { SetupSummary } from "@/features/setup/SetupFlow";
 import { SETUP_EVENT } from "@/features/setup/api";
 
 export function App() {
@@ -70,13 +72,15 @@ export function App() {
           <ConfirmationProvider>
             <ShortcutsProvider>
               {setup === "needed" ? (
-                <SetupFlow
-                  onDone={(s) => {
-                    setSummary(s);
-                    setSetup("done");
-                  }}
-                  onSkip={() => setSetup("done")}
-                />
+                <Suspense fallback={null}>
+                  <SetupFlow
+                    onDone={(s) => {
+                      setSummary(s);
+                      setSetup("done");
+                    }}
+                    onSkip={() => setSetup("done")}
+                  />
+                </Suspense>
               ) : setup === "done" ? (
                 <AppShell setupSummary={summary} onSetupTipsClosed={() => setSummary(null)} />
               ) : null}
@@ -113,7 +117,7 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
         if (!cfg) return;
         // The overlay draws every frame (its FPS meter): the idle scenario runs without it.
         setDiagnostics(cfg.scenario !== "idle");
-        setTimeout(() => void runBenchmark(cfg, () => ws.openTab("pods") || ws.openView({ kind: "pods", title: t("Pods") })), 500);
+        setTimeout(() => void import("@/features/bench/runner").then(({ runBenchmark }) => runBenchmark(cfg, () => ws.openTab("pods") || ws.openView({ kind: "pods", title: t("Pods") }))), 500);
       });
     }
     return () => window.removeEventListener("keydown", onKey);
@@ -142,7 +146,11 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-app text-fg">
       <WindowToolbar />
-      {setupSummary && <SetupTips summary={setupSummary} onClose={onSetupTipsClosed} />}
+      {setupSummary && (
+        <Suspense fallback={null}>
+          <SetupTips summary={setupSummary} onClose={onSetupTipsClosed} />
+        </Suspense>
+      )}
       {/* The protected band belongs to single-cluster lists; tool tabs carry their own context. */}
       {scopedCluster?.protected && activeTab?.kind === "deployments" && <ProtectedContextBar cluster={scopedCluster} />}
       <div className="flex min-h-0 flex-1">
@@ -151,13 +159,19 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
         {tabs.map((tab) => (
           <div key={tab.id} role="tabpanel" hidden={tab.id !== activeTabId} className="min-w-0 flex-1 flex-col [&:not([hidden])]:flex">
             <ViewErrorBoundary label={`${tab.kind} tab`}>
-              <TabContent tab={tab} active={tab.id === activeTabId} />
+              <Suspense fallback={<EmptyState className="flex-1" title={t("Loading…")} />}>
+                <TabContent tab={tab} active={tab.id === activeTabId} />
+              </Suspense>
             </ViewErrorBoundary>
           </div>
         ))}
       </div>
       <StatusBar />
-      {diagnostics && backend && <DiagnosticsPanel onClose={() => setDiagnostics(false)} />}
+      {diagnostics && backend && (
+        <Suspense fallback={null}>
+          <DiagnosticsPanel onClose={() => setDiagnostics(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

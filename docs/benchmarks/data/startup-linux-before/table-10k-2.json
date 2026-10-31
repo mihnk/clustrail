@@ -1,0 +1,270 @@
+{
+  "scenario": "table",
+  "synthetic": "pods=10000",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+    "cores": 4,
+    "screen": "1440x900@1",
+    "build": "production"
+  },
+  "loadMs": 1649,
+  "rows": 10000,
+  "domRows": 37,
+  "idle": {
+    "seconds": 2.98,
+    "fps": 29.8,
+    "frameMs": {
+      "n": 89,
+      "p50": 32,
+      "p95": 44,
+      "p99": 92,
+      "max": 92,
+      "mean": 33.53
+    },
+    "over34ms": 30,
+    "over50ms": 2,
+    "over100ms": 0,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "scrollSteady": {
+    "seconds": 5.99,
+    "fps": 14.4,
+    "frameMs": {
+      "n": 86,
+      "p50": 66,
+      "p95": 101,
+      "p99": 123,
+      "max": 123,
+      "mean": 69.66
+    },
+    "over34ms": 84,
+    "over50ms": 84,
+    "over100ms": 5,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "scrollJump": {
+    "seconds": 3.97,
+    "fps": 13.4,
+    "frameMs": {
+      "n": 53,
+      "p50": 69,
+      "p95": 108,
+      "p99": 128,
+      "max": 128,
+      "mean": 74.85
+    },
+    "over34ms": 52,
+    "over50ms": 52,
+    "over100ms": 4,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "search": {
+    "ms": {
+      "n": 18,
+      "p50": 127,
+      "p95": 181,
+      "p99": 181,
+      "max": 181,
+      "mean": 123.89
+    },
+    "unchangedCount": 0,
+    "queries": [
+      "checkout",
+      "team-01",
+      "crash",
+      "node-001",
+      "zzzz-none",
+      ""
+    ]
+  },
+  "sort": {
+    "Status": {
+      "n": 4,
+      "p50": 116,
+      "p95": 133,
+      "p99": 133,
+      "max": 133,
+      "mean": 111.75
+    },
+    "Restarts": {
+      "n": 4,
+      "p50": 95,
+      "p95": 97,
+      "p99": 97,
+      "max": 97,
+      "mean": 81.75
+    },
+    "Age": {
+      "n": 4,
+      "p50": 98,
+      "p95": 112,
+      "p99": 112,
+      "max": 112,
+      "mean": 97.75
+    }
+  },
+  "inspector": {
+    "n": 15,
+    "p50": 137,
+    "p95": 253,
+    "p99": 253,
+    "max": 253,
+    "mean": 149.4
+  },
+  "stream": {
+    "frames": 3,
+    "gaps": 0,
+    "applyMs": {
+      "n": 3,
+      "p50": 2,
+      "p95": 2,
+      "p99": 2,
+      "max": 2,
+      "mean": 1.33
+    },
+    "receiveToPaintMs": {
+      "n": 2,
+      "p50": 1593,
+      "p95": 1593,
+      "p99": 1593,
+      "max": 1593,
+      "mean": 1531.5
+    },
+    "updateCostMs": {
+      "n": 1,
+      "p50": 855,
+      "p95": 855,
+      "p99": 855,
+      "max": 855,
+      "mean": 855
+    }
+  },
+  "backend": {
+    "process": {
+      "cpuPercent": 35.19273139713353,
+      "heapAllocMB": 24.316314697265625,
+      "heapInuseMB": 26.578125,
+      "sysMB": 46.11548614501953,
+      "totalAllocMB": 45.31953430175781,
+      "numGC": 7,
+      "gcPauseMs": 16.1799,
+      "gcCPU": 0.003441186969105678,
+      "goroutines": 19,
+      "cpuTimeMs": 10741.983,
+      "voluntarySwitches": 20273,
+      "involuntarySwitches": 10034
+    },
+    "family": {
+      "supported": true,
+      "processes": 5,
+      "cpuTimeMs": 48990,
+      "voluntarySwitches": 9960,
+      "rssMB": 1175.84375
+    },
+    "wakeups": {
+      "kubeconfig watch": 8
+    },
+    "watches": 1,
+    "consumers": 1,
+    "rows": 10000,
+    "pending": 0,
+    "events": 10000,
+    "frames": 3,
+    "bytes": 3974691,
+    "snapshots": 2,
+    "sendFull": 0,
+    "resyncs": 0,
+    "maxBatch": 0,
+    "queue": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "encode": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "round": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "ui": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "visible": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "size": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "at": 1793413324277
+  },
+  "totalMs": 22266,
+  "pids": {
+    "app": 31006,
+    "webview": [
+      31047,
+      31060,
+      31063,
+      31065
+    ]
+  },
+  "osMemoryMB": {
+    "go": {
+      "max": 448.0,
+      "last": 448.0,
+      "samples": 22
+    },
+    "webview": {
+      "max": 759.0,
+      "last": 733.0,
+      "samples": 22
+    }
+  },
+  "os": {
+    "system": "Linux",
+    "release": "6.18.44-fc-v185",
+    "machine": "x86_64"
+  }
+}
