@@ -154,7 +154,9 @@ func (kc *Kubeconfig) Changed(extra []string) bool {
 			continue
 		}
 		n++
-		if t, ok := kc.mtimes[p]; !ok || !t.Equal(st.ModTime()) {
+		// A device's mtime says nothing about its content: on macOS any write
+		// to /dev/null (KUBECONFIG=/dev/null) moves it.
+		if t, ok := kc.mtimes[p]; !ok || (st.Mode().IsRegular() && !t.Equal(st.ModTime())) {
 			return true
 		}
 	}

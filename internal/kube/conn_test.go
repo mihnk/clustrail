@@ -524,6 +524,17 @@ contexts:
 	}
 }
 
+// KUBECONFIG=/dev/null (the benchmarks): on macOS any process writing to
+// /dev/null moves its mtime, which must not reload the config every 3 s.
+func TestDevNullKubeconfigDoesNotChange(t *testing.T) {
+	t.Setenv("KUBECONFIG", os.DevNull)
+	kc := LoadKubeconfig(nil)
+	_ = os.WriteFile(os.DevNull, []byte("x"), 0o644)
+	if kc.Changed(nil) {
+		t.Fatal("a write to /dev/null is not a kubeconfig change")
+	}
+}
+
 func TestStoreNewContexts(t *testing.T) {
 	s, err := OpenStore(filepath.Join(t.TempDir(), "contexts.json"))
 	if err != nil {
