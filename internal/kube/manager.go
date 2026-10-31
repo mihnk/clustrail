@@ -271,7 +271,7 @@ func (m *Manager) List() ClusterList {
 		if conn := m.conns[name]; conn != nil {
 			out.Forbidden = append(out.Forbidden, conn.forbidden...)
 			if conn.gitops != nil {
-				out.Controllers = append(out.Controllers, conn.gitops.controller())
+				out.Controllers = append(out.Controllers, conn.gitops.controller(c.Env))
 			}
 		}
 	}

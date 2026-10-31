@@ -182,8 +182,10 @@ func (g *gitopsWatcher) start(ctx context.Context) {
 	})
 }
 
-func (g *gitopsWatcher) controller() Controller {
-	ctl := Controller{Cluster: g.c.id, Env: g.c.env()}
+// controller describes the GitOps controller found. The environment is passed
+// in: the manager calls this while holding its lock, and c.env() takes it too.
+func (g *gitopsWatcher) controller(env Environment) Controller {
+	ctl := Controller{Cluster: g.c.id, Env: env}
 	if g.tool != "" {
 		ctl.Tool = ptr(g.tool)
 	}
