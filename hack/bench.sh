@@ -29,7 +29,7 @@ elif command -v gtimeout >/dev/null; then
 fi
 webview='WebKit|WebContent|msedgewebview2'
 # WebView processes that already run (Safari, other apps) are not ours.
-( (pgrep -f "$webview" 2>/dev/null || true) | sort -n >"$work/before.pids" )
+( (pgrep -f "$webview" 2>/dev/null || true) | sort >"$work/before.pids" )
 
 CLUSTRAIL_BENCH=$scenario CLUSTRAIL_SYNTHETIC=$spec CLUSTRAIL_BENCH_SECONDS=$seconds \
 CLUSTRAIL_BENCH_OUT=$work/result.json CLUSTRAIL_CONFIG=$work/contexts.json XDG_CACHE_HOME=$work/cache \
@@ -56,7 +56,7 @@ while kill -0 $wrapper 2>/dev/null; do
     appmb=$( (ps -o rss= -p "$app" 2>/dev/null || true) | awk '{printf "%.0f", $1/1024}')
     appcpu=$(cpu_of "$app")
     webmb=0 webcpu=0 procs=0
-    for p in $( (pgrep -f "$webview" 2>/dev/null || true) | sort -n | comm -13 "$work/before.pids" -); do
+    for p in $( (pgrep -f "$webview" 2>/dev/null || true) | sort | comm -13 "$work/before.pids" -); do
       m=$( (ps -o rss= -p "$p" 2>/dev/null || true) | awk '{print $1}')
       c=$(cpu_of "$p")
       [ -n "$m" ] || continue
@@ -65,7 +65,7 @@ while kill -0 $wrapper 2>/dev/null; do
       procs=$((procs + 1))
     done
     echo "$now,${appmb:-0},$webmb,${appcpu:-0},$webcpu,$procs" >>"$work/samples.csv"
-    echo "$app $( (pgrep -f "$webview" 2>/dev/null || true) | sort -n | comm -13 "$work/before.pids" - | tr '\n' ' ')" >"$work/pids"
+    echo "$app $( (pgrep -f "$webview" 2>/dev/null || true) | sort | comm -13 "$work/before.pids" - | tr '\n' ' ')" >"$work/pids"
   fi
   sleep 1
 done
