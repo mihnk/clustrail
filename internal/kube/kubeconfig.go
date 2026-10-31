@@ -2,9 +2,11 @@ package kube
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -35,8 +37,8 @@ type KubeconfigSource struct {
 }
 
 // Kubeconfig is the merged view of every kubeconfig file, kubectl semantics:
-// KUBECONFIG (or ~/.kube/config), then files added in Clustrail; the first
-// file that defines a context wins.
+// KUBECONFIG (or ~/.kube/config), then files added in Clustrail; for each
+// cluster, user and context name the first file that defines it wins.
 type Kubeconfig struct {
 	Merged   *clientcmdapi.Config
 	Contexts []KubeContext
@@ -77,6 +79,8 @@ func LoadKubeconfig(extra []string) *Kubeconfig {
 	paths, labels := KubeconfigPaths(extra)
 	kc := &Kubeconfig{Merged: clientcmdapi.NewConfig(), mtimes: map[string]time.Time{}}
 	seen := map[string]bool{}
+	type origin struct{ name, label, file string }
+	var origins []origin
 	for i, p := range paths {
 		src := KubeconfigSource{Path: labels[i], Watched: true}
 		if labels[i] != homeShort(p) {
@@ -99,29 +103,43 @@ func LoadKubeconfig(extra []string) *Kubeconfig {
 			kc.Sources = append(kc.Sources, src)
 			continue
 		}
-		for name, ctx := range cfg.Contexts {
+		// Relative paths (certificates, token files, exec commands) are
+		// relative to the file that holds them, as for kubectl.
+		if err := clientcmd.ResolveLocalPaths(cfg); err != nil {
+			src.Error = err.Error()
+			kc.Sources = append(kc.Sources, src)
+			continue
+		}
+		// kubectl's merge: clusters, users and contexts are merged separately,
+		// the first file that defines a name wins, whether or not a context
+		// in that file uses it.
+		for name, c := range cfg.Clusters {
+			if _, dup := kc.Merged.Clusters[name]; !dup {
+				kc.Merged.Clusters[name] = c
+			}
+		}
+		for name, a := range cfg.AuthInfos {
+			if _, dup := kc.Merged.AuthInfos[name]; !dup {
+				kc.Merged.AuthInfos[name] = a
+			}
+		}
+		for _, name := range slices.Sorted(maps.Keys(cfg.Contexts)) {
 			src.Contexts++
 			if seen[name] {
 				continue
 			}
 			seen[name] = true
-			kc.Merged.Contexts[name] = ctx
-			if c, ok := cfg.Clusters[ctx.Cluster]; ok {
-				if _, dup := kc.Merged.Clusters[ctx.Cluster]; !dup {
-					kc.Merged.Clusters[ctx.Cluster] = resolvePaths(c, p)
-				}
-			}
-			if a, ok := cfg.AuthInfos[ctx.AuthInfo]; ok {
-				if _, dup := kc.Merged.AuthInfos[ctx.AuthInfo]; !dup {
-					kc.Merged.AuthInfos[ctx.AuthInfo] = resolveAuthPaths(a, p)
-				}
-			}
-			kc.Contexts = append(kc.Contexts, describeContext(name, ctx, cfg, labels[i], p))
+			kc.Merged.Contexts[name] = cfg.Contexts[name]
+			origins = append(origins, origin{name, labels[i], p})
 		}
 		if kc.Merged.CurrentContext == "" {
 			kc.Merged.CurrentContext = cfg.CurrentContext
 		}
 		kc.Sources = append(kc.Sources, src)
+	}
+	// Described from the merged config: the server shown is the one connected to.
+	for _, o := range origins {
+		kc.Contexts = append(kc.Contexts, describeContext(o.name, kc.Merged.Contexts[o.name], kc.Merged, o.label, o.file))
 	}
 	return kc
 }
@@ -141,26 +159,6 @@ func (kc *Kubeconfig) Changed(extra []string) bool {
 		}
 	}
 	return n != len(kc.mtimes)
-}
-
-// Relative certificate and exec paths in a kubeconfig are relative to the file.
-func resolvePaths(c *clientcmdapi.Cluster, file string) *clientcmdapi.Cluster {
-	c = c.DeepCopy()
-	if c.CertificateAuthority != "" && !filepath.IsAbs(c.CertificateAuthority) {
-		c.CertificateAuthority = filepath.Join(filepath.Dir(file), c.CertificateAuthority)
-	}
-	return c
-}
-
-func resolveAuthPaths(a *clientcmdapi.AuthInfo, file string) *clientcmdapi.AuthInfo {
-	a = a.DeepCopy()
-	dir := filepath.Dir(file)
-	for _, f := range []*string{&a.ClientCertificate, &a.ClientKey, &a.TokenFile} {
-		if *f != "" && !filepath.IsAbs(*f) {
-			*f = filepath.Join(dir, *f)
-		}
-	}
-	return a
 }
 
 var (
