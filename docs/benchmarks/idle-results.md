@@ -74,8 +74,11 @@ Typed clients now decode protobuf: a list of 10,000 pods decodes in about
 
 Still open: while the window is visible and nothing changes, the Go process
 uses 3–4 % of a core and wakes about 50 times a second. On Linux, WebKitGTK's
-UI process runs inside it, so this is likely GTK's rendering under Xvfb
-rather than Clustrail's code (no backend loop, page callback or DOM change
-runs); the macOS run will show whether it exists there.
+UI process runs inside it, and strace shows where the time goes: WebKit's
+memory-pressure monitor reading `/proc/self/cgroup` (one byte per read),
+`/proc/meminfo`, `/proc/zoneinfo` and the cgroup memory limits, the GTK main
+loop's eventfds, and the Go runtime reading the cgroup CPU quota. None of it
+is Clustrail's code (no backend loop, page callback or DOM change runs); the
+macOS run will show what WebKit costs there.
 
 Raw results: [data/idle-linux-after/](data/idle-linux-after/).

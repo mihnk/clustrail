@@ -222,15 +222,13 @@ func (m *Manager) followContainer(ctx context.Context, c *clusterConn, ls *logSt
 		ls.state(LogSourceState{Namespace: ns, Pod: pod, Container: container, State: "live"})
 		rc, err := c.client.CoreV1().Pods(ns).GetLogs(pod, opts).Stream(ctx)
 		if err == nil {
-			sc := bufio.NewScanner(rc)
-			sc.Buffer(make([]byte, 64*1024), 1024*1024)
-			for sc.Scan() {
-				t, msg := splitTimestamp(sc.Text())
+			_ = readLogLines(rc, maxLogLine, func(line string) {
+				t, msg := splitTimestamp(line)
 				if !t.IsZero() {
 					last = t
 				}
 				ls.add(LogLine{Namespace: ns, Pod: pod, Container: container, TS: t.Local().Format("15:04:05.000"), Level: levelOf(msg), Msg: msg})
-			}
+			})
 			rc.Close()
 		}
 		if ctx.Err() != nil || req.Previous {
@@ -272,6 +270,55 @@ func (m *Manager) followContainer(ctx context.Context, c *clusterConn, ls *logSt
 		case <-ctx.Done():
 			return
 		case <-time.After(time.Duration(min(2+attempt, 10)) * time.Second):
+		}
+	}
+}
+
+// maxLogLine is the longest log line kept; the rest of a longer line is
+// dropped and the line says how much.
+var maxLogLine = 64 << 10
+
+// readLogLines calls fn for each line of r. A line longer than limit is cut
+// with a note of how many bytes were dropped, and reading goes on: a scanner
+// would stop at the first line over its limit, and the stream, reconnecting
+// from the same timestamp, would stop at that line forever.
+func readLogLines(r io.Reader, limit int, fn func(string)) error {
+	br := bufio.NewReaderSize(r, 64<<10)
+	var line []byte
+	dropped, pending := 0, false
+	emit := func() {
+		text := strings.TrimSuffix(string(line), "\r")
+		if dropped > 0 {
+			text += fmt.Sprintf(" … [line cut: %d more bytes]", dropped)
+		}
+		fn(text)
+		line, dropped, pending = line[:0], 0, false
+	}
+	for {
+		chunk, err := br.ReadSlice('\n')
+		complete := len(chunk) > 0 && chunk[len(chunk)-1] == '\n'
+		if complete {
+			chunk = chunk[:len(chunk)-1]
+		}
+		if len(chunk) > 0 {
+			pending = true
+			take := max(0, min(limit-len(line), len(chunk)))
+			line = append(line, chunk[:take]...)
+			dropped += len(chunk) - take
+		}
+		if complete {
+			pending = true
+			emit()
+		}
+		switch {
+		case err == nil, errors.Is(err, bufio.ErrBufferFull):
+		case err == io.EOF:
+			if pending {
+				emit() // the last line, without a newline
+			}
+			return nil
+		default:
+			return err
 		}
 	}
 }
