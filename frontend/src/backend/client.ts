@@ -162,7 +162,7 @@ export interface LatencySummary {
 export interface BackendDiagnostics {
   process: {
     cpuPercent: number; heapAllocMB: number; heapInuseMB: number; sysMB: number; totalAllocMB: number; numGC: number; gcPauseMs: number; gcCPU: number; goroutines: number;
-    cpuTimeMs: number; voluntarySwitches: number; involuntarySwitches: number;
+    cpuTimeMs: number; voluntarySwitches: number; involuntarySwitches: number; wakeups: number;
   };
   /** The Go and WebView processes together (Linux; elsewhere measured from outside). */
   family: { supported: boolean; processes: number; cpuTimeMs: number; voluntarySwitches: number; rssMB: number };

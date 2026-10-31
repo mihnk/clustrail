@@ -165,7 +165,7 @@ func TestIdleConnectedCluster(t *testing.T) {
 	res := map[string]any{
 		"pods": pods, "seconds": sec,
 		"cpuPercent":        (p1.CPUTimeMs - p0.CPUTimeMs) / sec / 10,
-		"wakeupsPerSec":     float64(p1.VoluntarySwitches-p0.VoluntarySwitches) / sec,
+		"wakeupsPerSec":     float64(p1.Wakeups-p0.Wakeups) / sec,
 		"loopWakeupsPerSec": loops,
 		"heapInuseMB":       p1.HeapInuseMB, "goroutines": p1.Goroutines,
 	}

@@ -25,6 +25,10 @@ type Process struct {
 	CPUTimeMs           float64 `json:"cpuTimeMs"`
 	VoluntarySwitches   int64   `json:"voluntarySwitches"`
 	InvoluntarySwitches int64   `json:"involuntarySwitches"`
+	// Wakeups is what the platform counts as the process waking up: voluntary
+	// context switches on Linux, idle and interrupt wakeups on macOS (where
+	// the context switch counters stay 0).
+	Wakeups int64 `json:"wakeups"`
 }
 
 var (
@@ -45,6 +49,7 @@ func Sample() Process {
 	cpu := u.cpu
 	p.CPUTimeMs = float64(cpu) / 1e6
 	p.VoluntarySwitches, p.InvoluntarySwitches = u.voluntary, u.involuntary
+	p.Wakeups = wakeups(u)
 	now := time.Now()
 	mu.Lock()
 	if !lastWall.IsZero() && cpu > 0 {

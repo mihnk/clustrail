@@ -59,7 +59,8 @@ Build the production app first: `cd frontend && npm run build && cd .. && go bui
 | Summary of a results directory | `python3 hack/bench-summary.py <dir>` |
 
 The idle scenario reports, per phase: CPU of every app process from the OS
-(`os`), the Go process's CPU and voluntary context switches (wakeups), each
+(`os`), the Go process's CPU and wakeups (voluntary context switches on Linux,
+the kernel's idle and interrupt wakeups on macOS), each
 backend loop's wakeups, the page's timer, interval and animation-frame
 callbacks, DOM changes and where they happen, and Wails events. On macOS,
 `hack/measure-macos.sh` adds top(1)'s idle wakeups and energy impact for the

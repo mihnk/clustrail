@@ -182,8 +182,8 @@ async function idlePhase(name: string, seconds: number) {
     startedAt,
     endedAt,
     seconds: Math.round(sec * 10) / 10,
-    // CPU as % of one core; wakeups as voluntary context switches per second.
-    go: { cpuPercent: perSec(after.process.cpuTimeMs, before.process.cpuTimeMs) / 10, wakeupsPerSec: perSec(after.process.voluntarySwitches, before.process.voluntarySwitches) },
+    // CPU as % of one core; wakeups per second (voluntary context switches on Linux, idle and interrupt wakeups on macOS).
+    go: { cpuPercent: perSec(after.process.cpuTimeMs, before.process.cpuTimeMs) / 10, wakeupsPerSec: perSec(after.process.wakeups, before.process.wakeups) },
     family: after.family?.supported
       ? { processes: after.family.processes, cpuPercent: perSec(after.family.cpuTimeMs, before.family.cpuTimeMs) / 10, wakeupsPerSec: perSec(after.family.voluntarySwitches, before.family.voluntarySwitches), rssMB: Math.round(after.family.rssMB) }
       : "measured from outside (hack/bench.sh)",

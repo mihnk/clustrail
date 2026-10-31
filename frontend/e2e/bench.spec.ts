@@ -47,7 +47,7 @@ test(`in-app ${scenario} benchmark (Chromium)`, async ({ page }) => {
   const rows = synthetic(pods);
   let result = "";
   let paused = false;
-  const diag = { process: { cpuPercent: 0, heapAllocMB: 0, heapInuseMB: 0, sysMB: 0, totalAllocMB: 0, numGC: 0, gcPauseMs: 0, gcCPU: 0, goroutines: 0 }, watches: 1, consumers: 1, rows: pods, pending: 0, events: 0, frames: 0, bytes: 0, snapshots: 1, sendFull: 0, resyncs: 0, maxBatch: 0, queue: {}, encode: {}, round: {}, ui: {}, visible: {}, size: {}, at: 0 };
+  const diag = { process: { cpuPercent: 0, heapAllocMB: 0, heapInuseMB: 0, sysMB: 0, totalAllocMB: 0, numGC: 0, gcPauseMs: 0, gcCPU: 0, goroutines: 0, cpuTimeMs: 0, voluntarySwitches: 0, involuntarySwitches: 0, wakeups: 0 }, watches: 1, consumers: 1, rows: pods, pending: 0, events: 0, frames: 0, bytes: 0, snapshots: 1, sendFull: 0, resyncs: 0, maxBatch: 0, queue: {}, encode: {}, round: {}, ui: {}, visible: {}, size: {}, at: 0 };
   const backend = await openDesktop(page, {
     clusters: [cluster],
     pods: (c) => (c === "synthetic-01" ? rows : []),
