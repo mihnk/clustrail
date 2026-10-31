@@ -53,8 +53,9 @@ METRICS = {
         ("hidden: page timer and frame callbacks", "/s", lambda r: page_callbacks(r, "hidden")),
         ("hidden: top idle wakeups (macOS)", "/s", lambda r: get(r, "phases.hidden.top.idleWakeupsPerSec")),
         ("hidden: top energy impact (macOS)", "", lambda r: get(r, "phases.hidden.top.power")),
-        ("memory: Go process", "MB", lambda r: get(r, "osMemoryMB.go.last")),
-        ("memory: WebView processes", "MB", lambda r: get(r, "osMemoryMB.webview.last")),
+        # The highest sample: the last one may be taken while the app quits.
+        ("memory: Go process (max)", "MB", lambda r: get(r, "osMemoryMB.go.max")),
+        ("memory: WebView processes (max)", "MB", lambda r: get(r, "osMemoryMB.webview.max")),
     ],
     "table": [
         ("time to first full table", "ms", lambda r: get(r, "loadMs")),

@@ -1,0 +1,13 @@
+{
+  "cpuPercent": 0.021062966721865924,
+  "goroutines": 68,
+  "heapInuseMB": 13.609375,
+  "loopWakeupsPerSec": {
+    "API probe": 0.06666550632019641,
+    "cache budget": 0.033332753160098205,
+    "kubeconfig watch": 0.33332753160098205
+  },
+  "pods": 2000,
+  "seconds": 30.000522165,
+  "wakeupsPerSec": 5.699900790376793
+}

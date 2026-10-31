@@ -112,6 +112,7 @@ type gitopsWatcher struct {
 	listers map[schema.GroupVersionResource]cache.GenericLister
 	synced  []cache.InformerSynced
 	dirty   bool
+	kicks   kicker
 	sentAll bool
 	tool    string
 }
@@ -137,7 +138,8 @@ func (g *gitopsWatcher) served(gvr schema.GroupVersionResource) bool {
 func (g *gitopsWatcher) start(ctx context.Context) {
 	f := dynamicinformer.NewDynamicSharedInformerFactory(g.c.dynamic, 0)
 	poll := pollMode.Load()
-	mark := func(any) { g.mu.Lock(); g.dirty = true; g.mu.Unlock() }
+	g.kicks = newKicker()
+	mark := func(any) { g.mu.Lock(); g.dirty = true; g.mu.Unlock(); g.kicks.kick() }
 	for _, gvr := range []schema.GroupVersionResource{argoApps, fluxKustomize, fluxHelmRelease} {
 		if !g.served(gvr) || !g.c.canList(ctx, gvr.Group, gvr.Resource) {
 			continue
@@ -168,18 +170,8 @@ func (g *gitopsWatcher) start(ctx context.Context) {
 	}
 	f.Start(ctx.Done())
 	safeLoop(ctx, "GitOps updates", nil, func() {
-		t := time.NewTicker(time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				f.Shutdown()
-				return
-			case <-t.C:
-				wake("GitOps flush")
-				g.flush()
-			}
-		}
+		flushUntilQuiet(ctx, "GitOps flush", time.Second, g.kicks, g.flush)
+		f.Shutdown()
 	})
 }
 
@@ -193,20 +185,21 @@ func (g *gitopsWatcher) controller(env Environment) Controller {
 	return ctl
 }
 
-func (g *gitopsWatcher) flush() {
+func (g *gitopsWatcher) flush() bool {
 	for _, s := range g.synced {
 		if !s() {
-			return
+			return true
 		}
 	}
 	g.mu.Lock()
 	if !g.dirty && g.sentAll {
 		g.mu.Unlock()
-		return
+		return false
 	}
 	g.dirty, g.sentAll = false, true
 	g.mu.Unlock()
 	g.c.emit.Emit(EventDelta, Delta{Cluster: g.c.id, Kind: "gitops", Reset: true, Upserts: toAny(g.objects()), Deletes: []string{}})
+	return true
 }
 
 func (g *gitopsWatcher) objects() []GitOpsObject {

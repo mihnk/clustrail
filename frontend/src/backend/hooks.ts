@@ -6,6 +6,7 @@ import { getPodDetail } from "@/data/mock";
 import type { PodDetail, PodRow, ResourceEvent } from "@/data/types";
 import { drainPreflight, type DrainPreflight, type NodeRow } from "@/data/nodes";
 import { useWorkspace } from "@/app/workspace";
+import { everyWhileVisible } from "@/lib/everyWhileVisible";
 
 /** Inspector content for a pod. Refetched when the row changes (status, restarts) in desktop mode. */
 export function usePodDetail(pod: PodRow | null): PodDetail | null {
@@ -88,10 +89,10 @@ export function useEvents(cluster: string, namespace: string, kind: string, name
         .then((ev) => !cancelled && setEvents(ev))
         .catch(() => !cancelled && setEvents([]));
     load();
-    const t = setInterval(load, 15_000);
+    const stop = everyWhileVisible(load, 15_000);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      stop();
     };
   }, [cluster, namespace, kind, name, active]);
   return events;

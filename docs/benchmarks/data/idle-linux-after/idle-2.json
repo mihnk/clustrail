@@ -1,0 +1,252 @@
+{
+  "scenario": "idle",
+  "synthetic": "clusters=5,pods=2000",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+    "cores": 4,
+    "screen": "1440x900@1",
+    "build": "production"
+  },
+  "loadMs": 938,
+  "rows": 10000,
+  "domRows": 37,
+  "idle": {
+    "seconds": 2.97,
+    "fps": 22.9,
+    "frameMs": {
+      "n": 68,
+      "p50": 40,
+      "p95": 64,
+      "p99": 121,
+      "max": 121,
+      "mean": 43.69
+    },
+    "over34ms": 57,
+    "over50ms": 13,
+    "over100ms": 1,
+    "longTasks": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0
+    }
+  },
+  "phases": [
+    {
+      "name": "visible",
+      "visibility": "visible",
+      "startedAt": 1793411233094,
+      "endedAt": 1793411293094,
+      "seconds": 60,
+      "go": {
+        "cpuPercent": 2.174,
+        "wakeupsPerSec": 35.82
+      },
+      "family": {
+        "processes": 5,
+        "cpuPercent": 5.017,
+        "wakeupsPerSec": 21.95,
+        "rssMB": 966
+      },
+      "backendLoopsPerSec": {
+        "cache budget": 0.03,
+        "kubeconfig watch": 0.33
+      },
+      "pagePerSec": {
+        "timeouts": 0,
+        "intervals": 0.02,
+        "animationFrames": 0
+      },
+      "domMutationsPerSec": 0,
+      "topMutations": [],
+      "eventsPerSec": {},
+      "animationFrameCallers": [],
+      "goHeapMB": 26,
+      "goroutines": 27,
+      "os": {
+        "appCpuPercent": 2.93,
+        "webviewCpuPercent": 3.91,
+        "webviewProcesses": 4,
+        "appMB": 440,
+        "webviewMB": 526
+      }
+    },
+    {
+      "name": "hidden",
+      "visibility": "hidden",
+      "startedAt": 1793411295118,
+      "endedAt": 1793411355118,
+      "seconds": 60,
+      "go": {
+        "cpuPercent": 0.071,
+        "wakeupsPerSec": 10.48
+      },
+      "family": {
+        "processes": 5,
+        "cpuPercent": 0.133,
+        "wakeupsPerSec": 3.03,
+        "rssMB": 936
+      },
+      "backendLoopsPerSec": {
+        "cache budget": 0.03,
+        "kubeconfig watch": 0.33
+      },
+      "pagePerSec": {
+        "timeouts": 0,
+        "intervals": 0,
+        "animationFrames": 0
+      },
+      "domMutationsPerSec": 0,
+      "topMutations": [],
+      "eventsPerSec": {},
+      "animationFrameCallers": [],
+      "goHeapMB": 23,
+      "goroutines": 27,
+      "os": {
+        "appCpuPercent": 0.08,
+        "webviewCpuPercent": 0.05,
+        "webviewProcesses": 4,
+        "appMB": 425,
+        "webviewMB": 511
+      }
+    }
+  ],
+  "stream": {
+    "frames": 9,
+    "gaps": 0,
+    "applyMs": {
+      "n": 9,
+      "p50": 1,
+      "p95": 39,
+      "p99": 39,
+      "max": 39,
+      "mean": 5
+    },
+    "receiveToPaintMs": {
+      "n": 9,
+      "p50": 1130,
+      "p95": 1341,
+      "p99": 1341,
+      "max": 1341,
+      "mean": 1124.22
+    },
+    "updateCostMs": {
+      "n": 1,
+      "p50": 378,
+      "p95": 378,
+      "p99": 378,
+      "max": 378,
+      "mean": 378
+    }
+  },
+  "backend": {
+    "process": {
+      "cpuPercent": 134.3349930472599,
+      "heapAllocMB": 21.042678833007812,
+      "heapInuseMB": 23.765625,
+      "sysMB": 50.181907653808594,
+      "totalAllocMB": 45.900177001953125,
+      "numGC": 8,
+      "gcPauseMs": 20.742534,
+      "gcCPU": 0.00021066761548809297,
+      "goroutines": 27,
+      "cpuTimeMs": 4831.367,
+      "voluntarySwitches": 12803,
+      "involuntarySwitches": 6415
+    },
+    "family": {
+      "supported": true,
+      "processes": 5,
+      "cpuTimeMs": 13290,
+      "voluntarySwitches": 4247,
+      "rssMB": 937.25390625
+    },
+    "wakeups": {
+      "cache budget": 4,
+      "kubeconfig watch": 42
+    },
+    "watches": 5,
+    "consumers": 5,
+    "rows": 10000,
+    "pending": 0,
+    "events": 10000,
+    "frames": 9,
+    "bytes": 6355348,
+    "snapshots": 9,
+    "sendFull": 0,
+    "resyncs": 0,
+    "maxBatch": 0,
+    "queue": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "encode": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "round": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "ui": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "visible": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "size": {
+      "n": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "at": 1793411355158
+  },
+  "totalMs": 126135,
+  "pids": {
+    "app": 28712,
+    "webview": [
+      28758,
+      28775,
+      28776,
+      28777
+    ]
+  },
+  "osMemoryMB": {
+    "go": {
+      "max": 451.0,
+      "last": 425.0,
+      "samples": 116
+    },
+    "webview": {
+      "max": 546.0,
+      "last": 511.0,
+      "samples": 116
+    }
+  },
+  "os": {
+    "system": "Linux",
+    "release": "6.18.44-fc-v185",
+    "machine": "x86_64"
+  }
+}

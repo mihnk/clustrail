@@ -6,6 +6,7 @@ import { IconButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
 import { t as tt } from "@/i18n";
+import { everyWhileVisible } from "@/lib/everyWhileVisible";
 
 export const BAR = "bg-surface-panel dark:bg-transparent";
 
@@ -53,10 +54,10 @@ export function usePerCluster<T>(load: (cluster: string) => Promise<T>, key: str
       ).finally(() => !cancelled && setLoading(false));
     };
     run();
-    const t = everyMs > 0 ? setInterval(run, everyMs) : undefined;
+    const stop = everyMs > 0 ? everyWhileVisible(run, everyMs) : undefined;
     return () => {
       cancelled = true;
-      if (t) clearInterval(t);
+      stop?.();
     };
   }, [clustersKey, key, active, tick, everyMs]);
 
@@ -146,12 +147,10 @@ export function useWarningCount(): number | null {
       }
     };
     run();
-    const t = setInterval(run, 60_000);
-    document.addEventListener("visibilitychange", run);
+    const stop = everyWhileVisible(run, 60_000);
     return () => {
       cancelled = true;
-      clearInterval(t);
-      document.removeEventListener("visibilitychange", run);
+      stop();
     };
   }, [key]);
   if (!backend || !clusters.length) return null;

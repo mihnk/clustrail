@@ -108,6 +108,7 @@ type clusterConn struct {
 	dirtyDeps map[string]bool
 	// nodesDirty rebuilds every node row (metrics ticks); dirtyNodes only the named ones.
 	nodesDirty bool
+	kicks      kicker // flushLoop waits on it while nothing is dirty
 	dirtyNodes map[string]bool
 	// podsByNode and rsByOwner are informer indexes, so a node or Deployment
 	// row is built from its own pods and ReplicaSets instead of a full scan.
@@ -169,7 +170,12 @@ func newClusterConn(id string, cfg *rest.Config, env func() Environment, emit Em
 	cfg = rest.CopyConfig(cfg)
 	cfg.QPS, cfg.Burst = 50, 100
 	cfg.UserAgent = "clustrail"
-	client, err := kubernetes.NewForConfig(cfg)
+	// Typed clients (pods, nodes, ReplicaSets…) take protobuf, which is cheaper
+	// to decode than JSON; every other client keeps the JSON config.
+	pcfg := rest.CopyConfig(cfg)
+	pcfg.ContentType = "application/vnd.kubernetes.protobuf"
+	pcfg.AcceptContentTypes = "application/vnd.kubernetes.protobuf,application/json"
+	client, err := kubernetes.NewForConfig(pcfg)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +203,7 @@ func newClusterConn(id string, cfg *rest.Config, env func() Environment, emit Em
 func connFromClients(id string, env func() Environment, emit Emitter, onState func(ConnectionState, error), client kubernetes.Interface, dyn dynamic.Interface, mc metricsclient.Interface) *clusterConn {
 	return &clusterConn{
 		id: id, env: env, emit: emit, client: client, dynamic: dyn, metrics: mc,
-		dirtyPods: map[string]bool{}, dirtyDeps: map[string]bool{}, dirtyNodes: map[string]bool{}, resetSent: map[string]bool{},
+		dirtyPods: map[string]bool{}, dirtyDeps: map[string]bool{}, dirtyNodes: map[string]bool{}, resetSent: map[string]bool{}, kicks: newKicker(),
 		podUsage: map[string]Usage{}, nodeUsage: map[string]Usage{}, samples: newSampleStore(120),
 		onState: onState, disc: client.Discovery(),
 	}
@@ -371,14 +377,17 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 					c.publishPod(p.Namespace, p.Name)
 					c.mu.Lock()
 					c.dirtyPods[p.Namespace+"/"+p.Name] = true
+					c.kicks.kick()
 					if p.Spec.NodeName != "" {
 						c.dirtyNodes[p.Spec.NodeName] = true
+						c.kicks.kick()
 					}
 					c.mu.Unlock()
 					if o := metav1.GetControllerOf(p); o != nil && o.Kind == "ReplicaSet" {
 						if dep := c.deploymentOfRS(p.Namespace, o.Name); dep != "" {
 							c.mu.Lock()
 							c.dirtyDeps[p.Namespace+"/"+dep] = true
+							c.kicks.kick()
 							c.mu.Unlock()
 						}
 					}
@@ -396,6 +405,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 				if n, ok := obj.(*corev1.Node); ok {
 					c.mu.Lock()
 					c.dirtyNodes[n.Name] = true
+					c.kicks.kick()
 					c.mu.Unlock()
 				}
 			})
@@ -413,6 +423,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 				if d, ok := obj.(*appsv1.Deployment); ok {
 					c.mu.Lock()
 					c.dirtyDeps[d.Namespace+"/"+d.Name] = true
+					c.kicks.kick()
 					c.mu.Unlock()
 				}
 			})
@@ -437,6 +448,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 					if o := metav1.GetControllerOf(rs); o != nil && o.Kind == "Deployment" {
 						c.mu.Lock()
 						c.dirtyDeps[rs.Namespace+"/"+o.Name] = true
+						c.kicks.kick()
 						c.mu.Unlock()
 					}
 				}
@@ -455,6 +467,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 				if h, ok := obj.(*autoscalingv2.HorizontalPodAutoscaler); ok && h.Spec.ScaleTargetRef.Kind == "Deployment" {
 					c.mu.Lock()
 					c.dirtyDeps[h.Namespace+"/"+h.Spec.ScaleTargetRef.Name] = true
+					c.kicks.kick()
 					c.mu.Unlock()
 				}
 			})
@@ -528,24 +541,15 @@ func (c *clusterConn) ownerOf(ns, name string) *OwnerRef {
 }
 
 func (c *clusterConn) flushLoop(ctx context.Context) {
-	t := time.NewTicker(flushInterval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			wake("cluster flush")
-			c.flush()
-		}
-	}
+	flushUntilQuiet(ctx, "cluster flush", flushInterval, c.kicks, c.flush)
 }
 
 // flush sends everything that changed since the last flush. The first flush
-// after the caches sync sends the full list as a reset.
-func (c *clusterConn) flush() {
+// after the caches sync sends the full list as a reset. It reports whether
+// there was work (or the caches are still syncing).
+func (c *clusterConn) flush() bool {
 	if !c.synced() {
-		return
+		return true
 	}
 	now := time.Now()
 	env := c.env()
@@ -563,7 +567,7 @@ func (c *clusterConn) flush() {
 		}
 		c.emit.Emit(EventDelta, Delta{Cluster: c.id, Kind: "deployments", Reset: true, Upserts: toAny(c.allDeploymentRows(env, now)), Deletes: []string{}})
 		c.emit.Emit(EventDelta, Delta{Cluster: c.id, Kind: "nodes", Reset: true, Upserts: toAny(c.allNodeRows(env, now)), Deletes: []string{}})
-		return
+		return true
 	}
 	if len(pods) > 0 && c.pods != nil && !c.streamPods {
 		d := Delta{Cluster: c.id, Kind: "pods", Upserts: []any{}, Deletes: []string{}}
@@ -608,6 +612,7 @@ func (c *clusterConn) flush() {
 		}
 		c.emit.Emit(EventDelta, d)
 	}
+	return len(pods) > 0 || len(deps) > 0 || nodes || len(someNodes) > 0
 }
 
 const (
@@ -791,6 +796,7 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 			}
 			for _, k := range changed {
 				c.dirtyPods[k] = true
+				c.kicks.kick()
 			}
 			c.mu.Unlock()
 			for _, k := range changed {
@@ -817,6 +823,7 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 			c.mu.Lock()
 			for k := range deps {
 				c.dirtyDeps[k] = true
+				c.kicks.kick()
 			}
 			c.mu.Unlock()
 		}
@@ -829,6 +836,7 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 			c.mu.Lock()
 			c.nodeUsage = nodeUsage
 			c.nodesDirty = true
+			c.kicks.kick()
 			c.mu.Unlock()
 		}
 	}

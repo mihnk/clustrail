@@ -38,6 +38,7 @@ import { cn } from "@/lib/cn";
 import { backend, backendInfo, errorText } from "@/backend/client";
 import { LANGUAGE_PREFERENCE, locale, t as tt, tn, type LanguageSetting } from "@/i18n";
 import { SETUP_EVENT } from "@/features/setup/api";
+import { everyWhileVisible } from "@/lib/everyWhileVisible";
 
 
 export const APP_VERSION = "0.9.0";
@@ -128,8 +129,8 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
       void api.logFile().then(setLogFile).catch(() => {});
     };
     load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    const stop = everyWhileVisible(load, 5000);
+    return () => stop();
   }, [active]);
   const [logBuffer, setLogBuffer] = usePersistentState("logs.bufferLines", 100_000);
   const [logMemory, setLogMemory] = usePersistentState("settings.logMemoryMB", 256);

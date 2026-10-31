@@ -115,6 +115,7 @@ type logStream struct {
 	// Membership (logsources.go): ns/pod → the pod's entry and its followers.
 	pods      map[string]*followedPod
 	podsDirty bool
+	kicks     kicker // the flush loop waits on it while nothing is new
 	matched   int
 	skipped   int
 }
@@ -151,24 +152,14 @@ func (m *Manager) StartLogs(req LogsRequest) (string, error) {
 	}
 	id := m.streams.next("logs")
 	ctx, cancel := context.WithCancel(c.ctx)
-	ls := &logStream{id: id, cluster: req.Cluster, cancel: cancel, states: map[string]LogSourceState{}, pods: map[string]*followedPod{}}
+	ls := &logStream{id: id, cluster: req.Cluster, cancel: cancel, states: map[string]LogSourceState{}, pods: map[string]*followedPod{}, kicks: newKicker()}
 	m.streams.mu.Lock()
 	m.streams.logs[id] = ls
 	m.streams.mu.Unlock()
 
 	safeGo("log sources", nil, func() { m.followSources(ctx, c, ls, req) })
 	safeLoop(ctx, "log flush", nil, func() {
-		t := time.NewTicker(logFlushInterval)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				wake("log flush")
-				ls.flush(m.emit)
-			}
-		}
+		flushUntilQuiet(ctx, "log flush", logFlushInterval, ls.kicks, func() bool { return ls.flush(m.emit) })
 	})
 	return id, nil
 }
@@ -177,6 +168,7 @@ func (ls *logStream) add(l LogLine) {
 	ls.mu.Lock()
 	ls.lines = append(ls.lines, l)
 	ls.dirty = true
+	ls.kicks.kick()
 	ls.mu.Unlock()
 }
 
@@ -184,14 +176,15 @@ func (ls *logStream) state(st LogSourceState) {
 	ls.mu.Lock()
 	ls.states[st.Pod+"/"+st.Container] = st
 	ls.dirty = true
+	ls.kicks.kick()
 	ls.mu.Unlock()
 }
 
-func (ls *logStream) flush(emit Emitter) {
+func (ls *logStream) flush(emit Emitter) bool {
 	ls.mu.Lock()
 	if !ls.dirty && !ls.podsDirty {
 		ls.mu.Unlock()
-		return
+		return false
 	}
 	lines := ls.lines
 	if len(lines) > maxBatch {
@@ -212,6 +205,7 @@ func (ls *logStream) flush(emit Emitter) {
 	}
 	ls.mu.Unlock()
 	emit.Emit(EventLogs, batch)
+	return true
 }
 
 func (m *Manager) followContainer(ctx context.Context, c *clusterConn, ls *logStream, req LogsRequest, ns, pod, container string) {

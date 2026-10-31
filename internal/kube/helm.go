@@ -247,6 +247,7 @@ type helmWatcher struct {
 	synced   cache.InformerSynced
 	mu       sync.Mutex
 	dirty    bool
+	kicks    kicker
 	sentAll  bool
 }
 
@@ -259,7 +260,8 @@ func (h *helmWatcher) start(ctx context.Context) {
 	if !ok {
 		return
 	}
-	mark := func(any) { h.mu.Lock(); h.dirty = true; h.mu.Unlock() }
+	h.kicks = newKicker()
+	mark := func(any) { h.mu.Lock(); h.dirty = true; h.mu.Unlock(); h.kicks.kick() }
 	var stop func()
 	if pollMode.Load() {
 		// Poll mode: Helm's storage Secrets are listed like everything else.
@@ -280,33 +282,24 @@ func (h *helmWatcher) start(ctx context.Context) {
 		stop = f.Shutdown
 	}
 	safeLoop(ctx, "Helm updates", nil, func() {
-		t := time.NewTicker(time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				stop()
-				return
-			case <-t.C:
-				wake("Helm flush")
-				h.flush()
-			}
-		}
+		flushUntilQuiet(ctx, "Helm flush", time.Second, h.kicks, h.flush)
+		stop()
 	})
 }
 
-func (h *helmWatcher) flush() {
+func (h *helmWatcher) flush() bool {
 	if h.lister == nil || !h.synced() {
-		return
+		return true
 	}
 	h.mu.Lock()
 	if !h.dirty && h.sentAll {
 		h.mu.Unlock()
-		return
+		return false
 	}
 	h.dirty, h.sentAll = false, true
 	h.mu.Unlock()
 	h.c.emit.Emit(EventDelta, Delta{Cluster: h.c.id, Kind: "helm", Reset: true, Upserts: toAny(h.releases()), Deletes: []string{}})
+	return true
 }
 
 // releases groups the storage Secrets by release; the newest revision is the row.

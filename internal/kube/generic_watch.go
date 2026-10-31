@@ -34,7 +34,27 @@ var pollEvery = 30 * time.Second
 // It applies to generic lists immediately and to clusters on their next connect.
 var pollMode atomic.Bool
 
-func SetPollMode(on bool) { pollMode.Store(on) }
+func SetPollMode(on bool) {
+	if pollMode.Swap(on) != on {
+		modeMu.Lock()
+		close(modeChanged)
+		modeChanged = make(chan struct{})
+		modeMu.Unlock()
+	}
+}
+
+// modeChanged is closed (and replaced) when the update method changes, so
+// watches notice without checking on a timer.
+var (
+	modeMu      sync.Mutex
+	modeChanged = make(chan struct{})
+)
+
+func updateMethodChanged() <-chan struct{} {
+	modeMu.Lock()
+	defer modeMu.Unlock()
+	return modeChanged
+}
 
 // ListUpdate is one batch of a generic list: a reset carries every row and
 // the columns; later updates only what changed.
@@ -109,6 +129,8 @@ type listWatch struct {
 	shown string
 	keep  []int // table cell indexes of the shown columns
 	rows  map[string]GenericRow
+	// sentMode is the update method the UI was last told about.
+	sentMode string
 }
 
 func (w *listWatch) rowID(r *GenericRow) {
@@ -146,6 +168,7 @@ func (w *listWatch) run(ctx context.Context) {
 			}
 			w.emit.Emit(EventList, ListUpdate{ID: w.id, Cluster: w.cluster, Reset: true, Columns: list.Columns, Namespaced: w.namespaced, Shown: w.shown,
 				Truncated: list.Truncated, Upserts: list.Rows, Deletes: []string{}, Mode: w.mode()})
+			w.sentMode = w.mode()
 		} else {
 			// A re-list (poll, or after a watch ended): send the difference.
 			w.diff(list)
@@ -183,7 +206,10 @@ func (w *listWatch) diff(list GenericList) {
 		}
 	}
 	sort.Strings(u.Deletes)
-	if len(u.Upserts) > 0 || len(u.Deletes) > 0 {
+	// A re-list after switching between watch and poll is sent even when
+	// nothing changed, so the list says how it is updated now.
+	if len(u.Upserts) > 0 || len(u.Deletes) > 0 || u.Mode != w.sentMode {
+		w.sentMode = u.Mode
 		w.emit.Emit(EventList, u)
 	}
 }
@@ -302,8 +328,12 @@ func (w *listWatch) watch(ctx context.Context, rv string) error {
 	defer cancel()
 	errc := make(chan error, 1)
 	safeGo("list watch stream", func(err error) { errc <- err; close(events) }, func() { errc <- w.stream(wctx, rv, events); close(events) })
-	t := time.NewTicker(500 * time.Millisecond)
-	defer t.Stop()
+	// A batch is sent 500 ms after its first change; nothing wakes while nothing changes.
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	defer timer.Stop()
+	var due <-chan time.Time
+	switched := updateMethodChanged()
 	// One entry per object per batch, its last event: an update then a delete
 	// in the same 500 ms must not reach the UI as both (the UI applies deletes
 	// before upserts and would bring the object back).
@@ -324,6 +354,10 @@ func (w *listWatch) watch(ctx context.Context, rv string) error {
 				return <-errc
 			}
 			w.rowID(&ev.Row)
+			if due == nil {
+				timer.Reset(500 * time.Millisecond)
+				due = timer.C
+			}
 			if ev.Deleted {
 				delete(w.rows, ev.Row.ID)
 				batch.delete(ev.Row.ID)
@@ -331,11 +365,15 @@ func (w *listWatch) watch(ctx context.Context, rv string) error {
 				w.rows[ev.Row.ID] = ev.Row
 				batch.upsert(ev.Row)
 			}
-		case <-t.C:
+		case <-due:
 			wake("list watch flush")
+			due = nil
 			flush()
+		case <-switched:
+			switched = updateMethodChanged()
 			if pollMode.Load() {
 				// Switched to poll mode while watching.
+				flush()
 				return nil
 			}
 		}

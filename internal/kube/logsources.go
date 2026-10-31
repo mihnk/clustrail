@@ -71,6 +71,7 @@ func (ls *logStream) left(ns, pod, reason string) {
 	now := time.Now()
 	p.info.State, p.info.Left, p.info.Reason = "left", now.UTC().Format(time.RFC3339), reason
 	ls.podsDirty = true
+	ls.kicks.kick()
 	cancel := p.cancel
 	ls.mu.Unlock()
 	ls.add(LogLine{Namespace: ns, Pod: pod, TS: now.Format("15:04:05.000"), Msg: fmt.Sprintf("%s left · %s", pod, reason), Event: "left"})
@@ -208,6 +209,7 @@ func (m *Manager) followSources(ctx context.Context, c *clusterConn, ls *logStre
 		ls.mu.Lock()
 		ls.pods[key] = fp
 		ls.podsDirty = true
+		ls.kicks.kick()
 		ls.mu.Unlock()
 		if !initial {
 			ls.add(LogLine{Namespace: p.Namespace, Pod: p.Name, TS: now.Format("15:04:05.000"), Msg: p.Name + " joined", Event: "joined"})
@@ -282,6 +284,7 @@ func (m *Manager) followSources(ctx context.Context, c *clusterConn, ls *logStre
 		if ls.matched != len(ordered) || ls.skipped != len(ordered)-len(keep) {
 			ls.matched, ls.skipped = len(ordered), len(ordered)-len(keep)
 			ls.podsDirty = true
+			ls.kicks.kick()
 		}
 		var gone []LogPod
 		if !failed {

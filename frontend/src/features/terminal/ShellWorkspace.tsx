@@ -112,8 +112,11 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
   const secondary = split ? sessions.find((s) => s.id !== current?.id && s.state !== "ended") : undefined;
   const update = (id: string, patch: Partial<ShellSession>) => setSessions((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)));
 
-  // Reconnect countdown. Mock: the next attempt succeeds. Desktop: a new exec starts.
+  // Reconnect countdown, only while a session is reconnecting. Mock: the next
+  // attempt succeeds. Desktop: a new exec starts.
+  const reconnecting = sessions.some((s) => s.state === "reconnecting");
   useEffect(() => {
+    if (!reconnecting) return;
     const t = setInterval(() => {
       setSessions((ss) =>
         ss.some((s) => s.state === "reconnecting")
@@ -126,7 +129,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
       );
     }, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [reconnecting]);
 
   // Desktop: a dropped stream (not an exit) reconnects with backoff; an exit ends the session.
   const onExit = (id: string, code: number, error?: string) =>

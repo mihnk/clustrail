@@ -699,8 +699,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   // Watch-like updates for the mock: usage numbers move, and the cart-web
-  // rollout that is in progress at start finishes after a while.
+  // rollout that is in progress at start finishes after a while. Mock data
+  // only: in the desktop app these numbers come from the cluster.
   useEffect(() => {
+    if (backend) return;
     const tick = setInterval(() => {
       setAllPods((ps) =>
         ps.map((p, i) =>

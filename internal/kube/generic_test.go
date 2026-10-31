@@ -183,3 +183,39 @@ func TestCreateObjectsFromManifest(t *testing.T) {
 		t.Fatalf("read-only err = %v", err)
 	}
 }
+
+// A watching list notices the switch to poll mode at once (a broadcast, not a
+// timer: an idle watch does not wake), and is listed again in poll mode.
+func TestListWatchSwitchesToPollMode(t *testing.T) {
+	c, client, rec := newFakeConn(t)
+	client.Fake.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{
+		{Name: "configmaps", Kind: "ConfigMap", Namespaced: true, Verbs: []string{"list", "watch"}},
+	}}}
+	c.dynamic = dynamicfake.NewSimpleDynamicClient(scheme.Scheme, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "a", Namespace: "payments"}})
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	defer c.cancel()
+	defer func(d time.Duration) { pollEvery = d }(pollEvery)
+	pollEvery = time.Hour // the poll itself must not be what produced the update
+	m := managerWith(c, false)
+	id, err := m.StartListWatch("test", "ConfigMap", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.StopListWatch(id)
+	waitFor(t, "watching", func() bool { u := rec.listUpdates(id); return len(u) > 0 && u[0].Mode == "watch" })
+	idle := Wakeups()["list watch flush"]
+	time.Sleep(700 * time.Millisecond)
+	if d := Wakeups()["list watch flush"] - idle; d != 0 {
+		t.Fatalf("an idle watch woke %d times", d)
+	}
+	SetPollMode(true)
+	defer SetPollMode(false)
+	waitFor(t, "listed again in poll mode", func() bool {
+		for _, u := range rec.listUpdates(id) {
+			if u.Mode == "poll" {
+				return true
+			}
+		}
+		return false
+	})
+}

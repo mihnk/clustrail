@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 import { applyClustrailTheme, monaco } from "./monaco";
 import { SecretKeys } from "@/features/resources/SecretKeys";
 import { t as tt, tn } from "@/i18n";
+import { everyWhileVisible } from "@/lib/everyWhileVisible";
 
 type Mode = "view" | "edit";
 type DiffMode = "none" | "inline" | "side";
@@ -98,10 +99,10 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         })
         .catch((e) => !cancelled && setLoadError(errorText(e)));
     void load();
-    const t = setInterval(load, 10_000);
+    const stop = everyWhileVisible(load, 10_000);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      stop();
     };
   }, [tab.id]);
   const [cursor, setCursor] = useState({ line: 1, col: 1 });

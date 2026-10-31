@@ -35,10 +35,10 @@ Xvfb), which overstates rendering cost.
 | Scrolling under heavy load, 60 Hz display | frame p95 ≤ 20 ms | 107 ms (native 10k, Linux/Xvfb); 33 ms (Chromium) | `hack/bench.sh table`, `storm` |
 | Open a warm 10k-row table | p95 ≤ 300 ms | not measured separately yet | — |
 | First 10k-row view, local deterministic source | p95 ≤ 1 s (cold and warm apart) | 1.9 s (native, Linux/Xvfb) | `hack/bench.sh table` |
-| Visible, 5 clusters, nothing changing | all app processes ≤ 1 % of one core | see [idle results](benchmarks/idle-results.md) | `hack/bench.sh idle` |
-| Background (hidden), no active log or terminal | all app processes ≤ 0.3 % of one core | see [idle results](benchmarks/idle-results.md) | `hack/bench.sh idle` |
-| Hidden window with no active job | zero periodic UI queries and zero paints after the pause | see [idle results](benchmarks/idle-results.md) | `hack/bench.sh idle` (page callbacks, DOM changes) |
-| Backend with a connected cluster, nothing changing | no timer loop wakes without work | see [idle results](benchmarks/idle-results.md) | `TestIdleConnectedCluster` (envtest) |
+| Visible, 5 clusters, nothing changing | all app processes ≤ 1 % of one core | 9.2 % (Linux/Xvfb; was 12.2 %) — [idle results](benchmarks/idle-results.md) | `hack/bench.sh idle` |
+| Background (hidden), no active log or terminal | all app processes ≤ 0.3 % of one core | **0.1 %** (was 1.5 %) | `hack/bench.sh idle` |
+| Hidden window with no active job | zero periodic UI queries and zero paints after the pause | **0** page callbacks and DOM changes | `hack/bench.sh idle` (page callbacks, DOM changes) |
+| Backend with a connected cluster, nothing changing | no timer loop wakes without work | only the 15 s probe, 3 s kubeconfig watch and 30 s budget check; 0.02 % of a core | `TestIdleConnectedCluster` (envtest) |
 | Memory | after warm-up, Go heap and retained JS grow ≤ 5 % over 8 h; RSS tracked apart | not measured (soak test, D3) | — |
 | Resource reclaim | after 200 open/close cycles, sessions, listeners, timers and watches back to baseline | not measured (D3) | — |
 | Correctness under load | after load and disconnects, UID, resourceVersion and final state equal the source | equal after the 10k storm (checksum) | `hack/bench.sh storm` |

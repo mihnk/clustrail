@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/EmptyState";
 import type { Environment } from "@/data/types";
 import { kindName } from "./kinds";
 import { t as tt } from "@/i18n";
+import { everyWhileVisible } from "@/lib/everyWhileVisible";
 
 // Actions of StatefulSets, DaemonSets, Jobs and CronJobs in the generic lists
 // (internal/kube/workloads.go). Deployments have their own workspace.
@@ -244,10 +245,10 @@ export function JobAttempts({ cluster, namespace, name }: { cluster: string; nam
         .then((s) => !cancelled && (setStatus(s), setError(null)))
         .catch((e) => !cancelled && setError(errorText(e)));
     void load();
-    const t = setInterval(load, 5000);
+    const stop = everyWhileVisible(load, 5000);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      stop();
     };
   }, [cluster, namespace, name]);
   if (!backend) return <EmptyState title={tt("Job attempts come from your clusters in the desktop app.")} />;
