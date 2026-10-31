@@ -136,14 +136,7 @@ func (s *sampleStore) save(path string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return writeFileAtomic(path, b)
 }
 
 // load adds saved samples newer than now-maxAge. Call it before collecting so

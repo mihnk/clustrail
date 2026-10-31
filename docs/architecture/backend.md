@@ -40,7 +40,12 @@ through one Wails service (`internal/app.Workspace`) and its events.
   file, `~/.kube/clustrail-pasted.yaml` (0600); existing kubeconfig files are
   never written. Settings › Run setup again repeats it.
 - **Settings** (`settings.go`): group, protection (Standard · Protected ·
-  Read-only) and hidden contexts live in `~/.config/clustrail/contexts.json`.
+  Read-only) and hidden contexts live in `~/.config/clustrail/contexts.json`,
+  written atomically (a synced temporary file renamed over the old one; the
+  metrics samples too). An unreadable file is kept aside as
+  `contexts.json.corrupt-<time>`, never overwritten, and setup runs again with
+  a notice: until environment and protection are chosen again, contexts are
+  not connected automatically.
   Read-only is enforced in Go for every change, every shell and every port
   forward (a forwarded port reaches the application, which can change data);
   viewing (logs, YAML, events) stays available. It is a guard

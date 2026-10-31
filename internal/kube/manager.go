@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"k8s.io/client-go/rest"
@@ -36,7 +37,9 @@ type Manager struct {
 	streams  streams
 	forwards forwards
 	shells   nodeShells
-	lists    listWatches
+	// recoveredShown: the unreadable-settings notice was shown.
+	recoveredShown atomic.Bool
+	lists          listWatches
 	// StreamPods sends pods through the streaming hub instead of delta events (set by the app).
 	StreamPods bool
 	synthetic  map[string]bool
@@ -436,7 +439,12 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 		fail(err)
 		return
 	}
-	conn, err := newClusterConn(id, cfg, func() Environment { return m.envOf(id) }, m.emit, func(s ConnectionState, err error) { m.onConnState(id, s, err) })
+	// Callbacks act only while this connection is the current one: a watch
+	// error or probe of a connection that was closed or replaced (a reconnect
+	// after a kubeconfig change, say) must not change the state of the
+	// connection that took its place.
+	var conn *clusterConn
+	conn, err = newClusterConn(id, cfg, func() Environment { return m.envOf(id) }, m.emit, func(s ConnectionState, err error) { m.connStateFrom(id, conn, s, err) })
 	if err != nil {
 		fail(err)
 		return
@@ -479,8 +487,8 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 		return
 	}
 	m.mu.Unlock()
-	safeLoop(conn.ctx, "API probe", func(err error) { m.onConnState(id, Reconnecting, err) }, func() {
-		conn.probeLoop(conn.ctx, func(ms int, err error) { m.onProbe(id, ms, err) })
+	safeLoop(conn.ctx, "API probe", func(err error) { m.connStateFrom(id, conn, Reconnecting, err) }, func() {
+		conn.probeLoop(conn.ctx, func(ms int, err error) { m.probeFrom(id, conn, ms, err) })
 	})
 	safeGo("node shell sweep", nil, func() { m.sweepNodeShells(id, conn) })
 	slog.Info("connected", "cluster", id, "version", info.Version, "identity", info.Identity, "latencyMs", info.LatencyMs, "metrics", info.Metrics,
@@ -519,6 +527,27 @@ func (m *Manager) envOf(id string) Environment {
 }
 
 // onConnState handles a watch error: rows stay but are marked stale until a probe succeeds.
+// isCurrent reports whether c is the connection registered for id.
+func (m *Manager) isCurrent(id string, c *clusterConn) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return c != nil && m.conns[id] == c
+}
+
+// connStateFrom and probeFrom pass on a connection's callbacks while it is
+// the current one, and drop them once it was closed or replaced.
+func (m *Manager) connStateFrom(id string, c *clusterConn, s ConnectionState, err error) {
+	if m.isCurrent(id, c) {
+		m.onConnState(id, s, err)
+	}
+}
+
+func (m *Manager) probeFrom(id string, c *clusterConn, ms int, err error) {
+	if m.isCurrent(id, c) {
+		m.onProbe(id, ms, err)
+	}
+}
+
 func (m *Manager) onConnState(id string, s ConnectionState, err error) {
 	if s != Reconnecting {
 		return
@@ -659,6 +688,12 @@ func (m *Manager) SetSelected(ids []string) error { return m.store.SetSelected(i
 
 // AutoConnect connects the contexts that were selected when the app last quit.
 func (m *Manager) AutoConnect() {
+	// The interface calls this once it listens: the time to say the settings
+	// file had to be set aside at start.
+	if aside := m.store.Recovered(); aside != "" && m.recoveredShown.CompareAndSwap(false, true) {
+		m.emit.Emit(EventNotice, Notice{Kind: "warning", Title: "Settings file unreadable",
+			Detail: "It was kept as " + aside + ". Choose the environment and protection of your contexts again; until then they are not connected automatically."})
+	}
 	for _, id := range m.store.Selected() {
 		m.Connect(id)
 	}

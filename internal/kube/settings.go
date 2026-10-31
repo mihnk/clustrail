@@ -3,10 +3,13 @@ package kube
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // ContextSettings is what Clustrail stores about a kubeconfig context. The
@@ -36,7 +39,12 @@ type settingsFile struct {
 	// InstallID identifies this installation on the pods it starts in
 	// clusters (node shells), so it only ever cleans up its own.
 	InstallID string `json:"installId,omitempty"`
+	// Version of this file's format; a file without one is version 1.
+	Version int `json:"version,omitempty"`
 }
+
+// settingsVersion is the format this build writes.
+const settingsVersion = 1
 
 // Store persists context settings as JSON in the user config directory
 // (~/.config/clustrail on Linux, ~/Library/Application Support/clustrail on macOS).
@@ -44,6 +52,16 @@ type Store struct {
 	mu   sync.Mutex
 	path string
 	data settingsFile
+	// recovered is where an unreadable settings file was kept, if it was.
+	recovered string
+}
+
+// Recovered returns where an unreadable settings file was kept at start, or "".
+func (s *Store) Recovered() string {
+	if s == nil {
+		return ""
+	}
+	return s.recovered
 }
 
 func DefaultStorePath() (string, error) {
@@ -65,7 +83,17 @@ func OpenStore(path string) (*Store, error) {
 		return nil, err
 	}
 	if err := json.Unmarshal(raw, &s.data); err != nil {
-		return nil, err
+		// Unreadable settings are kept aside, never overwritten, and setup
+		// runs again: contexts show as new (never connected automatically)
+		// until their environment and protection are chosen again.
+		aside := fmt.Sprintf("%s.corrupt-%d", path, time.Now().Unix())
+		if rerr := os.Rename(path, aside); rerr != nil {
+			return nil, fmt.Errorf("settings file %s is unreadable (%v) and could not be moved aside: %w", path, err, rerr)
+		}
+		slog.Error("settings file unreadable; kept aside, setup runs again", "path", path, "keptAs", aside, "error", err)
+		fresh := &Store{path: path, data: settingsFile{Contexts: map[string]ContextSettings{}}, recovered: aside}
+		fresh.data.SetupDone = new(bool)
+		return fresh, nil
 	}
 	if s.data.Contexts == nil {
 		s.data.Contexts = map[string]ContextSettings{}
@@ -80,15 +108,12 @@ func (s *Store) save() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
+	s.data.Version = settingsVersion
 	raw, err := json.MarshalIndent(s.data, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.path)
+	return writeFileAtomic(s.path, raw)
 }
 
 // Settings returns the stored settings of a context, or a default derived
