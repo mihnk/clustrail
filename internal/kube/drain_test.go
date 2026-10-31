@@ -2,6 +2,8 @@ package kube
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -171,4 +173,47 @@ func TestDrainReadErrorsKeepThePod(t *testing.T) {
 	if j := lastJob(rec); !strings.Contains(j.Error, "payments/slow (state unknown)") {
 		t.Fatalf("job = %+v", j)
 	}
+}
+
+// Evictions carry the planned pod's UID: a pod recreated under the same name
+// between the plan and the eviction is refused by the API server (409) and
+// left running, and the planned pod counts as gone.
+func TestDrainEvictsOnlyThePlannedPod(t *testing.T) {
+	defer func(d, min time.Duration) { drainPoll, drainMinTimeout = d, min }(drainPoll, drainMinTimeout)
+	drainPoll, drainMinTimeout = 20*time.Millisecond, 300*time.Millisecond
+	m, rec, get, replace := drainFixture(t)
+	c, _ := m.conn("test")
+	var uids []string
+	c.client.(*fake.Clientset).PrependReactor("create", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if a.GetSubresource() != "eviction" {
+			return false, nil, nil
+		}
+		ev := a.(k8stesting.CreateAction).GetObject().(*policyv1.Eviction)
+		if ev.DeleteOptions == nil || ev.DeleteOptions.Preconditions == nil || ev.DeleteOptions.Preconditions.UID == nil {
+			t.Errorf("eviction of %s has no UID precondition", ev.Name)
+			return false, nil, nil
+		}
+		uids = append(uids, string(*ev.DeleteOptions.Preconditions.UID))
+		if ev.Name == "web" {
+			// web was replaced after the plan: the precondition fails.
+			p := get("web").DeepCopy()
+			p.UID = "web-uid-2"
+			replace(p)
+			return true, nil, apierrors.NewConflict(corev1.Resource("pods"), "web", errors.New("precondition failed: UID in precondition: web-uid-1, UID in object meta: web-uid-2"))
+		}
+		return false, nil, nil
+	})
+	if _, err := m.DrainNode("test", "node-1", DrainOptions{}, "jane"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "slow terminating", func() bool { return strings.Contains(lastJob(rec).Detail, "1 terminating") })
+	if p := get("web"); p == nil || p.UID != "web-uid-2" {
+		t.Fatal("the recreated web pod must not be evicted")
+	}
+	slices.Sort(uids)
+	if strings.Join(uids, ",") != "slow-uid-1,web-uid-1" {
+		t.Fatalf("precondition UIDs = %v", uids)
+	}
+	// slow is held by its finalizer: the drain ends at its deadline.
+	waitFor(t, "drain done", func() bool { return lastJob(rec).Done })
 }

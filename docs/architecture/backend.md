@@ -111,7 +111,11 @@ through one Wails service (`internal/app.Workspace`) and its events.
   (`kubectl debug POD`, with `--target` and the same profiles); it cannot be
   removed, and the dialog says so. A node shell is a privileged pod pinned to
   the node with the host's PID, network and IPC namespaces and its root at
-  `/host`; it is deleted when the shell closes or Clustrail quits. Read-only
+  `/host`; it is deleted when the shell closes or Clustrail quits, and ends by
+  itself after 12 hours (`activeDeadlineSeconds`). Each shell carries a label
+  with this installation's id; on connect, this installation's shells that no
+  open shell uses (left by a crash, or by quitting while the cluster was
+  unreachable) are deleted, and other installations' shells are left alone. Read-only
   contexts offer neither; production and protected contexts ask for the
   context name.
 - **Helm upgrade** (`helm_upgrade.go`): edit the release's user-supplied

@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // Debugging a pod with an ephemeral container (`kubectl debug POD`) and a
@@ -196,11 +197,44 @@ type NodeShell struct {
 	Command []string `json:"command"`
 }
 
-const nodeShellLabel = "clustrail.mihnk.org/node-shell"
+const (
+	nodeShellLabel = "clustrail.mihnk.org/node-shell"
+	// installLabel names the installation that started a node shell.
+	installLabel = "clustrail.mihnk.org/install"
+	// nodeShellLifetime ends a node shell pod by itself if Clustrail could not
+	// delete it (a crash, or quitting while the cluster was unreachable).
+	nodeShellLifetime = 12 * time.Hour
+)
 
 type nodeShells struct {
 	mu   sync.Mutex
 	pods map[string]NodeShell // cluster/ns/pod
+	uids map[string]types.UID // known once the pod is created
+}
+
+func (s *nodeShells) track(key string, sh NodeShell) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pods == nil {
+		s.pods = map[string]NodeShell{}
+	}
+	s.pods[key] = sh
+}
+
+func (s *nodeShells) setUID(key string, uid types.UID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.uids == nil {
+		s.uids = map[string]types.UID{}
+	}
+	s.uids[key] = uid
+}
+
+func (s *nodeShells) untrack(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.pods, key)
+	delete(s.uids, key)
 }
 
 // StartNodeShell starts a privileged pod pinned to the node, with the host's
@@ -222,21 +256,21 @@ func (m *Manager) StartNodeShell(req NodeShellRequest) (NodeShell, error) {
 	if _, err := c.client.CoreV1().Nodes().Get(ctx, req.Node, metav1.GetOptions{}); err != nil {
 		return NodeShell{}, err
 	}
-	pod := nodeShellPod(req)
-	created, err := c.client.CoreV1().Pods(req.Namespace).Create(ctx, pod, metav1.CreateOptions{FieldManager: "clustrail"})
-	if err != nil {
-		return NodeShell{}, err
-	}
+	pod := nodeShellPod(req, m.store.InstallID())
 	shell := NodeShell{
-		Namespace: created.Namespace, Pod: created.Name, Container: "shell",
+		Namespace: pod.Namespace, Pod: pod.Name, Container: "shell",
 		Command: []string{"chroot", "/host", "sh", "-c", "if command -v bash >/dev/null; then exec bash -l; else exec sh -l; fi"},
 	}
-	m.shells.mu.Lock()
-	if m.shells.pods == nil {
-		m.shells.pods = map[string]NodeShell{}
+	// Tracked before it exists, so the sweep on connect never takes a shell
+	// that is starting for an orphan.
+	key := req.Cluster + "/" + shell.Namespace + "/" + shell.Pod
+	m.shells.track(key, shell)
+	created, err := c.client.CoreV1().Pods(req.Namespace).Create(ctx, pod, metav1.CreateOptions{FieldManager: "clustrail"})
+	if err != nil {
+		m.shells.untrack(key)
+		return NodeShell{}, err
 	}
-	m.shells.pods[req.Cluster+"/"+shell.Namespace+"/"+shell.Pod] = shell
-	m.shells.mu.Unlock()
+	m.shells.setUID(key, created.UID)
 	if err := waitRunning(ctx, c, shell.Namespace, shell.Pod, "shell", false); err != nil {
 		_ = m.DeleteNodeShell(req.Cluster, shell.Namespace, shell.Pod)
 		return NodeShell{}, err
@@ -244,20 +278,26 @@ func (m *Manager) StartNodeShell(req NodeShellRequest) (NodeShell, error) {
 	return shell, nil
 }
 
-func nodeShellPod(req NodeShellRequest) *corev1.Pod {
+func nodeShellPod(req NodeShellRequest, install string) *corev1.Pod {
 	node := strings.ToLower(req.Node)
 	if len(node) > 30 {
 		node = node[:30]
 	}
 	yes := true
 	var grace int64
+	lifetime := int64(nodeShellLifetime / time.Second)
+	labels := map[string]string{nodeShellLabel: "true", "app.kubernetes.io/managed-by": "clustrail"}
+	if install != "" {
+		labels[installLabel] = install
+	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      strings.Trim("clustrail-node-shell-"+strings.ReplaceAll(node, ".", "-"), "-") + "-" + randomSuffix(5),
 			Namespace: req.Namespace,
-			Labels:    map[string]string{nodeShellLabel: "true", "app.kubernetes.io/managed-by": "clustrail"},
+			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
+			ActiveDeadlineSeconds:         &lifetime,
 			NodeName:                      req.Node,
 			HostPID:                       true,
 			HostNetwork:                   true,
@@ -268,7 +308,7 @@ func nodeShellPod(req NodeShellRequest) *corev1.Pod {
 			Containers: []corev1.Container{{
 				Name:            "shell",
 				Image:           req.Image,
-				Command:         []string{"sh", "-c", "sleep 86400"},
+				Command:         []string{"sh", "-c", fmt.Sprintf("sleep %d", lifetime)},
 				Stdin:           true,
 				TTY:             true,
 				SecurityContext: &corev1.SecurityContext{Privileged: &yes},
@@ -280,12 +320,14 @@ func nodeShellPod(req NodeShellRequest) *corev1.Pod {
 }
 
 // DeleteNodeShell deletes a node shell pod Clustrail started. The pod stays
-// tracked until the API server confirms it is gone, so a failed delete is
-// retried at quit instead of leaving a privileged pod behind.
+// tracked until it is confirmed gone, so a failed delete (or a pod held by a
+// finalizer) is retried at quit and found again on the next connect instead
+// of leaving a privileged pod behind.
 func (m *Manager) DeleteNodeShell(cluster, ns, pod string) error {
 	key := cluster + "/" + ns + "/" + pod
 	m.shells.mu.Lock()
 	_, ok := m.shells.pods[key]
+	uid := m.shells.uids[key]
 	m.shells.mu.Unlock()
 	if !ok {
 		return fmt.Errorf("%s/%s is not a node shell Clustrail started", ns, pod)
@@ -296,15 +338,88 @@ func (m *Manager) DeleteNodeShell(cluster, ns, pod string) error {
 	}
 	ctx, cancel := actionCtx()
 	defer cancel()
-	var grace int64
-	err = c.client.CoreV1().Pods(ns).Delete(ctx, pod, metav1.DeleteOptions{GracePeriodSeconds: &grace})
-	if err != nil && !apierrors.IsNotFound(err) {
+	if err := deleteNodeShellPod(ctx, c, ns, pod, uid); err != nil {
 		return fmt.Errorf("node shell pod %s/%s not deleted: %w", ns, pod, err)
 	}
-	m.shells.mu.Lock()
-	delete(m.shells.pods, key)
-	m.shells.mu.Unlock()
+	m.shells.untrack(key)
 	return nil
+}
+
+// deleteNodeShellPod deletes the pod (only the one with this UID, when known)
+// and waits briefly until it is gone. A pod with another UID is not ours.
+func deleteNodeShellPod(ctx context.Context, c *clusterConn, ns, pod string, uid types.UID) error {
+	var grace int64
+	opts := metav1.DeleteOptions{GracePeriodSeconds: &grace}
+	if uid != "" {
+		opts.Preconditions = &metav1.Preconditions{UID: &uid}
+	}
+	err := c.client.CoreV1().Pods(ns).Delete(ctx, pod, opts)
+	switch {
+	case apierrors.IsNotFound(err), uid != "" && apierrors.IsConflict(err):
+		return nil
+	case err != nil:
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, nodeShellGoneWait)
+	defer cancel()
+	for {
+		p, err := c.client.CoreV1().Pods(ns).Get(ctx, pod, metav1.GetOptions{})
+		switch {
+		case apierrors.IsNotFound(err), err == nil && uid != "" && p.UID != uid:
+			return nil
+		case err == nil && len(p.Finalizers) > 0:
+			return fmt.Errorf("deletion accepted but held by finalizers %s", strings.Join(p.Finalizers, ", "))
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("deletion accepted but the pod is still there")
+		case <-time.After(nodeShellGonePoll):
+		}
+	}
+}
+
+// A deleted node shell is checked every nodeShellGonePoll for being gone, for
+// at most nodeShellGoneWait; quitting must not hang on a stuck pod.
+var (
+	nodeShellGonePoll = 200 * time.Millisecond
+	nodeShellGoneWait = 5 * time.Second
+)
+
+// sweepNodeShells deletes this installation's node shell pods that no open
+// shell uses: left behind by a crash, or by quitting while the cluster was
+// unreachable. Pods of other installations are never touched.
+func (m *Manager) sweepNodeShells(cluster string, c *clusterConn) {
+	install := m.store.InstallID()
+	if install == "" {
+		return
+	}
+	ctx, cancel := actionCtx()
+	defer cancel()
+	sel := nodeShellLabel + "=true," + installLabel + "=" + install
+	list, err := c.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{LabelSelector: sel})
+	if apierrors.IsForbidden(err) {
+		list, err = c.client.CoreV1().Pods("kube-system").List(ctx, metav1.ListOptions{LabelSelector: sel})
+	}
+	if err != nil {
+		slog.Warn("node shell sweep: listing failed", "cluster", cluster, "error", err)
+		return
+	}
+	for i := range list.Items {
+		p := &list.Items[i]
+		key := cluster + "/" + p.Namespace + "/" + p.Name
+		m.shells.mu.Lock()
+		_, open := m.shells.pods[key]
+		m.shells.mu.Unlock()
+		if open {
+			continue
+		}
+		if err := deleteNodeShellPod(ctx, c, p.Namespace, p.Name, p.UID); err != nil {
+			slog.Error("node shell pod left running: delete it by hand", "cluster", cluster, "pod", p.Namespace+"/"+p.Name, "error", err,
+				"command", fmt.Sprintf("kubectl --context %s -n %s delete pod %s", cluster, p.Namespace, p.Name))
+			continue
+		}
+		slog.Info("deleted a node shell pod left behind", "cluster", cluster, "pod", p.Namespace+"/"+p.Name)
+	}
 }
 
 // nodeShellRetry is the pause between attempts to delete node shells at quit.

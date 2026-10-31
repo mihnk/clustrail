@@ -33,6 +33,9 @@ type settingsFile struct {
 	// Environment and protection are stored by context name; when the name
 	// starts pointing elsewhere they must be confirmed again.
 	Servers map[string]string `json:"servers,omitempty"`
+	// InstallID identifies this installation on the pods it starts in
+	// clusters (node shells), so it only ever cleans up its own.
+	InstallID string `json:"installId,omitempty"`
 }
 
 // Store persists context settings as JSON in the user config directory
@@ -238,6 +241,21 @@ func (s *Store) RecordServers(servers map[string]string) error {
 }
 
 // ConfirmServer records that the user accepted the context's new server.
+// InstallID returns this installation's id, creating it on first use. A nil
+// store (tests) has none.
+func (s *Store) InstallID() string {
+	if s == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.InstallID == "" {
+		s.data.InstallID = randomSuffix(16)
+		_ = s.save()
+	}
+	return s.data.InstallID
+}
+
 func (s *Store) ConfirmServer(context, server string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

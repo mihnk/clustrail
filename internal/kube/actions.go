@@ -331,9 +331,14 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 				var blocked []string
 				for _, key := range pending {
 					ns, name, _ := strings.Cut(key, "/")
-					err := c.client.PolicyV1().Evictions(ns).Evict(ctx, &policyv1.Eviction{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}})
+					// Only the pod that was planned: a pod recreated under the same name is not evicted.
+					uid := uids[key]
+					err := c.client.PolicyV1().Evictions(ns).Evict(ctx, &policyv1.Eviction{
+						ObjectMeta:    metav1.ObjectMeta{Name: name, Namespace: ns},
+						DeleteOptions: &metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}},
+					})
 					switch {
-					case err == nil, apierrors.IsNotFound(err):
+					case err == nil, apierrors.IsNotFound(err), apierrors.IsConflict(err):
 						evicted = append(evicted, key)
 					case apierrors.IsTooManyRequests(err):
 						blocked = append(blocked, key) // a PodDisruptionBudget allows no disruption now

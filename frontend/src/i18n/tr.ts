@@ -1429,7 +1429,7 @@ export const tr: Record<string, string> = {
   "Clustrail starts a privileged pod on this node with the host’s process, network and IPC namespaces, then opens a shell in the node’s root filesystem.": "Clustrail bu node'da, host'un süreç, ağ ve IPC namespace'lerini kullanan ayrıcalıklı bir pod başlatır, ardından node'un kök dosya sisteminde bir shell açar.",
   "Namespace": "Namespace",
   "The pod": "Pod",
-  "privileged · hostPID · hostNetwork · hostIPC · tolerates every taint · pinned to the node · deleted when the shell closes or Clustrail quits": "privileged · hostPID · hostNetwork · hostIPC · her taint'i tolere eder · node'a sabitlenir · shell kapanınca ya da Clustrail kapanınca silinir",
+  "privileged · hostPID · hostNetwork · hostIPC · tolerates every taint · pinned to the node · deleted when the shell closes or Clustrail quits, and ends by itself after 12 hours": "privileged · hostPID · hostNetwork · hostIPC · her taint'i tolere eder · node'a sabitlenir · shell kapanınca ya da Clustrail kapanınca silinir, 12 saat sonra kendiliğinden biter",
   "This is root on the node. Pod Security admission (baseline or restricted) on the namespace refuses it; the error says which policy.": "Bu, node üzerinde root yetkisidir. Namespace'teki Pod Security admission (baseline ya da restricted) bunu reddeder; hata hangi politika olduğunu söyler.",
   "What an identity may do, as the API server decides it": "Bir kimliğin neler yapabileceği, API server'ın kararıyla",
   "Cluster": "Cluster",

@@ -453,6 +453,7 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 	}
 	m.mu.Unlock()
 	go conn.probeLoop(conn.ctx, func(ms int, err error) { m.onProbe(id, ms, err) })
+	go m.sweepNodeShells(id, conn)
 	slog.Info("connected", "cluster", id, "version", info.Version, "identity", info.Identity, "latencyMs", info.LatencyMs, "metrics", info.Metrics,
 		"poll", pollMode.Load(), "forbidden", len(conn.forbidden))
 	m.setState(id, func(c *Cluster) {

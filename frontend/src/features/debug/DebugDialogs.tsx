@@ -300,7 +300,7 @@ function NodeShellDialog({ target }: { target: Extract<DebugTarget, { kind: "nod
       </div>
       <div className="flex flex-col gap-1 rounded-lg border border-line-strong px-3 py-2 text-meta">
         <span className="font-semibold">{tt("The pod")}</span>
-        <span className="text-fg-secondary">{tt("privileged · hostPID · hostNetwork · hostIPC · tolerates every taint · pinned to the node · deleted when the shell closes or Clustrail quits")}</span>
+        <span className="text-fg-secondary">{tt("privileged · hostPID · hostNetwork · hostIPC · tolerates every taint · pinned to the node · deleted when the shell closes or Clustrail quits, and ends by itself after 12 hours")}</span>
       </div>
       <div className="flex items-start gap-2 rounded-lg bg-status-critical-soft px-3 py-2 text-meta leading-[1.45] text-fg-secondary">
         <TriangleAlert className="mt-px size-3.5 shrink-0 text-status-critical" aria-hidden />
