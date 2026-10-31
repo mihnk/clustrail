@@ -212,30 +212,158 @@ func parseUpgradeValues(text string, live map[string]any) (map[string]any, error
 	if err := unredact(vals, live, ""); err != nil {
 		return nil, err
 	}
+	// Never send the placeholder to the cluster as a value.
+	if hasPlaceholder(vals) {
+		return nil, fmt.Errorf("values still contain %q; type the real values", redactedValue)
+	}
 	return vals, nil
 }
 
 func unredact(v map[string]any, live map[string]any, path string) error {
 	for k, val := range v {
-		p := strings.TrimPrefix(path+"."+k, ".")
-		switch t := val.(type) {
-		case string:
-			if t != redactedValue {
-				continue
+		lv, ok := live[k]
+		r, err := unredactValue(val, lv, ok, strings.TrimPrefix(path+"."+k, "."))
+		if err != nil {
+			return err
+		}
+		v[k] = r
+	}
+	return nil
+}
+
+// unredactValue puts the live value back where the placeholder was kept,
+// walking into maps and lists.
+func unredactValue(val, live any, liveOK bool, path string) (any, error) {
+	switch t := val.(type) {
+	case string:
+		if t != redactedValue {
+			return t, nil
+		}
+		if !liveOK {
+			return nil, fmt.Errorf("%s is %q but the release has no value there to keep; type the value", path, redactedValue)
+		}
+		return live, nil
+	case map[string]any:
+		sub, _ := live.(map[string]any)
+		return t, unredact(t, sub, path)
+	case []any:
+		if !hasPlaceholder(t) {
+			return t, nil
+		}
+		ll, _ := live.([]any)
+		match, err := matchListItems(t, ll, path)
+		if err != nil {
+			return nil, err
+		}
+		for i := range t {
+			var lv any
+			if match[i] >= 0 {
+				lv = ll[match[i]]
 			}
-			lv, ok := live[k]
-			if !ok {
-				return fmt.Errorf("%s is %q but the release has no value there to keep; type the value", p, redactedValue)
+			r, err := unredactValue(t[i], lv, match[i] >= 0, fmt.Sprintf("%s[%d]", path, i))
+			if err != nil {
+				return nil, err
 			}
-			v[k] = lv
-		case map[string]any:
-			sub, _ := live[k].(map[string]any)
-			if err := unredact(t, sub, p); err != nil {
-				return err
+			t[i] = r
+		}
+		return t, nil
+	}
+	return val, nil
+}
+
+// listIdentityKeys name a list item when edited items are matched to the
+// release's items by identity rather than by position.
+var listIdentityKeys = []string{"name", "key", "id"}
+
+// matchListItems pairs each edited item with the live item it came from (-1:
+// none). An unchanged list pairs by position; otherwise items are paired by a
+// name, key or id that every item has and no two share. A secret is never
+// moved to an item by guessing: without either, the edit is refused.
+func matchListItems(items, live []any, path string) ([]int, error) {
+	match := make([]int, len(items))
+	if len(items) == len(live) {
+		same := true
+		for i := range items {
+			if !reflect.DeepEqual(items[i], redact(live[i])) {
+				same = false
+				break
+			}
+		}
+		if same {
+			for i := range match {
+				match[i] = i
+			}
+			return match, nil
+		}
+	}
+	for _, key := range listIdentityKeys {
+		ids, ok := listIDs(items, key)
+		if !ok {
+			continue
+		}
+		liveIDs, ok := listIDs(live, key)
+		if !ok {
+			continue
+		}
+		at := make(map[string]int, len(liveIDs))
+		for j, id := range liveIDs {
+			at[id] = j
+		}
+		for i, id := range ids {
+			if j, found := at[id]; found {
+				match[i] = j
+			} else {
+				match[i] = -1
+			}
+		}
+		return match, nil
+	}
+	return nil, fmt.Errorf("%s: the list changed and its items have no name, key or id, so the values kept as %q can't be matched to the release's items; type them", path, redactedValue)
+}
+
+// listIDs returns each item's value for key when every item is a map with
+// that key and no two items share it.
+func listIDs(items []any, key string) ([]string, bool) {
+	ids := make([]string, len(items))
+	seen := make(map[string]bool, len(items))
+	for i, it := range items {
+		m, ok := it.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		v, ok := m[key]
+		if !ok {
+			return nil, false
+		}
+		id := fmt.Sprint(v)
+		if seen[id] {
+			return nil, false
+		}
+		seen[id] = true
+		ids[i] = id
+	}
+	return ids, true
+}
+
+// hasPlaceholder reports whether the redaction placeholder appears anywhere in v.
+func hasPlaceholder(v any) bool {
+	switch t := v.(type) {
+	case string:
+		return t == redactedValue
+	case map[string]any:
+		for _, x := range t {
+			if hasPlaceholder(x) {
+				return true
+			}
+		}
+	case []any:
+		for _, x := range t {
+			if hasPlaceholder(x) {
+				return true
 			}
 		}
 	}
-	return nil
+	return false
 }
 
 // PlanHelmUpgrade renders the upgrade with a server-side dry run and compares

@@ -3,6 +3,7 @@ package kube
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -159,4 +160,111 @@ entries:
 	if entries[0].Password != "s3cret" {
 		t.Fatalf("entries = %+v", entries)
 	}
+}
+
+// Secrets inside list items: an unchanged round trip gives the release's
+// values back, a secret never moves to another item, and the placeholder is
+// never sent as a value.
+func TestUpgradeValuesRestoreSecretsInLists(t *testing.T) {
+	user := func(name, password string) map[string]any {
+		return map[string]any{"name": name, "password": password, "role": "ro"}
+	}
+	live := func() map[string]any {
+		return map[string]any{
+			"users":  []any{user("alice", "a-secret"), user("bob", "b-secret")},
+			"hooks":  []any{map[string]any{"url": "https://x", "token": "x-token"}, map[string]any{"url": "https://y", "token": "y-token"}},
+			"groups": []any{map[string]any{"id": 1, "members": []any{map[string]any{"name": "m", "apiKey": "m-key"}}}},
+		}
+	}
+	shown := toYAML(live(), "{}")
+	for _, secret := range []string{"a-secret", "b-secret", "x-token", "m-key"} {
+		if strings.Contains(shown, secret) {
+			t.Fatalf("%s shown:\n%s", secret, shown)
+		}
+	}
+	parse := func(edit func(string) string) (map[string]any, error) {
+		return parseUpgradeValues(edit(shown), live())
+	}
+	userOf := func(vals map[string]any, i int) map[string]any { return vals["users"].([]any)[i].(map[string]any) }
+
+	t.Run("unchanged values come back as they are", func(t *testing.T) {
+		vals, err := parse(func(s string) string { return s })
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Through YAML numbers are float64, as in the release.
+		want := live()
+		want["groups"].([]any)[0].(map[string]any)["id"] = float64(1)
+		if !reflect.DeepEqual(vals, want) {
+			t.Fatalf("values = %#v", vals)
+		}
+	})
+	t.Run("reordered items keep their own secrets", func(t *testing.T) {
+		vals, err := parse(func(s string) string {
+			s = strings.Replace(s, "name: alice", "name: TMP", 1)
+			s = strings.Replace(s, "name: bob", "name: alice", 1)
+			return strings.Replace(s, "name: TMP", "name: bob", 1)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u := userOf(vals, 0); u["name"] != "bob" || u["password"] != "b-secret" {
+			t.Fatalf("first user = %v", u)
+		}
+		if u := userOf(vals, 1); u["name"] != "alice" || u["password"] != "a-secret" {
+			t.Fatalf("second user = %v", u)
+		}
+	})
+	t.Run("an edited item keeps its secret", func(t *testing.T) {
+		vals, err := parse(func(s string) string { return strings.Replace(s, "role: ro", "role: rw", 1) })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u := userOf(vals, 0); u["role"] != "rw" || u["password"] != "a-secret" {
+			t.Fatalf("user = %v", u)
+		}
+	})
+	t.Run("a removed item takes its secret with it", func(t *testing.T) {
+		vals, err := parseUpgradeValues("users:\n- name: bob\n  password: '"+redactedValue+"'\n  role: ro\n", live())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u := userOf(vals, 0); u["password"] != "b-secret" {
+			t.Fatalf("user = %v", u)
+		}
+	})
+	t.Run("a new item needs its own secret", func(t *testing.T) {
+		add := "users:\n- name: alice\n  password: '" + redactedValue + "'\n- name: carol\n  password: '" + redactedValue + "'\n"
+		if _, err := parseUpgradeValues(add, live()); err == nil || !strings.Contains(err.Error(), "users[1].password") {
+			t.Fatalf("err = %v", err)
+		}
+		vals, err := parseUpgradeValues("users:\n- name: carol\n  password: typed\n- name: alice\n  password: '"+redactedValue+"'\n", live())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if userOf(vals, 0)["password"] != "typed" || userOf(vals, 1)["password"] != "a-secret" {
+			t.Fatalf("users = %v", vals["users"])
+		}
+	})
+	t.Run("items without identity are not matched by guessing", func(t *testing.T) {
+		// Swapping two hooks that have no name, key or id: refused.
+		_, err := parse(func(s string) string {
+			s = strings.Replace(s, "url: https://x", "url: TMP", 1)
+			s = strings.Replace(s, "url: https://y", "url: https://x", 1)
+			return strings.Replace(s, "url: TMP", "url: https://y", 1)
+		})
+		if err == nil || !strings.Contains(err.Error(), "hooks: the list changed") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("nested lists", func(t *testing.T) {
+		vals, err := parse(func(s string) string { return s })
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := vals["groups"].([]any)[0].(map[string]any)["members"].([]any)[0].(map[string]any)
+		if m["apiKey"] != "m-key" {
+			t.Fatalf("member = %v", m)
+		}
+	})
 }
