@@ -8,9 +8,11 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
 
@@ -102,5 +104,71 @@ func TestDrainTimeoutNamesPodsStillTerminating(t *testing.T) {
 	j := lastJob(rec)
 	if !strings.Contains(j.Error, "1 still terminating: payments/slow (finalizers: example.com/flush)") || !strings.Contains(j.Error, "cordoned but not empty") {
 		t.Fatalf("timeout error = %q", j.Error)
+	}
+}
+
+// A pod whose read fails is not gone: the drain must not report success
+// because the deadline ended while the pod was being read.
+func TestDrainTimeoutDuringAReadIsNotSuccess(t *testing.T) {
+	defer func(d, min time.Duration) { drainPoll, drainMinTimeout = d, min }(drainPoll, drainMinTimeout)
+	drainPoll, drainMinTimeout = 20*time.Millisecond, 300*time.Millisecond
+	m, rec, _, _ := drainFixture(t)
+	c, _ := m.conn("test")
+	c.client.(*fake.Clientset).PrependReactor("get", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if a.(k8stesting.GetAction).GetName() != "slow" {
+			return false, nil, nil
+		}
+		time.Sleep(400 * time.Millisecond) // past the drain's deadline
+		return true, nil, context.DeadlineExceeded
+	})
+	if _, err := m.DrainNode("test", "node-1", DrainOptions{}, "jane"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "drain done", func() bool { return lastJob(rec).Done })
+	j := lastJob(rec)
+	if j.Error == "" || !strings.Contains(j.Error, "timed out after") || !strings.Contains(j.Error, "payments/slow (state unknown)") {
+		t.Fatalf("job = %+v", j)
+	}
+}
+
+// A drain cut short by the connection closing says so, not "timed out".
+func TestDrainStoppedByDisconnectSaysSo(t *testing.T) {
+	defer func(d, min time.Duration) { drainPoll, drainMinTimeout = d, min }(drainPoll, drainMinTimeout)
+	drainPoll, drainMinTimeout = 20*time.Millisecond, time.Minute
+	m, rec, _, _ := drainFixture(t)
+	c, _ := m.conn("test")
+	ctx, cancel := context.WithCancel(context.Background())
+	c.ctx = ctx
+	if _, err := m.DrainNode("test", "node-1", DrainOptions{}, "jane"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "slow terminating", func() bool { return strings.Contains(lastJob(rec).Detail, "1 terminating") })
+	cancel()
+	waitFor(t, "drain done", func() bool { return lastJob(rec).Done })
+	j := lastJob(rec)
+	if !strings.Contains(j.Error, "stopped: the connection to the cluster closed") || !strings.Contains(j.Error, "payments/slow") || strings.Contains(j.Error, "timed out") {
+		t.Fatalf("job = %+v", j)
+	}
+}
+
+// A failing read is retried, never counted as gone.
+func TestDrainReadErrorsKeepThePod(t *testing.T) {
+	defer func(d, min time.Duration) { drainPoll, drainMinTimeout = d, min }(drainPoll, drainMinTimeout)
+	drainPoll, drainMinTimeout = 20*time.Millisecond, 300*time.Millisecond
+	m, rec, _, _ := drainFixture(t)
+	c, _ := m.conn("test")
+	c.client.(*fake.Clientset).PrependReactor("get", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if a.(k8stesting.GetAction).GetName() != "slow" {
+			return false, nil, nil
+		}
+		return true, nil, apierrors.NewServiceUnavailable("etcd leader changed")
+	})
+	if _, err := m.DrainNode("test", "node-1", DrainOptions{}, "jane"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "state unknown", func() bool { return strings.Contains(lastJob(rec).Detail, "1 terminating") })
+	waitFor(t, "drain done", func() bool { return lastJob(rec).Done })
+	if j := lastJob(rec); !strings.Contains(j.Error, "payments/slow (state unknown)") {
+		t.Fatalf("job = %+v", j)
 	}
 }

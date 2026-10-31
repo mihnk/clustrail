@@ -338,6 +338,8 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 					case apierrors.IsTooManyRequests(err):
 						blocked = append(blocked, key) // a PodDisruptionBudget allows no disruption now
 						pdbErr = err
+					case ctx.Err() != nil:
+						blocked = append(blocked, key) // ended below with the reason
 					default:
 						report(Job{Done: true, Error: fmt.Sprintf("evicting %s: %v", key, err)})
 						return
@@ -346,6 +348,7 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 				pending = blocked
 			}
 			// Stage 2: wait for evicted pods to be deleted (or replaced by a new pod of the same name).
+			// Only a read that shows the pod gone counts; any failed read keeps it.
 			var terminating []string
 			for _, key := range evicted {
 				ns, name, _ := strings.Cut(key, "/")
@@ -353,9 +356,9 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 				switch {
 				case apierrors.IsNotFound(err), err == nil && p.UID != uids[key]:
 					gone++
-				case err != nil && ctx.Err() == nil:
-					terminating = append(terminating, key) // transient read error: look again
-				case err == nil:
+				case err != nil:
+					terminating = append(terminating, key+" (state unknown)")
+				default:
 					terminating = append(terminating, key+terminationNote(p))
 				}
 			}
@@ -377,12 +380,20 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 			case <-ctx.Done():
 				var parts []string
 				if len(pending) > 0 {
-					parts = append(parts, fmt.Sprintf("%d not evicted (%v)", len(pending), pdbErr))
+					note := ""
+					if pdbErr != nil {
+						note = fmt.Sprintf(" (%v)", pdbErr)
+					}
+					parts = append(parts, fmt.Sprintf("%d not evicted%s", len(pending), note))
 				}
 				if len(terminating) > 0 {
 					parts = append(parts, fmt.Sprintf("%d still terminating: %s", len(terminating), strings.Join(firstN(terminating, 5), ", ")))
 				}
-				report(Job{Done: true, Error: fmt.Sprintf("timed out after %s: %s · the node is cordoned but not empty", timeout, strings.Join(parts, "; "))})
+				reason := fmt.Sprintf("timed out after %s", timeout)
+				if c.ctx.Err() != nil {
+					reason = "stopped: the connection to the cluster closed"
+				}
+				report(Job{Done: true, Error: fmt.Sprintf("%s: %s · the node is cordoned but not empty", reason, strings.Join(parts, "; "))})
 				return
 			case <-time.After(drainPoll):
 			}
