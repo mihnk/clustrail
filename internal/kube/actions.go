@@ -310,7 +310,9 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 	jobID := fmt.Sprintf("drain-%s-%s-%d", cluster, node, time.Now().UnixMilli())
 	short := strings.SplitN(node, ".", 2)[0]
 	timeout := max(time.Duration(opts.TimeoutSec)*time.Second, drainMinTimeout)
-	go func() {
+	safeGo("drain", func(err error) {
+		m.emit.Emit(EventJob, Job{ID: jobID, Title: "Draining " + short, Done: true, Error: err.Error()})
+	}, func() {
 		ctx, cancel := context.WithTimeout(c.ctx, timeout)
 		defer cancel()
 		report := func(j Job) { j.ID, j.Title = jobID, "Draining "+short; m.emit.Emit(EventJob, j) }
@@ -403,7 +405,7 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 			case <-time.After(drainPoll):
 			}
 		}
-	}()
+	})
 	return jobID, nil
 }
 

@@ -472,10 +472,10 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 	c.helm.start(ctx)
 	c.gitops.start(ctx)
 
-	go c.flushLoop(ctx)
+	safeLoop(ctx, "row updates", func(err error) { c.health.fail("row updates", nil); c.onState(Reconnecting, err) }, func() { c.flushLoop(ctx) })
 	defer c.started.Store(true)
 	if withMetrics {
-		go c.metricsLoop(ctx)
+		safeLoop(ctx, "metrics", nil, func() { c.metricsLoop(ctx) })
 	}
 	return nil
 }
@@ -922,7 +922,7 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 	every := pollEvery
 	key := fmt.Sprintf("poll-%p", idx)
 	var synced atomic.Bool
-	go func() {
+	safeLoop(ctx, "polling "+key, func(err error) { c.health.fail(key, nil); c.onState(Reconnecting, err) }, func() {
 		for {
 			lctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			objs, err := list(lctx)
@@ -969,7 +969,7 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 			case <-time.After(every):
 			}
 		}
-	}()
+	})
 	return idx, synced.Load
 }
 

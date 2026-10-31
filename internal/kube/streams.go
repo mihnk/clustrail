@@ -156,8 +156,8 @@ func (m *Manager) StartLogs(req LogsRequest) (string, error) {
 	m.streams.logs[id] = ls
 	m.streams.mu.Unlock()
 
-	go m.followSources(ctx, c, ls, req)
-	go func() {
+	safeGo("log sources", nil, func() { m.followSources(ctx, c, ls, req) })
+	safeLoop(ctx, "log flush", nil, func() {
 		t := time.NewTicker(logFlushInterval)
 		defer t.Stop()
 		for {
@@ -168,7 +168,7 @@ func (m *Manager) StartLogs(req LogsRequest) (string, error) {
 				ls.flush(m.emit)
 			}
 		}
-	}()
+	})
 	return id, nil
 }
 
@@ -369,7 +369,11 @@ func (m *Manager) StartExec(req ExecRequest) (string, error) {
 	m.streams.mu.Lock()
 	m.streams.exec[id] = sess
 	m.streams.mu.Unlock()
-	go func() {
+	safeGo("shell session", func(err error) {
+		code := -1
+		m.emit.Emit(EventExec, ExecOutput{ID: id, Exit: &code, Err: err.Error()})
+		m.CloseExec(id)
+	}, func() {
 		out := emitWriter{id: id, emit: m.emit}
 		err := executor.StreamWithContext(ctx, remotecommand.StreamOptions{Stdin: pr, Stdout: out, Tty: true, TerminalSizeQueue: sizeQueue(sess.sizes)})
 		code := 0
@@ -387,7 +391,7 @@ func (m *Manager) StartExec(req ExecRequest) (string, error) {
 		res.Exit = &code
 		m.emit.Emit(EventExec, res)
 		m.CloseExec(id)
-	}()
+	})
 	return id, nil
 }
 

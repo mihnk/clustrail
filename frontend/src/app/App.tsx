@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
+import { ViewErrorBoundary } from "@/components/ViewErrorBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmationProvider } from "@/components/safety/ConfirmationDialog";
@@ -148,7 +149,9 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
         {/* Inactive tabs stay mounted so filters, sort, scroll and selection survive tab switches. */}
         {tabs.map((tab) => (
           <div key={tab.id} role="tabpanel" hidden={tab.id !== activeTabId} className="min-w-0 flex-1 flex-col [&:not([hidden])]:flex">
-            <TabContent tab={tab} active={tab.id === activeTabId} />
+            <ViewErrorBoundary label={`${tab.kind} tab`}>
+              <TabContent tab={tab} active={tab.id === activeTabId} />
+            </ViewErrorBoundary>
           </div>
         ))}
       </div>

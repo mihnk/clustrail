@@ -216,7 +216,8 @@ func (m *Manager) followSources(ctx context.Context, c *clusterConn, ls *logStre
 			if len(req.Containers) > 0 && !contains(req.Containers, ct.Name) {
 				continue
 			}
-			go m.followContainer(pctx, c, ls, req, p.Namespace, p.Name, ct.Name)
+			ns, pod, container := p.Namespace, p.Name, ct.Name
+			safeGo("log stream", nil, func() { m.followContainer(pctx, c, ls, req, ns, pod, container) })
 		}
 	}
 

@@ -253,7 +253,8 @@ func (m *Manager) AccessMatrix(cluster string, subject AccessSubject, namespace 
 	for _, cl := range cells {
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(cl cell) {
+		cl := cl
+		safeGo("access check", nil, func() {
 			defer func() { <-sem; wg.Done() }()
 			r := AccessRows[cl.i]
 			attrs := &authzv1.ResourceAttributes{Verb: AccessVerbs[cl.j], Group: r.Group, Resource: r.Resource, Subresource: r.Subresource}
@@ -274,7 +275,7 @@ func (m *Manager) AccessMatrix(cluster string, subject AccessSubject, namespace 
 			default:
 				res.Allowed[cl.i][cl.j] = "no"
 			}
-		}(cl)
+		})
 	}
 	wg.Wait()
 	if firstErr != nil && apierrors.IsForbidden(firstErr) {

@@ -10,7 +10,13 @@ larger change, open an issue first so we can agree on the approach.
   service and listens to its events.
 - **Changes go through the safety model.** Anything that modifies a cluster
   checks Read-only in Go (`Manager.writable`) and asks for confirmation in the
-  UI (`useConfirm`), with the equivalent `kubectl` command shown.
+  UI (`useConfirm`), with the equivalent `kubectl` command shown. A new
+  `Workspace` method goes into one of the two lists in
+  `internal/app/readonly_test.go`; the test calls every method that changes a
+  cluster against a read-only context.
+- **A panic never ends the app.** Goroutines in `internal/kube` start with
+  `safeGo` or `safeLoop` (`safe.go`), which recover, log the stack and put
+  the component in a defined state; a test refuses a bare `go` statement.
 - **Say what is true.** Views state where data comes from and what is missing
   (RBAC limits, metrics history, unsupported features) instead of filling gaps
   with made-up values. Mock data belongs to the browser preview only.

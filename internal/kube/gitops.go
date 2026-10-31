@@ -167,7 +167,7 @@ func (g *gitopsWatcher) start(ctx context.Context) {
 		return
 	}
 	f.Start(ctx.Done())
-	go func() {
+	safeLoop(ctx, "GitOps updates", nil, func() {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for {
@@ -179,7 +179,7 @@ func (g *gitopsWatcher) start(ctx context.Context) {
 				g.flush()
 			}
 		}
-	}()
+	})
 }
 
 func (g *gitopsWatcher) controller() Controller {

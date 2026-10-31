@@ -671,6 +671,7 @@ export const backendApi = {
   setSyntheticPaused: (on: boolean) => call<void>("SetSyntheticPaused", on),
   podChecksum: (cluster: string) => call<{ count: number; sum: number }>("PodChecksum", cluster),
   revealLog: () => call<void>("RevealLog"),
+  logClientError: (message: string, detail: string) => call<void>("LogClientError", message, detail),
   testConnection: (id: string) => call<{ name: string; result: "ok" | "failed" | "skipped"; detail?: string; ms?: number }[]>("TestConnection", id),
   setup: () => call<SetupInfo>("Setup"),
   setupTest: (id: string) => call<SetupTestResult>("SetupTest", id),

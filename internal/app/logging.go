@@ -131,6 +131,16 @@ func (w *Workspace) LogFile() LogInfo {
 	return info
 }
 
+// LogClientError records an error from the interface (a view that crashed,
+// an unhandled rejection) in the log. Nothing leaves the machine.
+func (w *Workspace) LogClientError(message, detail string) {
+	const max = 4000
+	if len(detail) > max {
+		detail = detail[:max] + "…"
+	}
+	slog.Error("interface error", "message", message, "detail", detail)
+}
+
 // RevealLog shows the log file in the system file manager.
 func (w *Workspace) RevealLog() error {
 	return revealInFileManager(LogPath())

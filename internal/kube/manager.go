@@ -48,9 +48,14 @@ func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
 		state: map[string]*Cluster{}, conns: map[string]*clusterConn{}, hidden: map[string]bool{}, attempts: map[string]int{}, pending: map[string]*connectAttempt{},
 		streams: streams{logs: map[string]*logStream{}, exec: map[string]*execSession{}},
 	}
+	notice := func(component string) {
+		m.emit.Emit(EventNotice, Notice{Kind: "warning", Title: "Internal error in " + component,
+			Detail: "Clustrail recovered and kept running; the details are in its log (Settings › Privacy & diagnostics)."})
+	}
+	panicNotice.Store(&notice)
 	m.reload()
-	go m.watchKubeconfig()
-	go m.budgetLoop(ctx)
+	safeLoop(ctx, "kubeconfig watch", nil, m.watchKubeconfig)
+	safeLoop(ctx, "cache budget", nil, func() { m.budgetLoop(ctx) })
 	return m
 }
 
@@ -363,7 +368,7 @@ func (m *Manager) Connect(id string) {
 	m.pending[id] = a
 	m.mu.Unlock()
 	m.setState(id, func(c *Cluster) { c.Connection, c.Error, c.AuthHint = Connecting, "", nil })
-	go m.connect(id, a)
+	safeGo("connect "+id, func(err error) { m.connectPanicked(id, a, err) }, func() { m.connect(id, a) })
 }
 
 // current reports whether a is still the attempt pending for id.
@@ -371,6 +376,27 @@ func (m *Manager) current(id string, a *connectAttempt) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.pending[id] == a
+}
+
+// connectPanicked ends a connect attempt that panicked the way a failed one
+// ends, so the cluster does not stay "connecting".
+func (m *Manager) connectPanicked(id string, a *connectAttempt, err error) {
+	a.cancel()
+	m.mu.Lock()
+	pending := m.pending[id] == a
+	if pending {
+		delete(m.pending, id)
+	}
+	connecting := m.state[id] != nil && m.state[id].Connection == Connecting
+	registered := m.conns[id] != nil
+	m.mu.Unlock()
+	if !pending && !connecting {
+		return
+	}
+	if registered {
+		m.Disconnect(id)
+	}
+	m.setState(id, func(c *Cluster) { c.Connection, c.Error, c.LatencyMs = Unreachable, err.Error(), nil })
 }
 
 func (m *Manager) connect(id string, a *connectAttempt) {
@@ -452,8 +478,10 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 		return
 	}
 	m.mu.Unlock()
-	go conn.probeLoop(conn.ctx, func(ms int, err error) { m.onProbe(id, ms, err) })
-	go m.sweepNodeShells(id, conn)
+	safeLoop(conn.ctx, "API probe", func(err error) { m.onConnState(id, Reconnecting, err) }, func() {
+		conn.probeLoop(conn.ctx, func(ms int, err error) { m.onProbe(id, ms, err) })
+	})
+	safeGo("node shell sweep", nil, func() { m.sweepNodeShells(id, conn) })
 	slog.Info("connected", "cluster", id, "version", info.Version, "identity", info.Identity, "latencyMs", info.LatencyMs, "metrics", info.Metrics,
 		"poll", pollMode.Load(), "forbidden", len(conn.forbidden))
 	m.setState(id, func(c *Cluster) {
@@ -469,7 +497,7 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 		}
 	})
 	// The region comes from node labels once the node cache filled.
-	go func() {
+	safeGo("cluster region", nil, func() {
 		for range 20 {
 			time.Sleep(500 * time.Millisecond)
 			if r := conn.region(); r != "" {
@@ -477,7 +505,7 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 				return
 			}
 		}
-	}()
+	})
 }
 
 func (m *Manager) envOf(id string) Environment {

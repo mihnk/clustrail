@@ -282,7 +282,8 @@ func (m *Manager) claimReasons(ctx context.Context, c *clusterConn, claims []Sto
 		}
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(cl *StorageClaim) {
+		cl := &claims[i]
+		safeGo("storage: claim events", nil, func() {
 			defer func() { <-sem; wg.Done() }()
 			evs, err := c.client.CoreV1().Events(cl.Namespace).List(ctx, metav1.ListOptions{FieldSelector: "involvedObject.kind=PersistentVolumeClaim,involvedObject.name=" + cl.Name})
 			if err != nil || len(evs.Items) == 0 {
@@ -297,7 +298,7 @@ func (m *Manager) claimReasons(ctx context.Context, c *clusterConn, claims []Sto
 			if msg := strings.TrimSpace(e.Message); msg != "" {
 				cl.Reason += " · " + msg
 			}
-		}(&claims[i])
+		})
 	}
 	wg.Wait()
 }
@@ -320,7 +321,8 @@ func (m *Manager) volumeUsage(ctx context.Context, c *clusterConn, nodes map[str
 	for node := range nodes {
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(node string) {
+		node := node
+		safeGo("storage: volume usage", nil, func() {
 			defer func() { <-sem; wg.Done() }()
 			nctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -338,7 +340,7 @@ func (m *Manager) volumeUsage(ctx context.Context, c *clusterConn, nodes map[str
 			for k, v := range parseVolumeStats(raw) {
 				out[k] = v
 			}
-		}(node)
+		})
 	}
 	wg.Wait()
 	switch {

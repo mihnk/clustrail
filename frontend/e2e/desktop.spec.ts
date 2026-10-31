@@ -344,3 +344,30 @@ test("a context that now points to another server locks changes until confirmed"
   expect(b.argsOf("ConfirmTarget")).toEqual([["prod-eu-west-1"]]);
   expect(b.errors).toEqual([]);
 });
+
+test("a view that crashes stays in its tab, is logged and can be reloaded", async ({ page, context }) => {
+  await page.close();
+  const p = await context.newPage();
+  let broken = true;
+  const b = await openDesktop(p, {
+    // A malformed answer makes the service chain view throw while rendering.
+    answers: { ServiceChain: () => (broken ? { services: null, checks: null } : { services: [], checks: [] }) },
+  });
+  await sidebar(p, /^Services/).click();
+  await visible(p, "10.96.12.4").click({ button: "right" });
+  await p.getByRole("menuitem", { name: "Service chain" }).click();
+  await expect(visible(p, "This view stopped working")).toBeVisible();
+  await expect.poll(() => b.argsOf("LogClientError").length).toBeGreaterThan(0);
+  expect(String(b.argsOf("LogClientError")[0]![0])).toContain("chain tab:");
+  // Other tabs keep working.
+  await p.getByRole("tab", { name: /^Pods/ }).click();
+  await expect(visible(p, "checkout-api-7d9f8b6c4-x2kqp")).toBeVisible();
+  // Reload view renders it again from fresh state.
+  broken = false;
+  await p.getByRole("tab", { name: /Chain · checkout-api/ }).click();
+  await p.getByRole("button", { name: "Reload view" }).click();
+  await expect(p.getByText("This view stopped working")).toHaveCount(0);
+  await expect(visible(p, "Checks, in the order a request meets them")).toBeVisible();
+  // React reports the caught error on the console; nothing else may.
+  expect(b.errors.filter((e) => !/stopped working|Cannot read properties of null|chain tab|services/i.test(e))).toEqual([]);
+});

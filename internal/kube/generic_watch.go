@@ -83,7 +83,7 @@ func (m *Manager) StartListWatch(cluster, kind, namespace string) (string, error
 	m.lists.byID[id] = cancel
 	m.lists.mu.Unlock()
 	lw := &listWatch{id: id, cluster: cluster, c: c, gvr: gvr, namespaced: namespaced, ns: namespace, emit: m.emit, every: pollEvery}
-	go lw.run(ctx)
+	safeGo("list watch", nil, func() { lw.run(ctx) })
 	return id, nil
 }
 
@@ -301,7 +301,7 @@ func (w *listWatch) watch(ctx context.Context, rv string) error {
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	errc := make(chan error, 1)
-	go func() { errc <- w.stream(wctx, rv, events); close(events) }()
+	safeGo("list watch stream", func(err error) { errc <- err; close(events) }, func() { errc <- w.stream(wctx, rv, events); close(events) })
 	t := time.NewTicker(500 * time.Millisecond)
 	defer t.Stop()
 	// One entry per object per batch, its last event: an update then a delete

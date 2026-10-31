@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -183,7 +185,12 @@ func (s *sender[R]) stop() {
 }
 
 func (s *sender[R]) run() {
-	defer s.stop()
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("recovered from a panic", "component", "stream sender "+s.id, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+		}
+		s.stop()
+	}()
 	window := MinWindow
 	// outbox holds encoded frames the transport refused, in order. They are
 	// retried as they are, sequence numbers and all, before anything newer is

@@ -591,7 +591,7 @@ func (m *Manager) UpgradeRelease(req HelmUpgradeRequest) (string, error) {
 		detail += " · waiting for resources"
 	}
 	report(Job{Progress: 0.2, Detail: detail})
-	go func() {
+	safeGo("Helm upgrade", func(err error) { report(Job{Done: true, Error: err.Error()}) }, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), up.Timeout+time.Minute)
 		defer cancel()
 		out, err := up.RunWithContext(ctx, req.Name, ch, vals)
@@ -604,7 +604,7 @@ func (m *Manager) UpgradeRelease(req HelmUpgradeRequest) (string, error) {
 			rev = r.Version
 		}
 		report(Job{Done: true, Progress: 1, Detail: fmt.Sprintf("revision %d deployed", rev)})
-	}()
+	})
 	return jobID, nil
 }
 

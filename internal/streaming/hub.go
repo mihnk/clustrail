@@ -8,6 +8,8 @@ package streaming
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -81,7 +83,16 @@ func (h *Hub[R]) Subscribe(key Key) (*Consumer[R], error) {
 		t = &topic[R]{key: key, hub: h, rows: map[string]R{}, state: Connecting, consumers: map[*Consumer[R]]struct{}{}, cancel: cancel}
 		h.topics[key] = t
 		h.Stats.Topics.Add(1)
-		go src(ctx, t)
+		go func() {
+			// A source that panics fails its topic instead of ending the app.
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("recovered from a panic", "component", "stream source "+fmt.Sprint(key), "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+					t.SetState(Failed, fmt.Sprintf("internal error: %v", r))
+				}
+			}()
+			src(ctx, t)
+		}()
 	}
 	c := &Consumer[R]{topic: t, notify: make(chan struct{}, 1), pending: map[string]op[R]{}, snapshot: true}
 	t.mu.Lock()

@@ -66,12 +66,12 @@ func (m *Manager) RollbackRelease(cluster, ns, name string, revision int) (strin
 	jobID := fmt.Sprintf("helm-%s-%s-%s-%d", cluster, ns, name, time.Now().UnixMilli())
 	report := func(j Job) { j.ID, j.Title = jobID, "Rolling back "+name; m.emit.Emit(EventJob, j) }
 	report(Job{Progress: 0.2, Detail: fmt.Sprintf("to revision %d · waiting for resources", revision)})
-	go func() {
+	safeGo("Helm rollback", func(err error) { report(Job{Done: true, Error: err.Error()}) }, func() {
 		if err := rb.Run(name); err != nil {
 			report(Job{Done: true, Error: err.Error()})
 			return
 		}
 		report(Job{Done: true, Progress: 1, Detail: fmt.Sprintf("rolled back to revision %d", revision)})
-	}()
+	})
 	return jobID, nil
 }

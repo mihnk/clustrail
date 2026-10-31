@@ -97,7 +97,7 @@ func (m *Manager) StartPortForward(req PortForwardRequest) (PortForward, error) 
 	m.forwards.mu.Unlock()
 
 	ready := make(chan int, 1)
-	go m.runForward(ctx, c, req, pf, ready)
+	safeGo("port forward", func(err error) { m.setForward(pf, func(i *PortForward) { i.State, i.Error = "failed", err.Error() }) }, func() { m.runForward(ctx, c, req, pf, ready) })
 	select {
 	case port := <-ready:
 		if port < 0 {
@@ -204,7 +204,7 @@ func forwardOnce(ctx context.Context, c *clusterConn, info PortForward, onReady 
 		return 0, err
 	}
 	var local atomic.Int32
-	go func() {
+	safeGo("port forward: local port", nil, func() {
 		select {
 		case <-readyCh:
 			if ports, err := fw.GetPorts(); err == nil && len(ports) > 0 {
@@ -213,7 +213,7 @@ func forwardOnce(ctx context.Context, c *clusterConn, info PortForward, onReady 
 			onReady(int(local.Load()))
 		case <-sessionCtx.Done():
 		}
-	}()
+	})
 	err = fw.ForwardPorts()
 	if err == nil {
 		err = errors.New("connection to the pod closed")

@@ -279,7 +279,7 @@ func (h *helmWatcher) start(ctx context.Context) {
 		f.Start(ctx.Done())
 		stop = f.Shutdown
 	}
-	go func() {
+	safeLoop(ctx, "Helm updates", nil, func() {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for {
@@ -291,7 +291,7 @@ func (h *helmWatcher) start(ctx context.Context) {
 				h.flush()
 			}
 		}
-	}()
+	})
 }
 
 func (h *helmWatcher) flush() {

@@ -4,13 +4,23 @@ import "./styles/index.css";
 import { App } from "./app/App";
 import { detectBackend } from "./backend/client";
 import { setMockMode } from "./data/mock";
+import { ViewErrorBoundary, logClientError } from "./components/ViewErrorBoundary";
+
+// Errors outside React's render (event handlers, timers, promises) are logged too.
+window.addEventListener("error", (e) => logClientError(`uncaught: ${e.message}`, e.error instanceof Error ? (e.error.stack ?? "") : ""));
+window.addEventListener("unhandledrejection", (e) => {
+  const r: unknown = e.reason;
+  logClientError(`unhandled rejection: ${r instanceof Error ? r.message : String(r)}`, r instanceof Error ? (r.stack ?? "") : "");
+});
 
 // Decide once, before the first render, whether real clusters or mock data back the UI.
 void detectBackend().then((desktop) => {
   setMockMode(!desktop);
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App />
+      <ViewErrorBoundary label="app" whole>
+        <App />
+      </ViewErrorBoundary>
     </StrictMode>,
   );
 });
