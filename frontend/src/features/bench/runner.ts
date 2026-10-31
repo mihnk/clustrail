@@ -18,7 +18,8 @@ const rowCount = () => Number(grid()?.getAttribute("aria-rowcount") ?? 0);
 async function waitFor(cond: () => boolean, timeoutMs: number, what: string) {
   const end = performance.now() + timeoutMs;
   while (!cond()) {
-    if (performance.now() > end) throw new Error(`timed out waiting for ${what}`);
+    // A hidden page (e.g. a covered window on macOS) gets no animation frames, so the table never renders.
+    if (performance.now() > end) throw new Error(`timed out waiting for ${what} (page ${document.visibilityState})`);
     await sleep(50);
   }
 }

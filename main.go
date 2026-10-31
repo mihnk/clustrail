@@ -41,7 +41,9 @@ func main() {
 			Handler: application.AssetFileServerFS(assets),
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			// Not in a benchmark: hiding the only window (the idle scenario's
+			// hidden phase) also counts as closing it, and the app would quit.
+			ApplicationShouldTerminateAfterLastWindowClosed: os.Getenv("CLUSTRAIL_BENCH") == "",
 		},
 	})
 

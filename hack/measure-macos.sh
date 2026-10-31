@@ -14,6 +14,9 @@
 # from top(1).
 set -euo pipefail
 [ "$(uname)" = Darwin ] || { echo "this script is for macOS; hack/bench.sh runs elsewhere" >&2; exit 1; }
+# Under the screen saver or a sleeping display the page is hidden: it gets no
+# animation frames, the table never renders and the runs hang. Keep it awake.
+caffeinate -di -w $$ &
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 REPEAT=${REPEAT:-3}
@@ -76,31 +79,39 @@ run() { # name scenario spec seconds
 import json, re, sys, time
 res = json.load(open(sys.argv[1]))
 pids = set([res.get("pids", {}).get("app")] + res.get("pids", {}).get("webview", [])) - {None}
-samples, stamp, interval = [], None, 2.0
+samples, stamp = [], None
 for line in open(sys.argv[2], errors="replace"):
     m = re.match(r"^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})", line)
     if m:
         stamp = time.mktime(time.strptime(m.group(1), "%Y/%m/%d %H:%M:%S")) * 1000
-        samples.append({"t": stamp, "cpu": 0.0, "idlew": 0.0, "power": 0.0, "seen": 0})
+        samples.append({"t": stamp, "cpu": 0.0, "idlew": {}, "power": 0.0, "seen": 0})
         continue
     f = line.split()
     if not samples or len(f) < 5 or not f[0].isdigit() or int(f[0]) not in pids:
         continue
     try:
-        cpu, idlew, power = float(f[-3]), float(f[-2]), float(f[-1])
+        # top marks a value that changed since its last sample: "24+".
+        cpu, idlew, power = (float(x.rstrip("+-")) for x in f[-3:])
     except ValueError:
         continue
     s = samples[-1]
-    s["cpu"] += cpu; s["idlew"] += idlew; s["power"] += power; s["seen"] += 1
+    s["cpu"] += cpu; s["power"] += power; s["seen"] += 1
+    s["idlew"][int(f[0])] = idlew  # counted since the process started
 samples = samples[1:]  # the first sample has no rates
 for ph in res.get("phases", []):
     inside = [s for s in samples if ph["startedAt"] <= s["t"] <= ph["endedAt"] and s["seen"]]
     if inside:
         n = len(inside)
+        # Idle wakeups: each process's counter growth across the phase.
+        counts = {}
+        for s in inside:
+            for p, v in s["idlew"].items():
+                counts.setdefault(p, []).append((s["t"], v))
+        wakeups = sum((c[-1][1] - c[0][1]) * 1000 / (c[-1][0] - c[0][0]) for c in counts.values() if c[-1][0] > c[0][0])
         ph["top"] = {
             "samples": n,
             "cpuPercent": round(sum(s["cpu"] for s in inside) / n, 2),
-            "idleWakeupsPerSec": round(sum(s["idlew"] for s in inside) / n / interval, 2),
+            "idleWakeupsPerSec": round(wakeups, 2),
             "power": round(sum(s["power"] for s in inside) / n, 2),
         }
 json.dump(res, open(sys.argv[1], "w"), indent=2)

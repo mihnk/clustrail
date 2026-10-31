@@ -10,6 +10,8 @@
 # macOS the WebKit processes are not children of the app; the ones that start
 # with it are attributed to it.
 set -euo pipefail
+# macOS awk writes decimals in the user's locale (1,50 in Turkish), which breaks the CSV.
+export LC_ALL=C
 scenario=$1 spec=$2 out=$3 seconds=${4:-}
 root=$(cd "$(dirname "$0")/.." && pwd)
 bin=${CLUSTRAIL_BIN:-$root/bin/clustrail}
