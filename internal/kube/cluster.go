@@ -535,6 +535,7 @@ func (c *clusterConn) flushLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			wake("cluster flush")
 			c.flush()
 		}
 	}
@@ -842,6 +843,7 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(time.Duration(metricsEvery.Load()) * time.Second):
+			wake("metrics")
 			tick()
 			if time.Since(lastSave) > 5*time.Minute {
 				lastSave = time.Now()
@@ -860,6 +862,7 @@ func (c *clusterConn) probeLoop(ctx context.Context, onLatency func(ms int, err 
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			wake("API probe")
 			start := time.Now()
 			_, err := c.client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(ctx)
 			if err != nil && apierrors.IsForbidden(err) {
@@ -967,6 +970,7 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 			case <-ctx.Done():
 				return
 			case <-time.After(every):
+				wake("polling")
 			}
 		}
 	})

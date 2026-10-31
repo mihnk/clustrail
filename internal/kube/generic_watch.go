@@ -332,6 +332,7 @@ func (w *listWatch) watch(ctx context.Context, rv string) error {
 				batch.upsert(ev.Row)
 			}
 		case <-t.C:
+			wake("list watch flush")
 			flush()
 			if pollMode.Load() {
 				// Switched to poll mode while watching.

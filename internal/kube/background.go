@@ -153,6 +153,7 @@ func (m *Manager) budgetLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(30 * time.Second):
+			wake("cache budget")
 		}
 		budget := cacheBudgetMB.Load()
 		if budget <= 0 {

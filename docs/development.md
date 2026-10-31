@@ -87,6 +87,27 @@ hack/bench.sh multi clusters=20,pods=2500,rate=100,vary=1,slow=1,drop=2 bench-c.
 go test -run - -bench . -benchmem ./internal/mock
 ```
 
+What the app costs while nothing changes (60 s visible, then 60 s hidden),
+and the backend with a connected cluster against a real kube-apiserver
+(envtest binaries, e.g. from `setup-envtest`):
+
+```bash
+hack/bench.sh idle clusters=5,pods=2000 idle.json 60
+```
+
+```bash
+KUBEBUILDER_ASSETS=/path/to/envtest/bin go test -tags envtest -run TestIdleConnectedCluster -v ./internal/kube
+```
+
+On a Mac, one command builds the app, runs every scenario three times and
+records the machine (`docs/benchmarks/data/macos-…/summary.md`):
+
+```bash
+hack/measure-macos.sh
+```
+
+Budgets and current values: [performance-budgets.md](performance-budgets.md).
+
 ## Against a real cluster
 
 `hack/kind-smoke.sh` creates a three-node [kind](https://kind.sigs.k8s.io)

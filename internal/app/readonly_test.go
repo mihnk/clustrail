@@ -29,7 +29,7 @@ var changesCluster = []string{
 var allowedReadOnly = []string{
 	// Wails service plumbing, diagnostics, benchmarks, updates
 	"ServiceName", "ServiceStartup", "ServiceShutdown", "Hello", "ServePods", "LogFile", "RevealLog", "Diagnostics",
-	"ResetDiagnostics", "LogClientError", "BenchConfig", "ReportBench", "SetSyntheticPaused", "PodChecksum", "CheckForUpdates",
+	"ResetDiagnostics", "LogClientError", "BenchConfig", "BenchWindow", "ReportBench", "SetSyntheticPaused", "PodChecksum", "CheckForUpdates",
 	"SetMetricsInterval", "SetCacheBudget", "SetUpdateMethod", "MemoryStats", "PauseWatches", "ResumeWatches",
 	// Clustrail's own settings and connections
 	"Clusters", "Snapshot", "Connect", "Disconnect", "HideCluster", "SetSelected", "AutoConnect", "ConfirmTarget",

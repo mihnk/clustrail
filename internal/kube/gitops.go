@@ -176,6 +176,7 @@ func (g *gitopsWatcher) start(ctx context.Context) {
 				f.Shutdown()
 				return
 			case <-t.C:
+				wake("GitOps flush")
 				g.flush()
 			}
 		}

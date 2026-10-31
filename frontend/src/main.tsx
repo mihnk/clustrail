@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles/index.css";
 import { App } from "./app/App";
 import { detectBackend } from "./backend/client";
+import { installWakeCounters } from "./features/bench/monitor";
 import { setMockMode } from "./data/mock";
 import { ViewErrorBoundary, logClientError } from "./components/ViewErrorBoundary";
 
@@ -14,6 +15,10 @@ window.addEventListener("unhandledrejection", (e) => {
 });
 
 // Decide once, before the first render, whether real clusters or mock data back the UI.
+// A benchmark (the app opens /?bench=1) counts the page's timer and frame
+// callbacks from the start.
+if (new URLSearchParams(location.search).has("bench")) installWakeCounters();
+
 void detectBackend().then((desktop) => {
   setMockMode(!desktop);
   createRoot(document.getElementById("root")!).render(

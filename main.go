@@ -8,6 +8,7 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 
 	"github.com/mihnk/clustrail/internal/app"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -61,10 +62,19 @@ func main() {
 			TitleBar:                application.MacTitleBarHiddenInset,
 			InvisibleTitleBarHeight: 40,
 		},
-		URL: "/",
+		URL: startURL(),
 	})
 
 	if err := wails.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// startURL marks a benchmark run in the page's URL, so the page knows before
+// it renders (it counts its timer callbacks from the start) without asking.
+func startURL() string {
+	if os.Getenv("CLUSTRAIL_BENCH") != "" {
+		return "/?bench=1"
+	}
+	return "/"
 }

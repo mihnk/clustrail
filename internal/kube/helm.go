@@ -288,6 +288,7 @@ func (h *helmWatcher) start(ctx context.Context) {
 				stop()
 				return
 			case <-t.C:
+				wake("Helm flush")
 				h.flush()
 			}
 		}

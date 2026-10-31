@@ -341,6 +341,7 @@ func (m *Manager) followSources(ctx context.Context, c *clusterConn, ls *logStre
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			wake("log membership")
 			round(false)
 		}
 	}

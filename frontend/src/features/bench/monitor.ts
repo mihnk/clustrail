@@ -71,3 +71,45 @@ export async function timed(action: () => void): Promise<number> {
   action();
   return (await afterPaint()) - start;
 }
+
+/**
+ * Callbacks the page ran, by kind (benchmarks only: installed before the app
+ * renders when a benchmark runs). An idle page should run none.
+ */
+export const wakeCounts = { timeout: 0, interval: 0, raf: 0 };
+let countersInstalled = false;
+
+export function installWakeCounters() {
+  if (countersInstalled) return;
+  countersInstalled = true;
+  const st = window.setTimeout.bind(window);
+  const si = window.setInterval.bind(window);
+  const raf = window.requestAnimationFrame.bind(window);
+  const wrap = (fn: TimerHandler, kind: "timeout" | "interval") =>
+    typeof fn === "function"
+      ? (...a: unknown[]) => {
+          wakeCounts[kind]++;
+          return (fn as (...x: unknown[]) => unknown)(...a);
+        }
+      : fn;
+  window.setTimeout = ((fn: TimerHandler, ms?: number, ...args: unknown[]) => st(wrap(fn, "timeout"), ms, ...args)) as typeof window.setTimeout;
+  window.setInterval = ((fn: TimerHandler, ms?: number, ...args: unknown[]) => si(wrap(fn, "interval"), ms, ...args)) as typeof window.setInterval;
+  window.requestAnimationFrame = (cb: FrameRequestCallback) => {
+    if (rafCallers) {
+      const at = (new Error().stack ?? "").split("\n").slice(1, 4).map((l) => l.trim().replace(/^.*\//, "")).join(" < ");
+      rafCallers[at] = (rafCallers[at] ?? 0) + 1;
+    }
+    return raf((t) => {
+      wakeCounts.raf++;
+      cb(t);
+    });
+  };
+}
+
+/** While set, who asks for animation frames (benchmarks: finding what draws while idle). */
+export let rafCallers: Record<string, number> | null = null;
+export const traceRafCallers = (on: boolean) => {
+  const out = rafCallers;
+  rafCallers = on ? {} : null;
+  return out;
+};

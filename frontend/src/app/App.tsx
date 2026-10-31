@@ -111,7 +111,8 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
     if (backend) {
       void backend.benchConfig().then((cfg) => {
         if (!cfg) return;
-        setDiagnostics(true);
+        // The overlay draws every frame (its FPS meter): the idle scenario runs without it.
+        setDiagnostics(cfg.scenario !== "idle");
         setTimeout(() => void runBenchmark(cfg, () => ws.openTab("pods") || ws.openView({ kind: "pods", title: t("Pods") })), 500);
       });
     }

@@ -227,6 +227,7 @@ func (m *Manager) watchKubeconfig() {
 		case <-m.ctx.Done():
 			return
 		case <-t.C:
+			wake("kubeconfig watch")
 			m.mu.Lock()
 			changed := m.kc.Changed(m.store.ExtraKubeconfigs())
 			m.mu.Unlock()

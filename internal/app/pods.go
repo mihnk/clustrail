@@ -71,6 +71,8 @@ func (w wailsConn) Context() context.Context { return w.c.Context() }
 // Diagnostics is the development diagnostics view's data.
 type Diagnostics struct {
 	Process   diagnostics.Process `json:"process"`
+	Family    diagnostics.Family  `json:"family"`  // Go and WebView processes, where measurable
+	Wakeups   map[string]int64    `json:"wakeups"` // timer-driven loop wakeups since start
 	Watches   int                 `json:"watches"` // active subscription scopes
 	Consumers int64               `json:"consumers"`
 	Rows      int                 `json:"rows"` // cached projection rows
@@ -94,7 +96,7 @@ type Diagnostics struct {
 func (w *Workspace) Diagnostics() Diagnostics {
 	s := w.pods.Stats
 	return Diagnostics{
-		Process: diagnostics.Sample(), Watches: len(w.pods.Topics()), Consumers: s.Consumers.Load(), Rows: w.pods.Rows(), Pending: w.pods.Pending(),
+		Process: diagnostics.Sample(), Family: diagnostics.FamilyUsage(), Wakeups: kube.Wakeups(), Watches: len(w.pods.Topics()), Consumers: s.Consumers.Load(), Rows: w.pods.Rows(), Pending: w.pods.Pending(),
 		Events: s.Events.Load(), Frames: s.Frames.Load(), Bytes: s.Bytes.Load(), Snapshots: s.Snapshots.Load(), SendFull: s.SendFull.Load(),
 		Resyncs: s.Resyncs.Load(), MaxBatch: s.MaxPending.Load(),
 		Queue: s.Queue.Summary(), Encode: s.Encode.Summary(), Round: s.Round.Summary(), UI: s.UI.Summary(), Visible: s.Visible.Summary(), Size: s.Size.Summary(),
@@ -133,6 +135,21 @@ func (w *Workspace) ReportBench(result string) error {
 		application.Get().Quit()
 	}()
 	return err
+}
+
+// BenchWindow hides or shows the window during a benchmark (the idle
+// scenario's hidden phase). It does nothing outside a benchmark.
+func (w *Workspace) BenchWindow(visible bool) {
+	if os.Getenv("CLUSTRAIL_BENCH") == "" {
+		return
+	}
+	for _, win := range application.Get().Window.GetAll() {
+		if visible {
+			win.Show()
+		} else {
+			win.Hide()
+		}
+	}
 }
 
 // SetSyntheticPaused pauses changes on synthetic clusters (benchmarks).

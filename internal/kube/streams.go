@@ -165,6 +165,7 @@ func (m *Manager) StartLogs(req LogsRequest) (string, error) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+				wake("log flush")
 				ls.flush(m.emit)
 			}
 		}

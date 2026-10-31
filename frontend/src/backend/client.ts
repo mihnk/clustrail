@@ -160,7 +160,14 @@ export interface LatencySummary {
 
 /** The Go side's pipeline and process numbers (internal/app/pods.go). */
 export interface BackendDiagnostics {
-  process: { cpuPercent: number; heapAllocMB: number; heapInuseMB: number; sysMB: number; totalAllocMB: number; numGC: number; gcPauseMs: number; gcCPU: number; goroutines: number };
+  process: {
+    cpuPercent: number; heapAllocMB: number; heapInuseMB: number; sysMB: number; totalAllocMB: number; numGC: number; gcPauseMs: number; gcCPU: number; goroutines: number;
+    cpuTimeMs: number; voluntarySwitches: number; involuntarySwitches: number;
+  };
+  /** The Go and WebView processes together (Linux; elsewhere measured from outside). */
+  family: { supported: boolean; processes: number; cpuTimeMs: number; voluntarySwitches: number; rssMB: number };
+  /** Wakeups of each timer-driven backend loop since start. */
+  wakeups: Record<string, number>;
   watches: number;
   consumers: number;
   rows: number;
@@ -667,6 +674,7 @@ export const backendApi = {
   diagnostics: () => call<BackendDiagnostics>("Diagnostics"),
   resetDiagnostics: () => call<void>("ResetDiagnostics"),
   benchConfig: () => call<Record<string, string> | null>("BenchConfig"),
+  benchWindow: (visible: boolean) => call<void>("BenchWindow", visible),
   reportBench: (result: string) => call<void>("ReportBench", result),
   setSyntheticPaused: (on: boolean) => call<void>("SetSyntheticPaused", on),
   podChecksum: (cluster: string) => call<{ count: number; sum: number }>("PodChecksum", cluster),

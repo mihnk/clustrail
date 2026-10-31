@@ -170,6 +170,10 @@ func Source(cfg Config) streaming.Source[kube.PodRow] {
 		}
 		sink.Replace(g.Rows())
 		sink.SetState(streaming.Live, "")
+		if cfg.Rate == 0 && cfg.DisconnectEvery == 0 {
+			<-ctx.Done() // nothing changes: no ticker, so idle benchmarks measure the app alone
+			return
+		}
 		tick := 10 * time.Millisecond
 		t := time.NewTicker(tick)
 		defer t.Stop()

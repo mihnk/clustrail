@@ -4,7 +4,7 @@
 import { backend, type BackendDiagnostics } from "@/backend/client";
 import { podStream } from "@/backend/podStream";
 import type { PodRow } from "@/data/types";
-import { afterPaint, FrameMonitor, sleep, stats, timed } from "./monitor";
+import { afterPaint, FrameMonitor, sleep, stats, timed, traceRafCallers, wakeCounts } from "./monitor";
 import { t } from "@/i18n";
 
 type Open = (view: "pods") => void;
@@ -129,6 +129,81 @@ async function sampleBackend(seconds: number, every = 2) {
   return samples;
 }
 
+/** One idle phase: CPU, wakeups and callbacks per second, from differences of cumulative counters. */
+async function idlePhase(name: string, seconds: number) {
+  const api = backend!;
+  const before = await api.diagnostics();
+  const page0 = { ...wakeCounts };
+  // DOM changes while nothing happens, by where they happen: each one costs
+  // style, layout and paint (and wakes the Wails window-region observer).
+  const mutations: Record<string, number> = {};
+  let mutationCount = 0;
+  const where = (n: Node) => {
+    const el = n instanceof Element ? n : n.parentElement;
+    if (!el) return "?";
+    const label = el.closest("[aria-label],[role]");
+    const tag = (e: Element) => e.tagName.toLowerCase() + (e.getAttribute("aria-label") ? `[${e.getAttribute("aria-label")}]` : e.getAttribute("role") ? `[role=${e.getAttribute("role")}]` : "");
+    return label && label !== el ? `${tag(label)} > ${tag(el)}` : tag(el);
+  };
+  const observer = new MutationObserver((list) => {
+    for (const m of list) {
+      mutationCount++;
+      const k = `${m.type}${m.attributeName ? ":" + m.attributeName : ""} ${where(m.target)}`;
+      mutations[k] = (mutations[k] ?? 0) + 1;
+    }
+  });
+  observer.observe(document.documentElement, { attributes: true, childList: true, subtree: true, characterData: true });
+  // Events from Go while nothing changes, by name.
+  const events: Record<string, number> = {};
+  const w = window as unknown as { _wails?: { dispatchWailsEvent?: (e: { name: string }) => void } };
+  const dispatch = w._wails?.dispatchWailsEvent;
+  if (w._wails && dispatch) {
+    w._wails.dispatchWailsEvent = (e) => {
+      events[e.name] = (events[e.name] ?? 0) + 1;
+      dispatch.call(w._wails, e);
+    };
+  }
+  traceRafCallers(true);
+  const startedAt = Date.now();
+  await sleep(seconds * 1000);
+  const endedAt = Date.now();
+  observer.disconnect();
+  const rafCallers = traceRafCallers(false) ?? {};
+  if (w._wails && dispatch) w._wails.dispatchWailsEvent = dispatch;
+  const after = await api.diagnostics();
+  const sec = (endedAt - startedAt) / 1000;
+  const perSec = (a: number, b: number) => Math.round(((a - b) / sec) * 100) / 100;
+  const loops: Record<string, number> = {};
+  for (const [k, v] of Object.entries(after.wakeups ?? {})) loops[k] = perSec(v, before.wakeups?.[k] ?? 0);
+  return {
+    name,
+    visibility: document.visibilityState,
+    startedAt,
+    endedAt,
+    seconds: Math.round(sec * 10) / 10,
+    // CPU as % of one core; wakeups as voluntary context switches per second.
+    go: { cpuPercent: perSec(after.process.cpuTimeMs, before.process.cpuTimeMs) / 10, wakeupsPerSec: perSec(after.process.voluntarySwitches, before.process.voluntarySwitches) },
+    family: after.family?.supported
+      ? { processes: after.family.processes, cpuPercent: perSec(after.family.cpuTimeMs, before.family.cpuTimeMs) / 10, wakeupsPerSec: perSec(after.family.voluntarySwitches, before.family.voluntarySwitches), rssMB: Math.round(after.family.rssMB) }
+      : "measured from outside (hack/bench.sh)",
+    backendLoopsPerSec: loops,
+    // The phase's own sleep is one timeout.
+    pagePerSec: { timeouts: perSec(wakeCounts.timeout - 1, page0.timeout), intervals: perSec(wakeCounts.interval, page0.interval), animationFrames: perSec(wakeCounts.raf, page0.raf) },
+    domMutationsPerSec: perSec(mutationCount, 0),
+    topMutations: Object.entries(mutations)
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 8)
+      .map(([k, n]) => `${perSec(n, 0)}/s ${k}`),
+    eventsPerSec: Object.fromEntries(Object.entries(events).map(([k, n]) => [k, perSec(n, 0)])),
+    animationFrameCallers: Object.entries(rafCallers)
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 4)
+      .map(([k, n]) => `${perSec(n, 0)}/s ${k}`),
+    goHeapMB: Math.round(after.process.heapInuseMB),
+    goroutines: after.process.goroutines,
+  };
+}
+
 function summarizeBackend(d: BackendDiagnostics) {
   const { process, ...rest } = d;
   return { process, ...rest };
@@ -137,7 +212,7 @@ function summarizeBackend(d: BackendDiagnostics) {
 export async function runBenchmark(cfg: Record<string, string>, open: Open) {
   const api = backend!;
   const scenario = cfg.scenario ?? "table";
-  const seconds = Number(cfg.seconds || (scenario === "storm" ? 60 : 30));
+  const seconds = Number(cfg.seconds || (scenario === "storm" || scenario === "idle" ? 60 : 30));
   const result: Record<string, unknown> = {
     scenario,
     synthetic: cfg.synthetic,
@@ -187,6 +262,14 @@ export async function runBenchmark(cfg: Record<string, string>, open: Open) {
       const go = await api.podChecksum(cluster);
       result.consistency = { ui, go, equal: ui.count === go.count && ui.sum === go.sum };
       await api.setSyntheticPaused(false);
+    } else if (scenario === "idle") {
+      // Nothing changes: what does the app still do, visible and hidden?
+      const visible = await idlePhase("visible", seconds);
+      await api.benchWindow(false);
+      await sleep(2000);
+      const hidden = await idlePhase("hidden", seconds);
+      await api.benchWindow(true);
+      result.phases = [visible, hidden];
     } else if (scenario === "multi") {
       const mon = new FrameMonitor();
       mon.start();
