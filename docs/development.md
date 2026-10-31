@@ -32,8 +32,12 @@ cd frontend && npm run build && cd .. && go build -tags production -o bin/clustr
 Checks:
 
 ```bash
-cd frontend && npm run typecheck
+cd frontend && npm run typecheck && npm test
 ```
+
+`npm test` runs the frontend's unit tests (vitest, `src/**/*.test.ts`) in
+Node: the filter and command-line parsers, formatters, the table's row model
+and the pod stream client.
 
 ```bash
 go vet ./... && go test -race ./internal/...

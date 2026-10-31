@@ -56,6 +56,10 @@ jobs:
         working-directory: frontend
         run: npm ci && npx playwright install --with-deps chromium
 
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test
+
       - name: Build
         working-directory: frontend
         run: npm run build
