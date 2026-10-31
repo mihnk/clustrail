@@ -60,7 +60,7 @@ func (m *Manager) PauseWatches() []string {
 	}
 	m.mu.Unlock()
 	sort.Strings(ids)
-	var paused []string
+	paused := []string{} // [] not null: the UI reads its length
 	for _, id := range ids {
 		if m.busy(id) {
 			continue
