@@ -44,6 +44,10 @@ Static analysis: `golangci-lint run` (v2.15.0, `.golangci.yml`) for Go and
 Both run in CI. A deliberate exception is suppressed on its line with the
 reason (`//nolint:<linter> // why`).
 
+Fuzzing: `hack/fuzz.sh` runs every Go fuzz target (Secret masking, Helm
+redaction, log levels, log source selectors, the pod stream protocol) for
+`FUZZTIME` each; CI runs it for 15 s per target.
+
 ```bash
 go vet ./... && go test -race ./internal/...
 ```

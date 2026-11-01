@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/yaml"
 )
 
@@ -215,4 +216,30 @@ func stringLeaves(v any, out *[]string) {
 			stringLeaves(x, out)
 		}
 	}
+}
+
+// A log source's selector picks pods from the informer cache when the cluster
+// is connected, and from the API server (its String() form) otherwise. Both
+// must pick the same pods: a selector that parses must survive its own
+// String() with the same meaning.
+func FuzzLogSourceSelector(f *testing.F) {
+	for _, s := range []string{"app=checkout", "app in (api,web),tier!=db", "!canary,env notin (dev)", "a.b/c-d_e=x.y-z", "k", "k=", "x==y", "app in ()", " , "} {
+		f.Add(s, "app", "checkout")
+	}
+	f.Fuzz(func(t *testing.T, selector, key, value string) {
+		sel, err := labels.Parse(selector)
+		if err != nil {
+			return
+		}
+		again, err := labels.Parse(sel.String())
+		if err != nil {
+			t.Fatalf("Parse(%q) gives %q, which does not parse: %v", selector, sel.String(), err)
+		}
+		sets := []labels.Set{{}, {key: value}, {key: ""}, {"app": "checkout", "tier": "db", "env": "dev", "canary": "true"}}
+		for _, set := range sets {
+			if sel.Matches(set) != again.Matches(set) {
+				t.Fatalf("%q and its String() %q disagree on %v", selector, sel.String(), set)
+			}
+		}
+	})
 }

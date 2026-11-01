@@ -47,6 +47,20 @@ jobs:
       - name: Desktop build
         run: go build -tags production -ldflags "-s -w" -o bin/clustrail .
 
+  # Every fuzz target for a short while: the seed corpus runs in go test
+  # already; this looks a little further on each change.
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Fuzz
+        run: FUZZTIME=15s hack/fuzz.sh
+
   e2e:
     runs-on: ubuntu-24.04
     steps:
