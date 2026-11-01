@@ -43,6 +43,8 @@ type Manager struct {
 	// StreamPods sends pods through the streaming hub instead of delta events (set by the app).
 	StreamPods bool
 	synthetic  map[string]bool
+	jobsOnce   sync.Once
+	jobsReg    *jobRegistry
 }
 
 func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {

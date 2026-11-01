@@ -35,6 +35,8 @@ var allowedReadOnly = []string{
 	"Clusters", "Snapshot", "Connect", "Disconnect", "HideCluster", "SetSelected", "AutoConnect", "ConfirmTarget",
 	"UpdateCluster", "AddCluster", "TestConnection", "Setup", "SetupTest", "PasteKubeconfig", "SkipSetup",
 	"RestartSetup", "CompleteSetup", "AddKubeconfig", "HelmRepositories",
+	// Background jobs: reading results, and stopping a job (it changes nothing in the cluster; jobs that change it called writable to start)
+	"Jobs", "CancelJob",
 	// Reading
 	"Namespaces", "PodDetail", "Events", "WorkloadReplicas", "JobStatus", "ClusterWarnings", "AccessMatrix",
 	"WarningCount", "Expiry", "HelmUpgradeSource", "ServiceChain", "Storage", "PodNetworkPolicies",

@@ -64,14 +64,18 @@ func (m *Manager) RollbackRelease(cluster, ns, name string, revision int) (strin
 	rb.Description = fmt.Sprintf("Rollback to %d (Clustrail)", revision)
 
 	jobID := fmt.Sprintf("helm-%s-%s-%s-%d", cluster, ns, name, time.Now().UnixMilli())
-	report := func(j Job) { j.ID, j.Title = jobID, "Rolling back "+name; m.emit.Emit(EventJob, j) }
-	report(Job{Progress: 0.2, Detail: fmt.Sprintf("to revision %d · waiting for resources", revision)})
-	safeGo("Helm rollback", func(err error) { report(Job{Done: true, Error: err.Error()}) }, func() {
+	job := m.jobReg().start(jobID, "Rolling back "+name, cluster, nil)
+	job.progress(0.2, fmt.Sprintf("to revision %d · waiting for resources", revision))
+	before := 0
+	if cur, err := currentRelease(cfg, name); err == nil {
+		before = cur.Version
+	}
+	safeGo("Helm rollback", func(err error) { helmOutcome(job, cfg, name, before, err) }, func() {
 		if err := rb.Run(name); err != nil {
-			report(Job{Done: true, Error: err.Error()})
+			helmOutcome(job, cfg, name, before, err)
 			return
 		}
-		report(Job{Done: true, Progress: 1, Detail: fmt.Sprintf("rolled back to revision %d", revision)})
+		job.succeed(fmt.Sprintf("rolled back to revision %d", revision))
 	})
 	return jobID, nil
 }

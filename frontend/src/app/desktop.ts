@@ -2,6 +2,7 @@
 // deltas) and every mutation is a backend call. The UI follows the resulting
 // watch events instead of patching rows itself.
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { jobResultToast, trackJob } from "./jobs";
 import { backend, errorText, EVENTS, onEvent, type ClusterList, type Delta, type JobEvent } from "@/backend/client";
 import { podStream } from "@/backend/podStream";
 import type { Cluster, DeploymentRow, PodRow } from "@/data/types";
@@ -109,18 +110,29 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
       queue.push(d);
       if (!frame) frame = requestAnimationFrame(flush);
     });
-    const offJob = onEvent<JobEvent>(EVENTS.job, (j) => {
-      if (j.done) {
+    // Jobs: events and the list read at start meet here; seq drops what is stale.
+    const seenJobs = new Map<string, number>();
+    const loadStarted = Date.now();
+    const applyJob = (j: JobEvent, fromList: boolean) => {
+      const what = trackJob(seenJobs, j);
+      if (what === "stale") return;
+      if (what === "result") {
         a.setJobs((js) => js.filter((x) => x.id !== j.id));
         const tid = jobToasts.current.get(j.id);
         if (tid !== undefined) toast.dismiss(tid);
         jobToasts.current.delete(j.id);
-        if (j.error) toast.show({ kind: "error", title: `${j.title} failed`, detail: j.error, copyText: j.error });
-        else toast.show({ kind: "success", title: j.title.replace(/^(\w+)ing /, (_, v: string) => `${v[0]!.toUpperCase()}${v.slice(1)}ed `), detail: j.detail });
+        // From the list: only results that came in while this window was loading.
+        if (!fromList || (j.finished ?? 0) >= loadStarted - 5000) toast.show(jobResultToast(j));
         return;
       }
       a.setJobs((js) => [...js.filter((x) => x.id !== j.id), { id: j.id, title: j.title, progress: j.progress, detail: j.detail }]);
-    });
+    };
+    const offJob = onEvent<JobEvent>(EVENTS.job, (j) => applyJob(j, false));
+    // After a window reload: the jobs still running, and results that arrived meanwhile.
+    void api
+      .jobs()
+      .then((list) => !cancelled && (list ?? []).forEach((j) => applyJob(j, true)))
+      .catch(() => {});
     // Pods come on their own stream (backend/podStream.ts), applied once per animation frame.
     const offPods = podStream.listen(() => a.setAllPods(podStream.rows()));
     const offPodState = podStream.onState((cluster, state, detail) => {

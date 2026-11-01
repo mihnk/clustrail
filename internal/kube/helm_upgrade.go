@@ -603,25 +603,26 @@ func (m *Manager) UpgradeRelease(req HelmUpgradeRequest) (string, error) {
 	up.Description = fmt.Sprintf("Upgrade to %s %s (Clustrail)", ch.Metadata.Name, ch.Metadata.Version)
 
 	jobID := fmt.Sprintf("helm-up-%s-%s-%s-%d", req.Cluster, req.Namespace, req.Name, time.Now().UnixMilli())
-	report := func(j Job) { j.ID, j.Title = jobID, "Upgrading "+req.Name; m.emit.Emit(EventJob, j) }
+	job := m.jobReg().start(jobID, "Upgrading "+req.Name, req.Cluster, nil)
 	detail := fmt.Sprintf("%s %s", ch.Metadata.Name, ch.Metadata.Version)
 	if up.WaitStrategy == helmkube.StatusWatcherStrategy {
 		detail += " · waiting for resources"
 	}
-	report(Job{Progress: 0.2, Detail: detail})
-	safeGo("Helm upgrade", func(err error) { report(Job{Done: true, Error: err.Error()}) }, func() {
+	job.progress(0.2, detail)
+	before := rel.Version
+	safeGo("Helm upgrade", func(err error) { helmOutcome(job, cfg, req.Name, before, err) }, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), up.Timeout+time.Minute)
 		defer cancel()
 		out, err := up.RunWithContext(ctx, req.Name, ch, vals)
 		if err != nil {
-			report(Job{Done: true, Error: err.Error()})
+			helmOutcome(job, cfg, req.Name, before, err)
 			return
 		}
 		rev := 0
 		if r, ok := out.(*releasev1.Release); ok {
 			rev = r.Version
 		}
-		report(Job{Done: true, Progress: 1, Detail: fmt.Sprintf("revision %d deployed", rev)})
+		job.succeed(fmt.Sprintf("revision %d deployed", rev))
 	})
 	return jobID, nil
 }

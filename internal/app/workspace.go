@@ -137,6 +137,12 @@ func (w *Workspace) PreviewDrain(cluster, node string, opts kube.DrainOptions) (
 	return w.m.PreviewDrain(cluster, node, opts)
 }
 
+// Jobs lists the running background jobs and the latest results (read again after a reload).
+func (w *Workspace) Jobs() []kube.Job { return w.m.Jobs() }
+
+// CancelJob asks a running job to stop; what it already changed stays changed.
+func (w *Workspace) CancelJob(id string) error { return w.m.CancelJob(id) }
+
 func (w *Workspace) DrainNode(cluster, node string, opts kube.DrainOptions) (string, error) {
 	job, err := w.m.DrainNode(cluster, node, opts, w.user)
 	return job, audit("drain node", cluster, node, err)

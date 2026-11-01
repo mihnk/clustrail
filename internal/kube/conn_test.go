@@ -341,11 +341,12 @@ func TestDrainPlanAndPDBRetry(t *testing.T) {
 		return len(js) > 0 && js[len(js)-1].Done
 	})
 	jobs := rec.jobs()
-	if last := jobs[len(jobs)-1]; last.Error != "" || last.Progress != 1 {
+	if last := jobs[len(jobs)-1]; last.Error != "" || last.Progress != 1 || last.State != JobSucceeded {
 		t.Fatalf("last job = %+v", last)
 	}
-	if !strings.Contains(jobs[0].Detail, "waiting for PodDisruptionBudget") {
-		t.Fatalf("first report should name the PDB wait: %+v", jobs[0])
+	// jobs[0] announces the job (running, no progress yet); the first progress report names the PDB wait.
+	if jobs[0].State != JobRunning || !strings.Contains(jobs[1].Detail, "waiting for PodDisruptionBudget") {
+		t.Fatalf("first reports = %+v, %+v", jobs[0], jobs[1])
 	}
 	node, _ := client.CoreV1().Nodes().Get(context.Background(), "node-1", metav1.GetOptions{})
 	if !node.Spec.Unschedulable || node.Annotations["clustrail.io/cordoned-by"] != "jane" {

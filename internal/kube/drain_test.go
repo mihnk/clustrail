@@ -133,7 +133,8 @@ func TestDrainTimeoutDuringAReadIsNotSuccess(t *testing.T) {
 	}
 }
 
-// A drain cut short by the connection closing says so, not "timed out".
+// A drain cut short by the connection closing says so, not "timed out", and
+// its result is unknown: evictions already accepted go on without us.
 func TestDrainStoppedByDisconnectSaysSo(t *testing.T) {
 	defer func(d, min time.Duration) { drainPoll, drainMinTimeout = d, min }(drainPoll, drainMinTimeout)
 	drainPoll, drainMinTimeout = 20*time.Millisecond, time.Minute
@@ -148,7 +149,7 @@ func TestDrainStoppedByDisconnectSaysSo(t *testing.T) {
 	cancel()
 	waitFor(t, "drain done", func() bool { return lastJob(rec).Done })
 	j := lastJob(rec)
-	if !strings.Contains(j.Error, "stopped: the connection to the cluster closed") || !strings.Contains(j.Error, "payments/slow") || strings.Contains(j.Error, "timed out") {
+	if j.State != JobUnknown || !strings.Contains(j.Error, "the connection to the cluster closed") || !strings.Contains(j.Error, "payments/slow") || strings.Contains(j.Error, "timed out") {
 		t.Fatalf("job = %+v", j)
 	}
 }

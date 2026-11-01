@@ -226,15 +226,6 @@ type DrainOptions struct {
 }
 
 // Job is a background operation shown as a progress toast.
-type Job struct {
-	ID       string  `json:"id"`
-	Title    string  `json:"title"`
-	Progress float64 `json:"progress"`
-	Detail   string  `json:"detail"`
-	Done     bool    `json:"done,omitempty"`
-	Error    string  `json:"error,omitempty"`
-}
-
 // DrainPlan is what `kubectl drain` would do, computed before anything changes.
 type DrainPlan struct {
 	Evict     []string `json:"evict"`
@@ -310,14 +301,14 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 	jobID := fmt.Sprintf("drain-%s-%s-%d", cluster, node, time.Now().UnixMilli())
 	short := strings.SplitN(node, ".", 2)[0]
 	timeout := max(time.Duration(opts.TimeoutSec)*time.Second, drainMinTimeout)
+	ctx, cancel = context.WithTimeout(c.ctx, timeout)
+	job := m.jobReg().start(jobID, "Draining "+short, cluster, cancel)
 	safeGo("drain", func(err error) {
-		m.emit.Emit(EventJob, Job{ID: jobID, Title: "Draining " + short, Done: true, Error: err.Error()})
+		job.unknown("drain stopped by an internal error: " + err.Error() + " · the node may be cordoned and some pods evicted")
 	}, func() {
-		ctx, cancel := context.WithTimeout(c.ctx, timeout)
 		defer cancel()
-		report := func(j Job) { j.ID, j.Title = jobID, "Draining "+short; m.emit.Emit(EventJob, j) }
 		if err := cordon(ctx, c, node, true, user); err != nil {
-			report(Job{Done: true, Error: err.Error()})
+			job.fail(err)
 			return
 		}
 		total := len(plan.Evict)
@@ -348,7 +339,7 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 					case ctx.Err() != nil:
 						blocked = append(blocked, key) // ended below with the reason
 					default:
-						report(Job{Done: true, Error: fmt.Sprintf("evicting %s: %v", key, err)})
+						job.fail(fmt.Errorf("evicting %s: %v · the node stays cordoned", key, err))
 						return
 					}
 				}
@@ -379,10 +370,10 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 				detail += fmt.Sprintf(" · %d terminating", len(evicted))
 			}
 			if len(pending) == 0 && len(evicted) == 0 {
-				report(Job{Done: true, Progress: 1, Detail: fmt.Sprintf("%d pods evicted and gone · node stays cordoned", total)})
+				job.succeed(fmt.Sprintf("%d pods evicted and gone · node stays cordoned", total))
 				return
 			}
-			report(Job{Progress: float64(accepted+gone) / float64(2*max(total, 1)), Detail: detail})
+			job.progress(float64(accepted+gone)/float64(2*max(total, 1)), detail)
 			select {
 			case <-ctx.Done():
 				var parts []string
@@ -396,11 +387,17 @@ func (m *Manager) DrainNode(cluster, node string, opts DrainOptions, user string
 				if len(terminating) > 0 {
 					parts = append(parts, fmt.Sprintf("%d still terminating: %s", len(terminating), strings.Join(firstN(terminating, 5), ", ")))
 				}
-				reason := fmt.Sprintf("timed out after %s", timeout)
-				if c.ctx.Err() != nil {
-					reason = "stopped: the connection to the cluster closed"
+				left := strings.Join(parts, "; ")
+				switch {
+				case job.cancelled():
+					// Nothing is undone: say what stays.
+					job.fail(fmt.Errorf("cancelled: %d of %d pods were already evicted and are not restored; %s · the node stays cordoned", total-len(pending), total, left))
+				case c.ctx.Err() != nil:
+					// Evictions already accepted go on in the cluster without us.
+					job.unknown(fmt.Sprintf("the connection to the cluster closed: %s · the node is cordoned; read the node to see where it stands", left))
+				default:
+					job.fail(fmt.Errorf("timed out after %s: %s · the node is cordoned but not empty", timeout, left))
 				}
-				report(Job{Done: true, Error: fmt.Sprintf("%s: %s · the node is cordoned but not empty", reason, strings.Join(parts, "; "))})
 				return
 			case <-time.After(drainPoll):
 			}

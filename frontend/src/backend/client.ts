@@ -67,13 +67,22 @@ export interface Delta {
   reset?: boolean;
 }
 
+/** A background job (drain, Helm), sent whole on every change (internal/kube/jobs.go). */
 export interface JobEvent {
   id: string;
   title: string;
+  cluster: string;
+  state: "queued" | "running" | "cancel-requested" | "succeeded" | "failed" | "unknown";
   progress: number;
   detail: string;
-  done?: boolean;
   error?: string;
+  /** succeeded, failed or unknown */
+  done?: boolean;
+  /** Grows with every change: a smaller one is stale. */
+  seq: number;
+  started: number;
+  finished?: number;
+  cancelable?: boolean;
 }
 
 export interface DrainOptions {
@@ -702,6 +711,8 @@ export const backendApi = {
   setNodeCordoned: (cluster: string, node: string, cordoned: boolean) => call<void>("SetNodeCordoned", cluster, node, cordoned),
   previewDrain: (cluster: string, node: string, opts: DrainOptions) => call<DrainPlan>("PreviewDrain", cluster, node, opts),
   drainNode: (cluster: string, node: string, opts: DrainOptions) => call<string>("DrainNode", cluster, node, opts),
+  jobs: () => call<JobEvent[]>("Jobs"),
+  cancelJob: (id: string) => call<void>("CancelJob", id),
 
   getObject: (cluster: string, kind: string, ns: string, name: string) => call<LiveObjectInfo>("GetObject", cluster, kind, ns, name),
   revealSecretKey: (cluster: string, ns: string, name: string, key: string) =>
