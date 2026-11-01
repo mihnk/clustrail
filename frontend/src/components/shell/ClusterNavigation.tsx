@@ -4,35 +4,25 @@ import { shallowEqual, usePodSelector } from "@/data/podStore";
 import { SYSTEM_NAMESPACES } from "@/app/workspace";
 import {
   Activity,
-  Box,
-  Clock,
-  Copy,
-  Database,
-  FileText,
-  KeyRound,
   GitBranch,
-  Globe,
   LayoutGrid,
-  Layers,
   LifeBuoy,
   Lock,
   Network,
   Pin,
-  Play,
   Plus,
   Route,
   Server,
   TriangleAlert,
   FileBadge,
   ShieldCheck,
-  HardDrive,
-  Waypoints,
   ArchiveX,
-  Gauge,
+  FolderTree,
 } from "lucide-react";
 import { DEFAULT_INVESTIGATION, useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
 import { LISTED_KINDS } from "@/features/resources/kinds";
+import { ResourceGroups } from "./ResourceGroups";
 import { useWarningCount } from "@/features/insights/shared";
 import type { Environment } from "@/data/types";
 import { isAttention } from "@/data/health";
@@ -111,23 +101,19 @@ export function ClusterNavigation() {
 
       <NavSection title={<><span className="section-label">{t("Resources")}</span><Pin className="size-3.5 text-fg-muted" aria-label={t("Pinned")} /></>}>
         <NavItem icon={<Network />} label={t("Overview")} active={kind === "clusters"} onClick={() => openView({ kind: "clusters", title: "Clusters" })} trailing={<NavCount>{clusters.length}</NavCount>} />
-        <NavItem icon={<Box />} label={t("Pods")} active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{podCounts.total}</NavCount></>} />
-        <NavItem icon={<Layers />} label={t("Deployments")} active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })} trailing={real ? count(depsAttention, deps.length, "warning") : <><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
-        {real && (
-          <>
-            {list("apps/StatefulSet", <Database />)}
-            {list("apps/DaemonSet", <Copy />)}
-            {list("batch/Job", <Play />)}
-            {list("batch/CronJob", <Clock />)}
-          </>
-        )}
-        {list("Service", <Network />, <NavCount>74</NavCount>)}
-        {list("networking.k8s.io/Ingress", <Globe />, <NavCount>19</NavCount>)}
-        {list("ConfigMap", <FileText />, <NavCount>203</NavCount>)}
-        {real && list("Secret", <KeyRound />)}
-        {real && <NavItem icon={<HardDrive />} label={t("Storage")} active={kind === "storage"} onClick={() => openView({ kind: "storage", title: t("Storage") })} />}
-        {list("Event", <Activity />, <CountPill tone="warning" className="ml-auto">23</CountPill>)}
         <NavItem icon={<Server />} label={t("Nodes")} active={kind === "nodes"} onClick={() => openView({ kind: "nodes", title: "Nodes" })} trailing={real ? count(nodesAttention, nodeRows.length, "warning") : <><CountPill tone="warning" className="ml-auto">1</CountPill><NavCount className="ml-1.5">38</NavCount></>} />
+        {real && list("Namespace", <FolderTree />)}
+        {list("Event", <Activity />, <CountPill tone="warning" className="ml-auto">23</CountPill>)}
+      </NavSection>
+      <ResourceGroups
+        real={real}
+        trailing={{
+          pods: <>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{podCounts.total}</NavCount></>,
+          deployments: real ? count(depsAttention, deps.length, "warning") : <><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>,
+        }}
+        mockCounts={{ Service: <NavCount>74</NavCount>, "networking.k8s.io/Ingress": <NavCount>19</NavCount>, ConfigMap: <NavCount>203</NavCount> }}
+      />
+      <NavSection title={null}>
         <NavItem icon={<LayoutGrid />} label={t("All resource kinds")} onClick={openKinds} trailing={<Kbd className="ml-auto">{modKey}J</Kbd>} />
       </NavSection>
 
@@ -159,9 +145,7 @@ export function ClusterNavigation() {
         />
         <NavItem icon={<FileBadge />} label={t("Certificates")} active={kind === "certificates"} onClick={() => openView({ kind: "certificates", title: t("Certificates") })} />
         <NavItem icon={<ArchiveX />} label={t("API removals")} active={kind === "apiremovals"} onClick={() => openView({ kind: "apiremovals", title: t("API removals") })} />
-        <NavItem icon={<Gauge />} label={t("Quotas and limits")} active={kind === "quotas"} onClick={() => openView({ kind: "quotas", title: t("Quotas and limits") })} />
         <NavItem icon={<ShieldCheck />} label={t("Access")} active={kind === "access"} onClick={() => openView({ kind: "access", title: t("Access") })} />
-        <NavItem icon={<Waypoints />} label={t("Network policies")} active={kind === "network"} onClick={() => openView({ kind: "network", title: t("Network policies") })} />
       </NavSection>
 
       <NavSection title={<span className="section-label">{t("Delivery")}</span>}>
@@ -225,7 +209,7 @@ function ClusterList() {
 function NavSection({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-px">
-      <div className="flex items-center justify-between px-2 pb-1">{title}</div>
+      {title && <div className="flex items-center justify-between px-2 pb-1">{title}</div>}
       {children}
     </section>
   );

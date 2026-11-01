@@ -28,7 +28,9 @@ telemetry.
 ## What it does
 
 - **Many clusters as one.** Pick clusters once; Pods, Deployments, Nodes and
-  every other kind list them together, problems first, live over watches.
+  every other kind list them together, problems first, live over watches. The
+  sidebar groups kinds like Lens (Workloads, Config, Network, Storage, Access
+  control) and lists custom resources by API group.
 - **Production stays protected.** Each context is Standard, Protected or
   Read-only. Protected changes show their impact and the equivalent `kubectl`
   command and need the name typed; Read-only is enforced in the Go backend.

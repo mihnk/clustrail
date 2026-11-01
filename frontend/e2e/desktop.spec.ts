@@ -108,7 +108,7 @@ test("warning events, certificates and access checks", async ({ page }) => {
   await expect(visible(page, "Client certificate")).toBeVisible();
   await expect(visible(page, /i\/o timeout/)).toBeVisible();
 
-  await sidebar(page, /^Access/).click();
+  await sidebar(page, /^Access$/).click();
   await page.getByRole("button", { name: "Check access" }).click();
   await expect(visible(page, "sre-view")).toBeVisible();
   await expect(page.getByLabel("list pods: allowed")).toBeVisible();

@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/yaml"
 )
 
@@ -117,7 +119,50 @@ func (c *clusterConn) loadKinds(force bool) {
 			}
 		}
 	}
+	var crds map[string]bool
+	for _, k := range listable {
+		if k.Group == crdGVR.Group && k.Resource == crdGVR.Resource {
+			crds = c.crdResources()
+			break
+		}
+	}
+	markCustom(listable, crds)
 	k.byKind, k.namespaced, k.listable, k.err = byKind, namespaced, listable, nil
+}
+
+var crdGVR = schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
+
+// crdResources is the set of "plural.group" names of the cluster's CRDs (a
+// CRD is named that way), nil when they cannot be listed.
+func (c *clusterConn) crdResources() map[string]bool {
+	if c.dynamic == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	list, err := c.dynamic.Resource(crdGVR).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]bool, len(list.Items))
+	for _, it := range list.Items {
+		out[it.GetName()] = true
+	}
+	return out
+}
+
+// markCustom flags kinds served from a CRD. Without the CRD list, a kind is
+// custom when its group is not one client-go knows (aggregated APIs such as
+// metrics.k8s.io then count as custom too).
+func markCustom(kinds []KindInfo, crds map[string]bool) {
+	for i := range kinds {
+		k := &kinds[i]
+		if crds != nil {
+			k.Custom = crds[k.Resource+"."+k.Group]
+		} else {
+			k.Custom = k.Group != "" && !scheme.Scheme.IsGroupRegistered(k.Group)
+		}
+	}
 }
 
 // resolve maps a Kind (optionally "group/Kind") to a resource using discovery.

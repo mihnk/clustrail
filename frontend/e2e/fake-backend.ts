@@ -99,7 +99,17 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       return [
         { kind: "CronJob", group: "batch", version: "v1", resource: "cronjobs", namespaced: true, shortNames: ["cj"], delete: true },
         { kind: "Service", group: "", version: "v1", resource: "services", namespaced: true, shortNames: ["svc"], delete: true },
-        { kind: "Certificate", group: "cert-manager.io", version: "v1", resource: "certificates", namespaced: true, shortNames: ["cert"], delete: true },
+        { kind: "Certificate", group: "cert-manager.io", version: "v1", resource: "certificates", namespaced: true, shortNames: ["cert"], delete: true, custom: true },
+        ...[
+          ["", "ConfigMap", "configmaps", true], ["", "Secret", "secrets", true], ["", "Event", "events", true], ["", "Namespace", "namespaces", false],
+          ["", "ServiceAccount", "serviceaccounts", true], ["", "PersistentVolumeClaim", "persistentvolumeclaims", true], ["", "PersistentVolume", "persistentvolumes", false],
+          ["apps", "StatefulSet", "statefulsets", true], ["apps", "DaemonSet", "daemonsets", true], ["apps", "ReplicaSet", "replicasets", true], ["batch", "Job", "jobs", true],
+          ["networking.k8s.io", "Ingress", "ingresses", true], ["networking.k8s.io", "IngressClass", "ingressclasses", false], ["discovery.k8s.io", "EndpointSlice", "endpointslices", true],
+          ["autoscaling", "HorizontalPodAutoscaler", "horizontalpodautoscalers", true], ["policy", "PodDisruptionBudget", "poddisruptionbudgets", true],
+          ["storage.k8s.io", "StorageClass", "storageclasses", false], ["rbac.authorization.k8s.io", "ClusterRole", "clusterroles", false],
+          ["apiextensions.k8s.io", "CustomResourceDefinition", "customresourcedefinitions", false],
+        ].map(([group, kind, resource, namespaced]) => ({ kind, group, version: "v1", resource, namespaced, delete: true })),
+        { kind: "Application", group: "argoproj.io", version: "v1alpha1", resource: "applications", namespaced: true, delete: true, custom: true },
       ];
     case "CreateObjects":
       return [{ kind: "CronJob", name: "my-cronjob", namespace: "default", status: args[2] ? "valid" : "created" }];

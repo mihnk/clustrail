@@ -27,6 +27,9 @@ type KindInfo struct {
 	Namespaced bool     `json:"namespaced"`
 	ShortNames []string `json:"shortNames,omitempty"`
 	Delete     bool     `json:"delete"`
+	// Custom: served from a CustomResourceDefinition (or, when CRDs cannot
+	// be listed, from an API group client-go does not know).
+	Custom bool `json:"custom,omitempty"`
 }
 
 // TableColumn is one column of the API server's table view (kubectl get).

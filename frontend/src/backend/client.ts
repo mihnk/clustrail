@@ -139,6 +139,8 @@ export interface KindInfo {
   namespaced: boolean;
   shortNames?: string[];
   delete: boolean;
+  /** Served from a CustomResourceDefinition. */
+  custom?: boolean;
 }
 
 export interface TableColumn {

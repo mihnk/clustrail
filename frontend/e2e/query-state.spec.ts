@@ -23,7 +23,7 @@ test("a quick cluster switch never shows the older cluster's answer", async ({ p
       },
     },
   });
-  await sidebar(page, /^Access/).click();
+  await sidebar(page, /^Access$/).click();
   const clusterSelect = page.getByRole("combobox", { name: "Cluster" });
   await expect(clusterSelect).toHaveValue("prod-eu-west-1");
   await clusterSelect.selectOption("staging-eu-1");

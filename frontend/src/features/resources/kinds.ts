@@ -22,7 +22,117 @@ export const LISTED_KINDS: { key: string; label: string }[] = [
   { key: "ConfigMap", label: t("ConfigMaps") },
   { key: "Secret", label: t("Secrets") },
   { key: "Event", label: t("Events") },
+  { key: "apps/ReplicaSet", label: t("ReplicaSets") },
+  { key: "autoscaling/HorizontalPodAutoscaler", label: t("HorizontalPodAutoscalers") },
+  { key: "policy/PodDisruptionBudget", label: t("PodDisruptionBudgets") },
+  { key: "scheduling.k8s.io/PriorityClass", label: t("PriorityClasses") },
+  { key: "node.k8s.io/RuntimeClass", label: t("RuntimeClasses") },
+  { key: "coordination.k8s.io/Lease", label: t("Leases") },
+  { key: "admissionregistration.k8s.io/MutatingWebhookConfiguration", label: t("Mutating webhooks") },
+  { key: "admissionregistration.k8s.io/ValidatingWebhookConfiguration", label: t("Validating webhooks") },
+  { key: "discovery.k8s.io/EndpointSlice", label: t("EndpointSlices") },
+  { key: "networking.k8s.io/IngressClass", label: t("IngressClasses") },
+  { key: "PersistentVolumeClaim", label: t("PersistentVolumeClaims") },
+  { key: "PersistentVolume", label: t("PersistentVolumes") },
+  { key: "storage.k8s.io/StorageClass", label: t("StorageClasses") },
+  { key: "ServiceAccount", label: t("ServiceAccounts") },
+  { key: "rbac.authorization.k8s.io/Role", label: t("Roles") },
+  { key: "rbac.authorization.k8s.io/RoleBinding", label: t("RoleBindings") },
+  { key: "rbac.authorization.k8s.io/ClusterRole", label: t("ClusterRoles") },
+  { key: "rbac.authorization.k8s.io/ClusterRoleBinding", label: t("ClusterRoleBindings") },
+  { key: "Namespace", label: t("Namespaces") },
+  { key: "apiextensions.k8s.io/CustomResourceDefinition", label: t("Definitions") },
 ];
+
+/** A sidebar entry: a resource list (generic view) or one of Clustrail's own views. */
+export type NavEntry = { list: string } | { view: "pods" | "deployments" | "storage" | "network" | "portforwards" | "quotas" | "chain"; label: string };
+
+/** The sidebar's groups, in Lens's order. */
+export const NAV_GROUPS: { id: string; title: string; entries: NavEntry[] }[] = [
+  {
+    id: "workloads",
+    title: t("Workloads"),
+    entries: [
+      { view: "pods", label: t("Pods") },
+      { view: "deployments", label: t("Deployments") },
+      { list: "apps/StatefulSet" },
+      { list: "apps/DaemonSet" },
+      { list: "apps/ReplicaSet" },
+      { list: "batch/Job" },
+      { list: "batch/CronJob" },
+    ],
+  },
+  {
+    id: "config",
+    title: t("Config"),
+    entries: [
+      { list: "ConfigMap" },
+      { list: "Secret" },
+      { list: "autoscaling/HorizontalPodAutoscaler" },
+      { list: "policy/PodDisruptionBudget" },
+      { view: "quotas", label: t("Quotas and limits") },
+      { list: "scheduling.k8s.io/PriorityClass" },
+      { list: "node.k8s.io/RuntimeClass" },
+      { list: "coordination.k8s.io/Lease" },
+      { list: "admissionregistration.k8s.io/MutatingWebhookConfiguration" },
+      { list: "admissionregistration.k8s.io/ValidatingWebhookConfiguration" },
+    ],
+  },
+  {
+    id: "network",
+    title: t("Network"),
+    entries: [
+      { list: "Service" },
+      { list: "discovery.k8s.io/EndpointSlice" },
+      { list: "networking.k8s.io/Ingress" },
+      { list: "networking.k8s.io/IngressClass" },
+      { view: "network", label: t("Network policies") },
+      { view: "chain", label: t("Service chain") },
+      { view: "portforwards", label: t("Port forwards") },
+    ],
+  },
+  {
+    id: "storage",
+    title: t("Storage"),
+    entries: [{ view: "storage", label: t("Storage") }, { list: "PersistentVolumeClaim" }, { list: "PersistentVolume" }, { list: "storage.k8s.io/StorageClass" }],
+  },
+  {
+    id: "access",
+    title: t("Access control"),
+    entries: [
+      { list: "ServiceAccount" },
+      { list: "rbac.authorization.k8s.io/Role" },
+      { list: "rbac.authorization.k8s.io/RoleBinding" },
+      { list: "rbac.authorization.k8s.io/ClusterRole" },
+      { list: "rbac.authorization.k8s.io/ClusterRoleBinding" },
+    ],
+  },
+];
+
+/** Groups folded until opened. */
+export const NAV_FOLDED_BY_DEFAULT = ["access", "custom"];
+
+/**
+ * Whether a list entry is shown: when no cluster has reported its kinds yet,
+ * every entry; otherwise only kinds some selected cluster serves.
+ */
+export function served(key: string, servedKeys: Set<string> | null): boolean {
+  return !servedKeys || servedKeys.has(key);
+}
+
+/** Custom kinds by API group, groups and kinds sorted. */
+export function customGroups(kinds: KindInfo[]): { group: string; kinds: KindInfo[] }[] {
+  const by = new Map<string, Map<string, KindInfo>>();
+  for (const k of kinds) {
+    if (!k.custom) continue;
+    let g = by.get(k.group);
+    if (!g) by.set(k.group, (g = new Map()));
+    if (!g.has(k.kind)) g.set(k.kind, k);
+  }
+  return [...by.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([group, m]) => ({ group, kinds: [...m.values()].sort((a, b) => a.kind.localeCompare(b.kind)) }));
+}
 
 export function plural(kind: string): string {
   if (/(s|x|ch|sh)$/.test(kind)) return `${kind}es`;

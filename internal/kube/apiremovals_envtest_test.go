@@ -99,4 +99,17 @@ func TestAPIRemovalsAgainstAPIServer(t *testing.T) {
 	if r.APIServerStarted == "" {
 		t.Error("API server start time not read")
 	}
+
+	// The sidebar's custom resources: the CRD's kind is custom, built-in kinds are not.
+	kinds, err := m.ResourceKinds("envtest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	custom := map[string]bool{}
+	for _, k := range kinds {
+		custom[k.Group+"/"+k.Kind] = k.Custom
+	}
+	if !custom["example.io/Widget"] || custom["/Pod"] || custom["apps/Deployment"] || custom["apiextensions.k8s.io/CustomResourceDefinition"] {
+		t.Errorf("custom flags: Widget %v, Pod %v, Deployment %v, CRD %v", custom["example.io/Widget"], custom["/Pod"], custom["apps/Deployment"], custom["apiextensions.k8s.io/CustomResourceDefinition"])
+	}
 }
