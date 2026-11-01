@@ -180,6 +180,22 @@ func (t *topic[R]) Replace(rows []R) {
 	t.hub.Stats.Events.Add(int64(len(rows)))
 }
 
+// MaxPending bounds a consumer's queue beyond the topic's own rows. Pending
+// changes coalesce per row, but deletes of rows that no longer exist pile up
+// while a consumer is stalled through churn (pods with new names every
+// minute). Past the bound the queue is dropped and the next batch is a
+// snapshot: memory stays bounded by the rows, and no delete is lost, since a
+// snapshot replaces everything the client has.
+var MaxPending = 20_000
+
+// overflow switches c to a snapshot when its queue outgrew the topic. Called with t.mu and c.mu held.
+func (t *topic[R]) overflow(c *Consumer[R]) {
+	if len(c.pending) > max(MaxPending, 2*len(t.rows)) {
+		c.snapshot, c.pending = true, map[string]op[R]{}
+		t.hub.Stats.Overflows.Add(1)
+	}
+}
+
 func (t *topic[R]) Upsert(r R) {
 	now := time.Now()
 	id := r.RowID()
@@ -191,6 +207,7 @@ func (t *topic[R]) Upsert(r R) {
 			c.pending[id] = op[R]{row: r}
 			c.events++
 			c.mark(now)
+			t.overflow(c)
 		}
 		c.mu.Unlock()
 		c.signal()
@@ -206,10 +223,12 @@ func (t *topic[R]) Delete(id string) {
 	for c := range t.consumers {
 		c.mu.Lock()
 		if !c.snapshot {
-			// Never dropped: a lost delete would leave a ghost row in the UI.
+			// Never dropped: a lost delete would leave a ghost row in the UI
+			// (an overflow replaces the queue with a snapshot, which has none).
 			c.pending[id] = op[R]{del: true}
 			c.events++
 			c.mark(now)
+			t.overflow(c)
 		}
 		c.mu.Unlock()
 		c.signal()

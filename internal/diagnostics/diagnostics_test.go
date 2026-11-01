@@ -24,3 +24,12 @@ func TestSampleCountsWakeups(t *testing.T) {
 		t.Fatalf("no CPU time: %+v", after)
 	}
 }
+
+func TestResidentMemoryIsMeasured(t *testing.T) {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("not measured here")
+	}
+	if mb := ResidentMB(); mb < 1 || mb > 1<<16 {
+		t.Fatalf("resident = %.1f MB", mb)
+	}
+}

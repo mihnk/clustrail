@@ -127,7 +127,7 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
     void backend?.setCacheBudget(on ? cacheBudget : 0);
   };
   // Desktop: the Go side's memory and cache sizes, and where its log is.
-  const [goMem, setGoMem] = useState<{ heapMB: number; objects: Record<string, number> } | null>(null);
+  const [goMem, setGoMem] = useState<{ heapMB: number; objects: Record<string, number>; processMB?: number; appMB?: number } | null>(null);
   const [logFile, setLogFile] = useState<{ path: string; size: number } | null>(null);
   useEffect(() => {
     if (!backend || !active) return;
@@ -408,6 +408,11 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
                       <span className="font-mono">{tt("· Go heap")}{" "}{goMem.heapMB} MB{budgetOn ? tt(" of {cacheBudget} MB", { cacheBudget }) : ""}
                       </span>
                     )}
+                    {goMem && (goMem.appMB || goMem.processMB) ? (
+                      <span className="font-mono" title={tt("Resident memory, which the budget does not limit: the WebView keeps its own.")}>
+                        {goMem.appMB ? tt("· app {mb} MB", { mb: goMem.appMB }) : tt("· process {mb} MB", { mb: goMem.processMB })}
+                      </span>
+                    ) : null}
                   </span>
                   <span>{tt("Over budget, connected clusters that are not selected are disconnected, largest first. Selected clusters stay.")}</span>
                 </span>

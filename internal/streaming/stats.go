@@ -15,6 +15,7 @@ type Stats struct {
 	Snapshots  atomic.Int64
 	SendFull   atomic.Int64 // sends refused because the window's queue was full
 	Resyncs    atomic.Int64 // snapshots a client asked for after a sequence gap
+	Overflows  atomic.Int64 // consumer queues that outgrew their topic and became a snapshot
 	Topics     atomic.Int64
 	Consumers  atomic.Int64
 	MaxPending atomic.Int64 // largest coalesced queue seen at a flush

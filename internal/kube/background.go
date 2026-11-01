@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mihnk/clustrail/internal/diagnostics"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
@@ -100,17 +101,30 @@ var cacheBudgetMB atomic.Int64
 
 func SetCacheBudget(mb int) { cacheBudgetMB.Store(int64(mb)) }
 
-// MemoryStats is what Settings shows next to the budget.
+// MemoryStats is what Settings shows next to the budget. The cache budget
+// is checked against the Go heap, where the caches live; the process and its
+// WebView are reported apart from it, since the budget cannot free them.
 type MemoryStats struct {
 	HeapMB   int            `json:"heapMB"`
 	BudgetMB int            `json:"budgetMB"`
 	Objects  map[string]int `json:"objects"` // cached objects per connected cluster
+	// ProcessMB is the Go process's resident memory (0: not measured here).
+	ProcessMB int `json:"processMB"`
+	// AppMB is the whole app with its WebView processes, where they are
+	// children of the app (Linux); 0 elsewhere (macOS runs WebKit apart).
+	AppMB int `json:"appMB"`
+	// Holders counts what each memory holder keeps (docs/architecture/memory.md).
+	Holders map[string]int `json:"holders"`
 }
 
 func (m *Manager) MemoryStats() MemoryStats {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
-	out := MemoryStats{HeapMB: int(ms.HeapInuse >> 20), BudgetMB: int(cacheBudgetMB.Load()), Objects: map[string]int{}}
+	out := MemoryStats{HeapMB: int(ms.HeapInuse >> 20), BudgetMB: int(cacheBudgetMB.Load()), Objects: map[string]int{}, Holders: map[string]int{}}
+	out.ProcessMB = int(diagnostics.ResidentMB())
+	if f := diagnostics.FamilyUsage(); f.Supported {
+		out.AppMB = int(f.RSSMB)
+	}
 	m.mu.Lock()
 	conns := make(map[string]*clusterConn, len(m.conns))
 	for id, c := range m.conns {
@@ -119,7 +133,21 @@ func (m *Manager) MemoryStats() MemoryStats {
 	m.mu.Unlock()
 	for id, c := range conns {
 		out.Objects[id] = c.cachedObjects()
+		out.Holders["metric series"] += c.samples.len()
 	}
+	m.streams.mu.Lock()
+	for _, l := range m.streams.logs {
+		l.mu.Lock()
+		out.Holders["log lines waiting"] += len(l.lines)
+		l.mu.Unlock()
+	}
+	out.Holders["log streams"] = len(m.streams.logs)
+	out.Holders["shells"] = len(m.streams.exec)
+	m.streams.mu.Unlock()
+	m.lists.mu.Lock()
+	out.Holders["list watches"] = len(m.lists.byID)
+	m.lists.mu.Unlock()
+	out.Holders["port forwards"] = len(m.PortForwards())
 	return out
 }
 
@@ -179,8 +207,16 @@ func (m *Manager) budgetLoop(ctx context.Context) {
 			if !warned {
 				warned = true
 				slog.Warn("over cache budget with selected clusters only", "heapMB", stats.HeapMB, "budgetMB", budget)
+				largest, most := "", -1
+				for id, n := range stats.Objects {
+					if n > most {
+						largest, most = id, n
+					}
+				}
+				// Nothing is dropped from a selected cluster behind the user's back:
+				// the notice says what is over and how to shrink it.
 				m.emit.Emit(EventNotice, Notice{Kind: "warning", Title: "Over the cache budget",
-					Detail: fmt.Sprintf("%d MB in use, budget %d MB. Only selected clusters are connected, so none was disconnected.", stats.HeapMB, budget)})
+					Detail: fmt.Sprintf("%d MB in use, budget %d MB. Only selected clusters are connected, so none was disconnected. %s caches the most (%d objects): showing one namespace there, or deselecting it, frees the most.", stats.HeapMB, budget, largest, most)})
 			}
 			continue
 		}

@@ -61,6 +61,13 @@ func (s *sampleStore) series(key string) (ts []int64, vals []float64) {
 	return ts, vals
 }
 
+// len is the number of series kept.
+func (s *sampleStore) len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.data)
+}
+
 // forget drops samples of containers whose pods are gone.
 func (s *sampleStore) forget(keep func(key string) bool) {
 	s.mu.Lock()

@@ -47,8 +47,9 @@ most 60 requests in all and no more after that
 
 | Buffer | Bound |
 |---|---|
-| Informer caches | Objects in scope. The cache budget (Settings) watches the Go heap; C10 adds per-holder budgets. |
-| Pod stream hub: pending changes per consumer | One entry per object (changes coalesce), so it is bounded by the objects in scope. Byte limits come with C9. |
+| Informer caches | Objects in scope. The cache budget (Settings) watches the Go heap; every holder is listed in [memory.md](memory.md). |
+| Pod stream hub: pending changes per consumer | One entry per object (changes coalesce). Past `MaxPending` (20,000, or twice the scope's rows), the queue becomes a snapshot. Before, deletes of short-lived pods piled up without limit for a stalled window. |
+| Pod stream frames | At most 5,000 rows or changes per frame. Retries of a full transport back off from 10 ms to 500 ms. At most 64 subscriptions per connection. |
 | Generic list watch: events channel | 256 events; the producer waits, it never grows. |
 | Generic list watch: batch | One entry per object per 500 ms. |
 | Log lines between flushes | Flushed every interval. The per-stream line and byte budget comes with C11. |
@@ -69,4 +70,5 @@ most 60 requests in all and no more after that
 - [x] No change is replayed automatically.
 - [x] No unbounded channel is fed by a cluster.
 - [x] Decompression of cluster data is bounded.
-- [ ] Byte limits on the stream hub and log streams: C9 and C11.
+- [x] Stream hub queues, frames and subscriptions are bounded (C9).
+- [ ] Line and byte budget per log stream: C11.

@@ -27,7 +27,13 @@ var ErrFull = errors.New("stream full")
 var (
 	MinWindow     = 16 * time.Millisecond
 	MaxWindow     = 100 * time.Millisecond
-	SnapshotChunk = 5000
+	SnapshotChunk = 5000 // rows per snapshot frame, and changes per delta frame
+	// MaxSubscriptions per connection; more are refused with an error frame.
+	MaxSubscriptions = 64
+	// Retrying a full transport backs off from retryMin to retryMax: a window
+	// that stopped reading costs a few wakeups a second, not a busy loop.
+	retryMin = 10 * time.Millisecond
+	retryMax = 500 * time.Millisecond
 )
 
 // Frame is the server → client message. Types:
@@ -95,6 +101,13 @@ func Serve[R Row](h *Hub[R], conn Conn) {
 			mu.Lock()
 			if old := subs[m.Sub]; old != nil {
 				old.stop()
+				delete(subs, m.Sub)
+			}
+			if len(subs) >= MaxSubscriptions {
+				mu.Unlock()
+				b, _ := json.Marshal(Frame[R]{T: "error", Sub: m.Sub, State: Failed, Detail: fmt.Sprintf("too many subscriptions on one connection (%d)", MaxSubscriptions)})
+				_ = conn.TrySend(b)
+				continue
 			}
 			c, err := h.Subscribe(m.Key)
 			if err != nil {
@@ -200,6 +213,7 @@ func (s *sender[R]) run() {
 	var outbox [][]byte
 	retry := time.NewTimer(time.Hour)
 	defer retry.Stop()
+	backoff := retryMin
 	for {
 		if len(outbox) == 0 {
 			select {
@@ -241,12 +255,14 @@ func (s *sender[R]) run() {
 			s.stats.Frames.Add(1)
 			s.stats.Bytes.Add(int64(len(outbox[0])))
 			outbox = outbox[1:]
+			backoff = retryMin
 		}
 		if len(outbox) > 0 {
 			// The window's queue is full: the UI is behind. Try again shortly.
 			s.stats.SendFull.Add(1)
 			window = MaxWindow
-			retry.Reset(10 * time.Millisecond)
+			retry.Reset(backoff)
+			backoff = min(backoff*2, retryMax)
 			select {
 			case <-s.ctx.Done():
 				return
@@ -287,11 +303,26 @@ func (s *sender[R]) encode(b Batch[R]) [][]byte {
 		return out
 	}
 	s.stats.Size.Add(float64(len(b.Upserts) + len(b.Deletes)))
-	f := Frame[R]{T: "delta", Upserts: b.Upserts, Deletes: b.Deletes, Events: b.Events, Token: tok}
-	if b.StateDirty {
-		f.State, f.Detail = b.State, b.Detail
+	// Large batches go out in frames of at most SnapshotChunk changes, deletes
+	// first, so no frame is huge; the last carries the token and the state.
+	ups, dels := b.Upserts, b.Deletes
+	for {
+		f := Frame[R]{T: "delta", Events: b.Events}
+		n := min(len(dels), SnapshotChunk)
+		f.Deletes, dels = dels[:n], dels[n:]
+		m := min(len(ups), SnapshotChunk-n)
+		f.Upserts, ups = ups[:m], ups[m:]
+		if len(ups) == 0 && len(dels) == 0 {
+			f.Token = tok
+			if b.StateDirty {
+				f.State, f.Detail = b.State, b.Detail
+			}
+			add(f)
+			break
+		}
+		f.Events = 0
+		add(f)
 	}
-	add(f)
 	s.tokens.put(tok, sent{at: now, oldest: b.Oldest})
 	return out
 }

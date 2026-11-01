@@ -756,7 +756,7 @@ export const backendApi = {
   setMetricsInterval: (seconds: number) => call<void>("SetMetricsInterval", seconds),
   setUpdateMethod: (method: "watch" | "poll") => call<void>("SetUpdateMethod", method),
   setCacheBudget: (mb: number) => call<void>("SetCacheBudget", mb),
-  memoryStats: () => call<{ heapMB: number; budgetMB: number; objects: Record<string, number> }>("MemoryStats"),
+  memoryStats: () => call<{ heapMB: number; budgetMB: number; objects: Record<string, number>; processMB?: number; appMB?: number; holders?: Record<string, number> }>("MemoryStats"),
   pauseWatches: () => call<string[]>("PauseWatches"),
   resumeWatches: () => call<void>("ResumeWatches"),
   /** The page's visibility; the backend combines it with the native window state (quiet mode). */

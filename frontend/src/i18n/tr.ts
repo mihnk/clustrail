@@ -1844,4 +1844,7 @@ export const tr: Record<string, string> = {
   "checking the pods…": "pod'lar kontrol ediliyor…",
   "Could not refresh; showing what was read at {at}.": "Yenilenemedi; {at} itibarıyla okunan gösteriliyor.",
   "Could not refresh.": "Yenilenemedi.",
+  "Resident memory, which the budget does not limit: the WebView keeps its own.": "Bütçenin sınırlamadığı yerleşik bellek: WebView kendi belleğini tutar.",
+  "· app {mb} MB": "· uygulama {mb} MB",
+  "· process {mb} MB": "· süreç {mb} MB",
 };
