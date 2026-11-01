@@ -24,6 +24,8 @@ type Manager struct {
 	store *Store
 	emit  Emitter
 	ctx   context.Context
+	// activity: foreground or background, and the work that follows (activity.go).
+	activity *activity
 
 	mu       sync.Mutex
 	kc       *Kubeconfig
@@ -54,7 +56,8 @@ func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
 	m := &Manager{
 		store: store, emit: emit, ctx: ctx,
 		state: map[string]*Cluster{}, conns: map[string]*clusterConn{}, hidden: map[string]bool{}, attempts: map[string]int{}, pending: map[string]*connectAttempt{},
-		streams: streams{logs: map[string]*logStream{}, exec: map[string]*execSession{}},
+		streams:  streams{logs: map[string]*logStream{}, exec: map[string]*execSession{}},
+		activity: newActivity(),
 	}
 	notice := func(component string) {
 		m.emit.Emit(EventNotice, Notice{Kind: "warning", Title: "Internal error in " + component,
@@ -64,6 +67,7 @@ func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
 	m.reload() //nolint:contextcheck // the manager keeps the app's context (m.ctx); its methods are the UI's entry points and take none
 	safeLoop(ctx, "kubeconfig watch", nil, m.watchKubeconfig)
 	safeLoop(ctx, "cache budget", nil, func() { m.budgetLoop(ctx) })
+	safeLoop(ctx, "sleep watch", nil, func() { m.sleepWatch(ctx) })
 	return m
 }
 
@@ -448,6 +452,7 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 		return
 	}
 	conn.fingerprint = fp
+	conn.slowdown = m.activity.slowdown
 	conn.fallbackNS = m.contextNamespace(id)
 	conn.streamPods = m.StreamPods
 	ctx, cancel := context.WithTimeout(a.ctx, 25*time.Second)

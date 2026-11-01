@@ -52,7 +52,7 @@ func main() {
 	// Pods reach the UI as incremental frames on a Wails stream (no extra listener).
 	wails.HandleStream(app.PodsStream, ws.ServePods)
 
-	wails.Window.NewWithOptions(application.WebviewWindowOptions{
+	win := wails.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:     "Clustrail",
 		Width:     1440,
 		Height:    900,
@@ -68,6 +68,7 @@ func main() {
 		},
 		URL: startURL(),
 	})
+	ws.WatchWindow(win)
 
 	if err := wails.Run(); err != nil {
 		log.Fatal(err)

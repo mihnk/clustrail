@@ -170,6 +170,28 @@ through one Wails service (`internal/app.Workspace`) and its events.
   storage Secrets (values with credential-like keys redacted); Argo CD
   Applications and Flux Kustomizations/HelmReleases from their CRDs when served.
 
+## Quiet mode
+
+`internal/kube/activity.go` keeps one state for the whole app: foreground or
+background. It combines three sources: the page's visibility (sent by the
+UI), the main window minimised or hidden (native window events), and the
+application hidden (macOS ⌘H). The app is in the background while any of
+them says hidden.
+
+- **In the background:** the API probe and metrics run 4 times less often.
+  The UI's timers already stop while the page is hidden. After 5 minutes,
+  watches pause if Settings allows it. Clusters with a log stream, shell
+  or port forward stay connected.
+- **Back in front:** paused watches resume, and every connection is probed
+  once, spread over 3 s.
+- **Wake from sleep:** detected when the wall clock jumps ahead of the
+  monotonic one. Every connection is probed once, with jitter.
+
+Each transition has a generation. A pause scheduled for an earlier
+background spell does nothing, so a late pause cannot undo a resume.
+
+Request budgets per cluster are in [request-budgets.md](request-budgets.md).
+
 ## Layout
 
 ```text

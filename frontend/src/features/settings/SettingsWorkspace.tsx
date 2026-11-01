@@ -106,7 +106,11 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
     setUpdateMethodPref(v);
     void backend?.setUpdateMethod(v);
   };
-  const [pauseBackground, setPauseBackground] = usePersistentState("settings.pauseBackgroundWatches", true);
+  const [pauseBackground, setPauseBackgroundPref] = usePersistentState("settings.pauseBackgroundWatches", true);
+  const setPauseBackground = (on: boolean) => {
+    setPauseBackgroundPref(on);
+    void backend?.setPauseInBackground(on);
+  };
   const [metricsInterval, setMetricsIntervalPref] = usePersistentState("settings.metricsIntervalSec", 15);
   const setMetricsInterval = (v: number) => {
     setMetricsIntervalPref(v);

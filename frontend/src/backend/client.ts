@@ -759,6 +759,9 @@ export const backendApi = {
   memoryStats: () => call<{ heapMB: number; budgetMB: number; objects: Record<string, number> }>("MemoryStats"),
   pauseWatches: () => call<string[]>("PauseWatches"),
   resumeWatches: () => call<void>("ResumeWatches"),
+  /** The page's visibility; the backend combines it with the native window state (quiet mode). */
+  setPageHidden: (hidden: boolean) => call<void>("SetPageHidden", hidden),
+  setPauseInBackground: (on: boolean) => call<void>("SetPauseInBackground", on),
   logFile: () => call<{ path: string; size: number }>("LogFile"),
   diagnostics: () => call<BackendDiagnostics>("Diagnostics"),
   resetDiagnostics: () => call<void>("ResetDiagnostics"),

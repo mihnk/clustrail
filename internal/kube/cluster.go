@@ -78,7 +78,11 @@ type clusterConn struct {
 
 	rest   *rest.Config
 	budget *budget // nil with fake clients
-	client kubernetes.Interface
+	// slowdown multiplies probe and metrics intervals (4 in the background, activity.go); nil means 1.
+	slowdown func() int
+	// probeKick runs a probe now (after a wake or a return to the foreground).
+	probeKick kicker
+	client    kubernetes.Interface
 	// disc has a request timeout; c.client has none so watches and streams stay open.
 	disc    discovery.DiscoveryInterface
 	dynamic dynamic.Interface
@@ -217,7 +221,7 @@ func connFromClients(id string, env func() Environment, emit Emitter, onState fu
 		id: id, env: env, emit: emit, client: client, dynamic: dyn, metrics: mc,
 		dirtyPods: map[string]bool{}, dirtyDeps: map[string]bool{}, dirtyNodes: map[string]bool{}, resetSent: map[string]bool{}, kicks: newKicker(),
 		podUsage: map[string]Usage{}, nodeUsage: map[string]Usage{}, samples: newSampleStore(120), alerts: newAlertDetector(),
-		onState: onState, disc: client.Discovery(),
+		onState: onState, disc: client.Discovery(), probeKick: newKicker(),
 	}
 }
 
@@ -869,7 +873,7 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Duration(metricsEvery.Load()) * time.Second):
+		case <-time.After(time.Duration(metricsEvery.Load()) * time.Second * c.slow()):
 			wake("metrics")
 			tick()
 			if time.Since(lastSave) > 5*time.Minute {
@@ -881,25 +885,32 @@ func (c *clusterConn) metricsLoop(ctx context.Context) {
 }
 
 // probeLoop measures latency and notices recovery after a lost watch.
+// slow is the current interval factor (activity.go).
+func (c *clusterConn) slow() time.Duration {
+	if c.slowdown == nil {
+		return 1
+	}
+	return time.Duration(c.slowdown())
+}
+
 func (c *clusterConn) probeLoop(ctx context.Context, onLatency func(ms int, err error)) {
-	t := time.NewTicker(probeInterval)
-	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
-			wake("API probe")
-			start := time.Now()
-			// A probe that hangs must end: a stuck server is not a connected one.
-			pctx, cancel := context.WithTimeout(background(ctx), probeTimeout)
-			_, err := c.client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(pctx)
-			cancel()
-			if err != nil && apierrors.IsForbidden(err) {
-				err = nil // /readyz may be restricted; reaching RBAC proves the server answers
-			}
-			onLatency(int(time.Since(start).Milliseconds()), err)
+		case <-time.After(probeInterval * c.slow()):
+		case <-c.probeKick:
 		}
+		wake("API probe")
+		start := time.Now()
+		// A probe that hangs must end: a stuck server is not a connected one.
+		pctx, cancel := context.WithTimeout(background(ctx), probeTimeout)
+		_, err := c.client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(pctx)
+		cancel()
+		if err != nil && apierrors.IsForbidden(err) {
+			err = nil // /readyz may be restricted; reaching RBAC proves the server answers
+		}
+		onLatency(int(time.Since(start).Milliseconds()), err)
 	}
 }
 
