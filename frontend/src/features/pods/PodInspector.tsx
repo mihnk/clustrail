@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import {
   Box,
   Check,
@@ -18,12 +18,14 @@ import { Segmented } from "@/components/ui/segmented";
 import { ModifyMenuButton, type ResourceAction } from "@/components/resource-actions/ResourceActions";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph, healthTone } from "@/components/status/StatusGlyph";
-import { MetricsChart } from "@/components/charts/MetricsChart";
 import { EmptyState } from "@/components/EmptyState";
 import { formatMemory } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { useWorkspace } from "@/app/workspace";
 import { t } from "@/i18n";
+
+// The chart library (uPlot) loads with the first chart, not at start.
+const MetricsChart = lazy(() => import("@/components/charts/MetricsChart").then((m) => ({ default: m.MetricsChart })));
 
 export type InspectorTab = "overview" | "containers" | "events" | "logs" | "yaml" | "metrics" | "related";
 
@@ -466,12 +468,14 @@ function MemorySection({ detail, themeKey }: { detail: PodDetail; themeKey: stri
           </span>
         )}
       </div>
-      <MetricsChart
-        series={series}
-        themeKey={themeKey}
-        onHover={setHover}
-        label={t("Memory of container {container} over the last hour{v1}", { container: mem.container, v1: kills ? `, reaching the ${series.limit}Mi limit ${kills} times` : "" })}
-      />
+      <Suspense fallback={<div style={{ height: 70 }} />}>
+        <MetricsChart
+          series={series}
+          themeKey={themeKey}
+          onHover={setHover}
+          label={t("Memory of container {container} over the last hour{v1}", { container: mem.container, v1: kills ? `, reaching the ${series.limit}Mi limit ${kills} times` : "" })}
+        />
+      </Suspense>
       <div className="flex flex-wrap gap-3 text-meta text-fg-muted">
         {series.limit !== undefined && (
           <Legend swatch={<span className="w-3 border-t-[1.5px] border-dashed border-status-critical" />}>{t("limit {limit}Mi", { limit: series.limit })}</Legend>

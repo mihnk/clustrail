@@ -1,7 +1,8 @@
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { ArrowUpCircle, Code, Diff, History, Info, LifeBuoy, Lock, X } from "lucide-react";
 import type { Cluster } from "@/data/types";
-import { planFromManifests, rollbackPlan, type HelmRelease, type RollbackPlan } from "@/data/helm";
+import { rollbackPlan, type HelmRelease } from "@/data/helm";
+import { planFromManifests, type RollbackPlan } from "@/data/helmPlan";
 import { backend } from "@/backend/client";
 import { useWorkspace } from "@/app/workspace";
 import { upgradeTab } from "./upgradeTab";

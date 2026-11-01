@@ -9,14 +9,14 @@ import { NavigationRail } from "@/components/shell/NavigationRail";
 import { StatusBar } from "@/components/shell/StatusBar";
 import { EmptyState } from "@/components/EmptyState";
 import { PodsWorkspace } from "@/features/pods/PodsWorkspace";
-import { DeploymentsWorkspace } from "@/features/deployments/DeploymentsWorkspace";
-import { ClustersWorkspace } from "@/features/clusters/ClustersWorkspace";
-import { NodesWorkspace } from "@/features/nodes/NodesWorkspace";
 import { PortForwardHost } from "@/features/portforward/PortForward";
 import { DebugHost } from "@/features/debug/DebugDialogs";
 import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 
 // xterm.js and Monaco only load when a Shell or YAML tab renders.
+const DeploymentsWorkspace = lazy(() => import("@/features/deployments/DeploymentsWorkspace").then((m) => ({ default: m.DeploymentsWorkspace })));
+const ClustersWorkspace = lazy(() => import("@/features/clusters/ClustersWorkspace").then((m) => ({ default: m.ClustersWorkspace })));
+const NodesWorkspace = lazy(() => import("@/features/nodes/NodesWorkspace").then((m) => ({ default: m.NodesWorkspace })));
 const ShellWorkspace = lazy(() => import("@/features/terminal/ShellWorkspace").then((m) => ({ default: m.ShellWorkspace })));
 const YamlWorkspace = lazy(() => import("@/features/yaml/YamlWorkspace").then((m) => ({ default: m.YamlWorkspace })));
 const CreateResourceWorkspace = lazy(() => import("@/features/resources/CreateResourceWorkspace").then((m) => ({ default: m.CreateResourceWorkspace })));
