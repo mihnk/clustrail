@@ -1,4 +1,7 @@
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode } from "react";
+import { countRender } from "@/lib/renderCount";
+import { shallowEqual, usePodSelector } from "@/data/podStore";
+import { SYSTEM_NAMESPACES } from "@/app/workspace";
 import {
   Activity,
   Box,
@@ -48,7 +51,8 @@ const envGroups: { env: Environment; label: string }[] = [
 ];
 
 export function ClusterNavigation() {
-  const { pods, activeTab, openTab, openView, clusters, pins, deployments, nodes, helmReleases, gitops, selectedClusterIds, investigations, currentInvestigation, openInvestigation, newInvestigation } =
+  countRender("sidebar");
+  const { podScope, activeTab, openTab, openView, clusters, pins, deployments, nodes, helmReleases, gitops, selectedClusterIds, investigations, currentInvestigation, openInvestigation, newInvestigation } =
     useWorkspace();
   const kind = activeTab?.kind;
   const { openKinds } = useOverlays();
@@ -67,7 +71,18 @@ export function ClusterNavigation() {
     );
   };
   const warnings = useWarningCount();
-  const attention = useMemo(() => pods.filter((p) => isAttention(p.health)).length, [pods]);
+  // Subscribed to two counts: a pod frame that changes neither does not render the sidebar.
+  const podCounts = usePodSelector((rows) => {
+    let total = 0;
+    let attention = 0;
+    for (const p of rows) {
+      if (!podScope.selected.has(p.cluster) || (podScope.hideSystem && SYSTEM_NAMESPACES.includes(p.namespace))) continue;
+      total++;
+      if (isAttention(p.health)) attention++;
+    }
+    return { total, attention };
+  }, shallowEqual);
+  const attention = podCounts.attention;
   // Mock: the design's numbers. Desktop: counts over the selected clusters; kinds Clustrail does not list yet show none.
   const inSel = <T extends { cluster: string }>(rows: T[]) => rows.filter((r) => selectedClusterIds.includes(r.cluster));
   const real = !IS_MOCK;
@@ -94,7 +109,7 @@ export function ClusterNavigation() {
 
       <NavSection title={<><span className="section-label">{t("Resources")}</span><Pin className="size-3.5 text-fg-muted" aria-label={t("Pinned")} /></>}>
         <NavItem icon={<Network />} label={t("Overview")} active={kind === "clusters"} onClick={() => openView({ kind: "clusters", title: "Clusters" })} trailing={<NavCount>{clusters.length}</NavCount>} />
-        <NavItem icon={<Box />} label={t("Pods")} active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{pods.length}</NavCount></>} />
+        <NavItem icon={<Box />} label={t("Pods")} active={kind === "pods"} onClick={() => openTab("pods")} trailing={<>{attention > 0 && <CountPill tone="critical" className="ml-auto">{attention}</CountPill>}<NavCount className={attention > 0 ? "ml-1.5" : ""}>{podCounts.total}</NavCount></>} />
         <NavItem icon={<Layers />} label={t("Deployments")} active={kind === "deployments"} onClick={() => openView({ kind: "deployments", title: "Deployments" })} trailing={real ? count(depsAttention, deps.length, "warning") : <><CountPill tone="warning" className="ml-auto">2</CountPill><NavCount className="ml-1.5">86</NavCount></>} />
         {real && (
           <>

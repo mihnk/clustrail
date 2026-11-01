@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { podStore } from "@/data/podStore";
+import { selectPods } from "@/app/workspace";
 import { Dialog } from "radix-ui";
 import {
   ArrowLeftRight,
@@ -98,7 +100,8 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
         run: () => confirm(restartDeploymentRequest(d, cluster, () => ws.restartDeployment(d.id))),
       });
     }
-    for (const p of ws.pods) {
+    // Read when the palette builds its list, not subscribed: pods do not re-render the palette.
+    for (const p of selectPods(podStore.get(), ws.podScope)) {
       items.push({
         id: `pod:${p.id}`,
         section: "Resources",

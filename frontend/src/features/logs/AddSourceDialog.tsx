@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
+import { sameItems, usePodSelector } from "@/data/podStore";
 import { Dialog } from "radix-ui";
 import { Info, X } from "lucide-react";
-import { useWorkspace } from "@/app/workspace";
 import type { LogSourceSpec } from "@/backend/client";
 import { Button, IconButton } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -35,14 +35,13 @@ export function AddSourceDialog({
   onAdd: (spec: LogSourceSpec) => void;
   onClose: () => void;
 }) {
-  const ws = useWorkspace();
   const [mode, setMode] = useState<Mode>("workload");
   const [namespace, setNamespace] = useState(initialNamespace);
   const [workload, setWorkload] = useState("");
   const [selector, setSelector] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  const clusterPods = useMemo(() => ws.allPods.filter((p) => p.cluster === cluster), [ws.allPods, cluster]);
+  const clusterPods = usePodSelector((rows) => rows.filter((p) => p.cluster === cluster), sameItems);
   const namespaces = useMemo(() => [...new Set(clusterPods.map((p) => p.namespace))].sort(), [clusterPods]);
   const pods = useMemo(() => clusterPods.filter((p) => p.namespace === namespace), [clusterPods, namespace]);
   const workloads = useMemo(() => {

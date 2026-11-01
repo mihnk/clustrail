@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { sameItems, usePodSelector } from "@/data/podStore";
 import { ArrowRightToLine, ArrowRightFromLine, Info, Waypoints } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
 import { backend, errorText, type ConnectionCheck, type NetPolDirection, type NetPolView } from "@/backend/client";
@@ -29,7 +30,7 @@ export function NetworkWorkspace({ tab }: { tab: WorkspaceTab; active: boolean }
     }
   }, [tab.params?.namespace, tab.params?.pod, tab.cluster]);
   const target = clusters.includes(cluster) ? cluster : (clusters[0] ?? "");
-  const pods = useMemo(() => ws.allPods.filter((p) => p.cluster === target).map((p) => `${p.namespace}/${p.name}`).sort(), [ws.allPods, target]);
+  const pods = usePodSelector((rows) => rows.filter((p) => p.cluster === target).map((p) => `${p.namespace}/${p.name}`).sort(), sameItems);
   const [ns, pod] = podText.includes("/") ? (podText.split("/", 2) as [string, string]) : ["", ""];
 
   const podKnown = pods.includes(podText); // false until the pod list has it

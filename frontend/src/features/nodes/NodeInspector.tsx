@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { sameItems, usePodSelector } from "@/data/podStore";
 import { Check, Copy, Droplet, Filter, Lock, Server, X } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import type { Cluster } from "@/data/types";
@@ -32,7 +33,7 @@ export function NodeInspector({
 }) {
   const ws = useWorkspace();
   const [copied, setCopied] = useState(false);
-  const pods = ws.allPods.filter((p) => p.cluster === node.cluster && p.node === node.name);
+  const pods = usePodSelector((rows) => rows.filter((p) => p.cluster === node.cluster && p.node === node.name), sameItems);
   const target = { env: node.env, protected: cluster?.protected ?? false, readOnly: cluster?.readOnly };
 
   return (

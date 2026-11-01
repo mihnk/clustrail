@@ -46,17 +46,19 @@ var (
 // Seq increases by one per frame and subscription; a client that sees a gap
 // asks for a resync.
 type Frame[R Row] struct {
-	T       string   `json:"t"`
-	Sub     string   `json:"sub"`
-	Seq     uint64   `json:"seq"`
-	Part    int      `json:"part,omitempty"`
-	Final   bool     `json:"final,omitempty"`
-	Rows    []R      `json:"rows,omitempty"`
-	Upserts []R      `json:"up,omitempty"`
-	Deletes []string `json:"del,omitempty"`
-	State   State    `json:"state,omitempty"`
-	Detail  string   `json:"detail,omitempty"`
-	Events  int      `json:"ev,omitempty"`
+	T       string `json:"t"`
+	Sub     string `json:"sub"`
+	Seq     uint64 `json:"seq"`
+	Part    int    `json:"part,omitempty"`
+	Final   bool   `json:"final,omitempty"`
+	Rows    []R    `json:"rows,omitempty"`
+	Upserts []R    `json:"up,omitempty"`
+	// Patches: changed fields of rows the client has, merged into them ({"id": …, field: value}).
+	Patches []map[string]any `json:"ch,omitempty"`
+	Deletes []string         `json:"del,omitempty"`
+	State   State            `json:"state,omitempty"`
+	Detail  string           `json:"detail,omitempty"`
+	Events  int              `json:"ev,omitempty"`
 	// Token identifies the frame in an ack (backend clock, opaque to the client).
 	Token int64 `json:"tok,omitempty"`
 }
@@ -298,11 +300,16 @@ func (s *sender[R]) encode(b Batch[R]) [][]byte {
 		s.tokens.put(tok, sent{at: now})
 		return out
 	}
-	if len(b.Upserts)+len(b.Deletes) == 0 {
+	if len(b.Upserts)+len(b.Patches)+len(b.Deletes) == 0 {
 		add(Frame[R]{T: "state", State: b.State, Detail: b.Detail})
 		return out
 	}
-	s.stats.Size.Add(float64(len(b.Upserts) + len(b.Deletes)))
+	s.stats.Size.Add(float64(len(b.Upserts) + len(b.Patches) + len(b.Deletes)))
+	s.stats.Patches.Add(int64(len(b.Patches)))
+	patches := make([]map[string]any, len(b.Patches))
+	for i, p := range b.Patches {
+		patches[i] = any(p.Row).(Patchable[R]).Patch(p.Fields)
+	}
 	// Large batches go out in frames of at most SnapshotChunk changes, deletes
 	// first, so no frame is huge; the last carries the token and the state.
 	ups, dels := b.Upserts, b.Deletes
@@ -312,7 +319,9 @@ func (s *sender[R]) encode(b Batch[R]) [][]byte {
 		f.Deletes, dels = dels[:n], dels[n:]
 		m := min(len(ups), SnapshotChunk-n)
 		f.Upserts, ups = ups[:m], ups[m:]
-		if len(ups) == 0 && len(dels) == 0 {
+		k := min(len(patches), SnapshotChunk-n-m)
+		f.Patches, patches = patches[:k], patches[k:]
+		if len(ups) == 0 && len(dels) == 0 && len(patches) == 0 {
 			f.Token = tok
 			if b.StateDirty {
 				f.State, f.Detail = b.State, b.Detail

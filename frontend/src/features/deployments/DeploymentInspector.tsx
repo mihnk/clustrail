@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { sameItems, usePodSelector } from "@/data/podStore";
 import { Activity, Box, Diff, GitBranch, Layers, Lock, Minus, Plus, ScrollText, X } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import type { Cluster, DeploymentRow, PodRelation } from "@/data/types";
@@ -48,8 +49,9 @@ export function DeploymentInspector({
 }) {
   const ws = useWorkspace();
   const { confirm } = useConfirm();
-  const pods = ws.allPods.filter(
-    (p) => p.cluster === d.cluster && p.namespace === d.namespace && p.owner?.kind === "ReplicaSet" && p.owner.name.startsWith(`${d.name}-`),
+  const pods = usePodSelector(
+    (rows) => rows.filter((p) => p.cluster === d.cluster && p.namespace === d.namespace && p.owner?.kind === "ReplicaSet" && p.owner.name.startsWith(`${d.name}-`)),
+    sameItems,
   );
   const target = { env: d.env, protected: cluster?.protected ?? false, readOnly: cluster?.readOnly };
 

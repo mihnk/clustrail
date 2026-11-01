@@ -2,6 +2,7 @@
 // deltas) and every mutation is a backend call. The UI follows the resulting
 // watch events instead of patching rows itself.
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { podStore } from "@/data/podStore";
 import { jobResultToast, trackJob } from "./jobs";
 import { backend, errorText, EVENTS, onEvent, type ClusterList, type Delta, type JobEvent } from "@/backend/client";
 import { podStream } from "@/backend/podStream";
@@ -38,7 +39,6 @@ export function applyDelta<T extends Row>(rows: T[], d: Delta): T[] {
 interface Args {
   toast: ReturnType<typeof useToast>;
   clusters: Cluster[];
-  allPods: PodRow[];
   deployments: DeploymentRow[];
   nodes: NodeRow[];
   helmReleases: HelmRelease[];
@@ -192,7 +192,7 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
   const actions = useMemo<DesktopActions | null>(() => {
     if (!backend) return null;
     const api = backend;
-    const pod = (id: string) => a.allPods.find((p) => p.id === id);
+    const pod = (id: string) => podStore.get().find((p) => p.id === id);
     const dep = (id: string) => a.deployments.find((d) => d.id === id);
     const done = (title: string, target: string, env?: Cluster["env"]) => () => toast.show({ kind: "success", title: t(title), target, env });
     return {
@@ -269,7 +269,7 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
       },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a is a new object every render: the actions read only the fields listed here, and setSelectedClusterIds, a state setter
-  }, [a.allPods, a.deployments, a.nodes, a.helmReleases, a.gitops, a.clusters, a.selectedClusterIds, toast, fail]);
+  }, [a.deployments, a.nodes, a.helmReleases, a.gitops, a.clusters, a.selectedClusterIds, toast, fail]);
 
   return { actions, meta };
 }

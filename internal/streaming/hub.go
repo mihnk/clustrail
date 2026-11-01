@@ -17,6 +17,20 @@ import (
 // Row is a table projection with a stable identity.
 type Row interface{ RowID() string }
 
+// Patchable rows go out as their changed fields only when a row the client
+// already has changes (issue C6): an update of one pod's CPU is about 50
+// bytes instead of 400, and the client merges it into the row it has.
+// New rows, re-created rows and snapshots are sent whole.
+type Patchable[R any] interface {
+	// ChangedFields lists the JSON fields that differ from old.
+	ChangedFields(old R) []string
+	// Patch is the row's id and the given fields' current values, by JSON name.
+	Patch(fields []string) map[string]any
+}
+
+// maxPatchFields: a change of more fields than this is sent as the whole row.
+const maxPatchFields = 8
+
 // Key identifies one subscription scope. Consumers with equal keys share a source.
 type Key struct {
 	Cluster   string `json:"cluster"`
@@ -200,11 +214,43 @@ func (t *topic[R]) Upsert(r R) {
 	now := time.Now()
 	id := r.RowID()
 	t.mu.Lock()
+	old, had := t.rows[id]
+	var changed []string
+	patchable := false
+	if had {
+		if p, ok := any(r).(Patchable[R]); ok {
+			changed, patchable = p.ChangedFields(old), true
+		}
+	}
 	t.rows[id] = r
+	if patchable && len(changed) == 0 {
+		// Nothing a client shows changed: nothing to send.
+		t.mu.Unlock()
+		return
+	}
 	for c := range t.consumers {
 		c.mu.Lock()
 		if !c.snapshot {
-			c.pending[id] = op[R]{row: r}
+			prev, pending := c.pending[id]
+			switch {
+			case !patchable:
+				c.pending[id] = op[R]{row: r}
+			case pending && (prev.del || prev.fields == nil):
+				// A whole row (or a delete then a re-create) is waiting: it goes whole.
+				c.pending[id] = op[R]{row: r}
+			case pending:
+				for _, f := range changed {
+					prev.fields[f] = struct{}{}
+				}
+				prev.row = r
+				c.pending[id] = prev
+			default:
+				fields := make(map[string]struct{}, len(changed))
+				for _, f := range changed {
+					fields[f] = struct{}{}
+				}
+				c.pending[id] = op[R]{row: r, fields: fields}
+			}
 			c.events++
 			c.mark(now)
 			t.overflow(c)
@@ -254,6 +300,14 @@ func (t *topic[R]) SetState(s State, detail string) {
 type op[R Row] struct {
 	row R
 	del bool
+	// fields: the changed fields when the client has the row; nil sends it whole.
+	fields map[string]struct{}
+}
+
+// Patched is a row to send as some of its fields.
+type Patched[R Row] struct {
+	Row    R
+	Fields []string
 }
 
 // Consumer is one subscriber's view of a topic: changes not yet sent,
@@ -313,6 +367,7 @@ type Batch[R Row] struct {
 	Snapshot   bool
 	Rows       []R // snapshot rows
 	Upserts    []R
+	Patches    []Patched[R]
 	Deletes    []string
 	State      State
 	Detail     string
@@ -322,7 +377,7 @@ type Batch[R Row] struct {
 }
 
 func (b *Batch[R]) Empty() bool {
-	return !b.Snapshot && !b.StateDirty && len(b.Upserts) == 0 && len(b.Deletes) == 0
+	return !b.Snapshot && !b.StateDirty && len(b.Upserts) == 0 && len(b.Patches) == 0 && len(b.Deletes) == 0
 }
 
 // Take removes everything pending and returns it as one batch.
@@ -344,9 +399,16 @@ func (c *Consumer[R]) Take() Batch[R] {
 		return b
 	}
 	for id, o := range pending {
-		if o.del {
+		switch {
+		case o.del:
 			b.Deletes = append(b.Deletes, id)
-		} else {
+		case o.fields != nil && len(o.fields) <= maxPatchFields:
+			fields := make([]string, 0, len(o.fields))
+			for f := range o.fields {
+				fields = append(fields, f)
+			}
+			b.Patches = append(b.Patches, Patched[R]{Row: o.row, Fields: fields})
+		default:
 			b.Upserts = append(b.Upserts, o.row)
 		}
 	}
@@ -365,6 +427,25 @@ func (c *Consumer[R]) Return(b Batch[R]) {
 			if _, newer := c.pending[r.RowID()]; !newer {
 				c.pending[r.RowID()] = op[R]{row: r}
 			}
+		}
+		for _, p := range b.Patches {
+			id := p.Row.RowID()
+			newer, has := c.pending[id]
+			switch {
+			case !has:
+				fields := make(map[string]struct{}, len(p.Fields))
+				for _, f := range p.Fields {
+					fields[f] = struct{}{}
+				}
+				c.pending[id] = op[R]{row: p.Row, fields: fields}
+			case newer.fields != nil:
+				// A newer patch: it keeps its row, and the returned fields go with it.
+				for _, f := range p.Fields {
+					newer.fields[f] = struct{}{}
+				}
+				c.pending[id] = newer
+			}
+			// A newer whole row or delete covers the returned patch.
 		}
 		for _, id := range b.Deletes {
 			if _, newer := c.pending[id]; !newer {

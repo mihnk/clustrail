@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { countRender } from "@/lib/renderCount";
 import {
   ArrowLeftRight,
   Box,
@@ -50,6 +51,7 @@ import { useOverlays } from "@/app/shortcuts";
 import { t as tt } from "@/i18n";
 
 export function WindowToolbar() {
+  countRender("toolbar");
   const { openPalette } = useOverlays();
   return (
     <header

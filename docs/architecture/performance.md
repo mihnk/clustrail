@@ -33,8 +33,10 @@ Measured numbers are in [`docs/benchmarks/m0-results.md`](../benchmarks/m0-resul
    notify at most once per animation frame, and no sooner than the last
    render took (adaptive pacing)
                                  ▼
- store (allPods) → PodsWorkspace: filter → incremental sort → cached row
- model → virtualized ResourceTable (≈30–40 DOM rows) → ack after paint
+ data/podStore.ts (external store; components subscribe to what they show)
+   → PodsWorkspace (only while its tab is in front): view.ts filter (cached
+   per row object) → incremental sort → cached row model → virtualized
+   ResourceTable (fixed heights, ≈30–40 DOM rows) → ack after paint
 ```
 
 ### Why each stage looks the way it does
@@ -94,11 +96,88 @@ Process numbers come from `internal/diagnostics` (heap, GC, goroutines, CPU via 
 - The log records subscribe/close events at debug level (`CLUSTRAIL_DEBUG=1`) with cluster and scope only, never row contents or credentials.
 - RBAC: a scope this identity may not list reports `disconnected` with the reason instead of failing silently.
 
+## Frontend store and update cost (C1, C8, C6)
+
+- **External pod store** (`data/podStore.ts`). Pods are no longer in the
+  workspace context, so a pod frame no longer re-renders every component
+  that reads the workspace. Components subscribe to what they show:
+  - the sidebar to two counts;
+  - an inspector to its pod's list;
+  - the Pods table to its rows, and only while its tab is in front.
+
+  A hidden view keeps the rows it had until it is shown again.
+  `e2e/render-isolation.spec.ts` checks that 20 frames changing a pod's CPU
+  render neither the sidebar, nor the tab strip, nor the Deployments view.
+- **Incremental filter** (`features/pods/view.ts`). The filter's answer is
+  cached per row object, and the sort merges only the new rows.
+  `view.test.ts` checks random sequences of creates, updates, deletes,
+  sort changes and query changes against a full recompute after every
+  step.
+- **Stable table layout.** Rows and group headers have fixed heights. The
+  virtualizer's options now change only with the item count or the group
+  layout, not with every data change. Keyboard positions come from the
+  few header positions instead of an array over all rows.
+- **Patches on the stream.** A change to a pod the window already has goes
+  out as its changed fields (`Patchable` in `internal/streaming`). For
+  1,000 pod updates (`BenchmarkPodDelta`):
+  - JSON size drops from 407 to 70 bytes per change;
+  - Go encoding takes 1.32 ms instead of 2.31 ms;
+  - parsing and merging in the page takes about 0.6 ms instead of 2.4 ms.
+
+  Shortening the keys was measured too and not adopted. It saved 25 % of
+  the bytes but made parsing 30 % slower, because each row needs its keys
+  mapped back.
+
+Measured in Chromium (`e2e/storm.spec.ts`): a storm of 1,000 changes/s for
+10 s, about 490 frames rendered, before and after these changes. The fake
+transport sends whole rows, so the patch savings are not in these numbers.
+
+| Pods | View in front | Receive → paint p50 / p95 | Script time in 10 s |
+|---|---|---|---|
+| 10,000 | Pods, before | 48 / 73 ms | 5.19 s |
+| 10,000 | Pods, after | 28 / 53 ms | 4.63 s |
+| 10,000 | another view, before | 60 / 82 ms | 5.03 s |
+| 10,000 | another view, after | 24 / 36 ms | 1.25 s |
+| 50,000 | Pods, before | 176 / 252 ms | 5.35 s |
+| 50,000 | Pods, after | 130 / 187 ms | 5.23 s |
+| 50,000 | another view, before | 224 / 323 ms | 5.55 s |
+| 50,000 | another view, after | 22 / 36 ms | 3.88 s |
+
+Rendering is paced: the next render waits as long as the last one took. A
+cheaper render therefore shows up as lower latency and more headroom, not
+always as less script time.
+
+### C2: sorting and filtering in the backend (decision)
+
+With the Pods table in front, 50,000 pods still take 130 ms from receive to
+paint, against 48 ms for 10,000 pods before. The remaining cost is a few
+linear passes per render, all over plain arrays: selecting the clusters'
+pods, the filter loop, the sort merge, and the row model. The goal
+"50k performs like 10k did" is not met yet.
+
+Moving the query to the backend (Go keeps the indexes; the window receives
+only the visible rows and the counts) would remove those passes and most
+of the WebView's row memory. It also changes everything that reads the
+full pod list in the page today:
+- counts in the sidebar;
+- node and Deployment inspectors;
+- the palette;
+- the log source picker;
+- the Clusters overview.
+
+The alternative is a Web Worker. It keeps the page's model but does not
+reduce memory.
+
+Next step: a backend query subscription for the Pods table only. Every
+other reader moves to a counts or by-owner topic on the same hub. Measure
+it with `e2e/storm.spec.ts` at 50k, and WebKit memory with
+`hack/bench.sh`. Until then the issue stays open.
+
 ## Known bottlenecks
 
 See the results page for numbers. In order of impact:
 
-1. **UI update cost still scales with visible-scope rows.** Each update re-runs filter, sort merge, row-model loop and virtualizer measurement over all rows: about 170 ms at 50k in Chromium and more in WebKitGTK without a GPU. Next step: keep filtered and sorted indexes incrementally in the store (apply deltas to the sorted array instead of rebuilding it), and give the virtualizer fixed row heights so it skips per-item measurement.
+1. **UI update cost still scales with visible-scope rows** while the Pods table is in front: about 130 ms at 50k in Chromium (see the C2 decision above), more in WebKitGTK without a GPU. Other views no longer pay it.
 2. **WebKitGTK under Xvfb renders in software.** The native numbers here are a floor, not what a GPU-backed WebKit on macOS shows. macOS (WKWebView) and Windows (WebView2) were not measured.
-3. **JSON over the HTTP poll transport.** Snapshot encode and parse are linear and fine at 50k (≈120 ms in Go). Above that, a binary or columnar encoding would help.
+3. **JSON over the HTTP poll transport.** Updates now go as patches (70 bytes per change). Snapshots are still whole rows, linear and fine at 50k (≈120 ms in Go).
 4. **The hub keeps a full row copy per topic** (≈380 B per pod, 18 MB at 50k) besides the informer cache. Building rows on demand from the informer would halve that.

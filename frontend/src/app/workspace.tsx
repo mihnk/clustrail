@@ -1,3 +1,4 @@
+import { podStore, usePodSelector } from "@/data/podStore";
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   clusters as initialClusters,
@@ -139,10 +140,12 @@ export interface WorkspaceState {
   setSelectedClusterIds: (ids: string[]) => void;
   toggleCluster: (id: string, selected: boolean) => void;
   selectedClusters: Cluster[];
-  /** Pods from the selected clusters. Filtering by view happens per tab. */
-  pods: PodRow[];
-  /** Pods from every connected cluster, for per-cluster counts. */
-  allPods: PodRow[];
+  /**
+   * Which pods the selected clusters show (pods themselves are in
+   * data/podStore.ts: useSelectedPods / useAllPods). Changes only with the
+   * selection or the clusters, never with a pod frame.
+   */
+  podScope: PodScope;
   deployments: DeploymentRow[];
   nodes: NodeRow[];
 
@@ -221,6 +224,38 @@ export const SYSTEM_NAMESPACES = ["kube-system", "kube-public", "kube-node-lease
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
+const setAllPods = podStore.set;
+
+/** The selected clusters' view of the pods (see useSelectedPods). */
+export interface PodScope {
+  selected: ReadonlySet<string>;
+  hideSystem: boolean;
+  noMetrics: ReadonlySet<string>;
+}
+
+/** Pods of the selected clusters, as the views show them. */
+export function selectPods(all: readonly PodRow[], scope: PodScope): PodRow[] {
+  return all
+    .filter((p) => scope.selected.has(p.cluster) && !(scope.hideSystem && SYSTEM_NAMESPACES.includes(p.namespace)))
+    // Without metrics.k8s.io there is no usage: never show 0, show nothing.
+    .map((p) => (scope.noMetrics.has(p.cluster) ? withoutUsage(p) : p));
+}
+
+/**
+ * Pods from the selected clusters; filtering by view happens per tab.
+ * Re-renders with pod changes while live; a hidden tab passes live = false
+ * and keeps the rows it had, so pod frames cost it nothing until it is shown.
+ */
+export function useSelectedPods(live = true): PodRow[] {
+  const { podScope } = useWorkspace();
+  const last = useRef<PodRow[]>(NO_PODS);
+  const all = usePodSelector((rows) => (live ? rows : last.current));
+  if (live) last.current = all;
+  return useMemo(() => selectPods(all, podScope), [all, podScope]);
+}
+
+const NO_PODS: PodRow[] = [];
+
 const initialTabs: WorkspaceTab[] = [
   { id: "pods", kind: "pods", title: tt("Pods") },
   resourceTab("prod-eu-west-1", "Deployment", "payments", "checkout-api"),
@@ -268,7 +303,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     desktop ? [] : initialSelectedClusters,
   );
   const [clusters, setClusters] = useState<Cluster[]>(desktop ? [] : initialClusters);
-  const [allPods, setAllPods] = useState<PodRow[]>(desktop ? [] : initialPods);
+  // Pods are in an external store; the mock starts with its own (data/podStore.ts).
+  useState(() => {
+    if (!desktop) podStore.set(initialPods);
+    return null;
+  });
   const [deployments, setDeployments] = useState<DeploymentRow[]>(desktop ? [] : initialDeployments);
   const [nodes, setNodes] = useState<NodeRow[]>(desktop ? [] : initialNodes);
   const [helmReleases, setHelmReleases] = useState<HelmRelease[]>(desktop ? [] : initialReleases);
@@ -399,7 +438,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const deletePod = useCallback(
     (id: string) => {
-      const pod = allPods.find((p) => p.id === id);
+      const pod = podStore.get().find((p) => p.id === id);
       setAllPods((ps) =>
         ps.map((p) => (p.id === id ? { ...p, health: "terminating", status: "Terminating", reason: tt("Terminating (deleted)") } : p)),
       );
@@ -430,7 +469,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }),
       );
     },
-    [allPods, later, toast],
+    [later, toast],
   );
 
   const restartDeployment = useCallback(
@@ -735,7 +774,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const desktopState = useDesktopWorkspace({
     toast,
     clusters,
-    allPods,
     deployments,
     nodes,
     helmReleases,
@@ -751,10 +789,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSelectedClusterIds,
   });
 
+  // Content-stable: a probe that changes a cluster's latency does not change which pods show.
+  const selectedKey = [...selectedClusterIds].sort().join("\n");
+  const noMetricsKey = clusters
+    .filter((c) => c.metrics === null)
+    .map((c) => c.id)
+    .sort()
+    .join("\n");
+  const podScope = useMemo<PodScope>(
+    () => ({
+      selected: new Set(selectedKey ? selectedKey.split("\n") : []),
+      hideSystem: hideSystemNamespaces,
+      noMetrics: new Set(noMetricsKey ? noMetricsKey.split("\n") : []),
+    }),
+    [selectedKey, hideSystemNamespaces, noMetricsKey],
+  );
+
   const value = useMemo<WorkspaceState>(() => {
     const selected = new Set(selectedClusterIds);
     const clusterById = (id: string) => clusters.find((c) => c.id === id);
-    const noMetrics = new Set(clusters.filter((c) => c.metrics === null).map((c) => c.id));
     const openTab = (id: string) => {
       if (!tabs.some((t) => t.id === id)) return false;
       setActiveTabId(id);
@@ -799,11 +852,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setSelectedClusterIds(on ? [...new Set([...selectedClusterIds, id])] : selectedClusterIds.filter((c) => c !== id)),
       // Keep the sidebar order (environment groups) regardless of selection order.
       selectedClusters: clusters.filter((c) => selected.has(c.id)),
-      pods: allPods
-        .filter((p) => selected.has(p.cluster) && !(hideSystemNamespaces && SYSTEM_NAMESPACES.includes(p.namespace)))
-        // Without metrics.k8s.io there is no usage: never show 0, show nothing.
-        .map((p) => (noMetrics.has(p.cluster) ? withoutUsage(p) : p)),
-      allPods,
+      podScope,
       deployments,
       nodes,
       setNodeCordoned,
@@ -906,13 +955,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     theme,
     themePreference,
     setTheme,
-    hideSystemNamespaces,
     density,
     setDensity,
     selectedClusterIds,
     setSelectedClusterIds,
     clusters,
-    allPods,
+    podScope,
     deployments,
     nodes,
     setNodeCordoned,

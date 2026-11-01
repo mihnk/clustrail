@@ -14,11 +14,10 @@ import type { PodRow } from "@/data/types";
 import { FilterToken, RemovableFilterToken } from "@/components/ui/filter-token";
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { useNamespaceFilter } from "@/app/namespaceFilter";
-import { useWorkspace } from "@/app/workspace";
+import { useSelectedPods, useWorkspace } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
 import { usePodDetail } from "@/backend/hooks";
 import { backend } from "@/backend/client";
-import { isAttention } from "@/data/health";
 import { ResourceTable } from "@/components/resource-table/ResourceTable";
 import { Button, IconButton } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -40,16 +39,16 @@ import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
 import { podColumns } from "./columns";
-import { matchesFilter, matchesLabel, parseFilter } from "./filter";
 import { PodInspector, type InspectorTab } from "./PodInspector";
 import { resourceTab } from "@/features/resources/kinds";
 import { deploymentNameOf, podActions } from "./actions";
-import { podSorter } from "./sort";
+import { useThrottled } from "@/lib/useThrottled";
+import { podView, type HealthFilter, type OwnerFilter } from "./view";
+
+const staleCopies = new WeakMap<object, PodRow & { staleSeconds: number }>();
 import { cachedCoreRowModel } from "@/lib/rowModel";
 import { t as tt, tn } from "@/i18n";
 
-type HealthFilter = "all" | "attention";
-type OwnerFilter = "any" | "ReplicaSet" | "StatefulSet" | "Job" | "none";
 type ClusterView = "aggregated" | "by-cluster";
 
 /** Label pairs offered under "+ Filter"; anything else is typed as label:key=value. */
@@ -60,8 +59,8 @@ const BAR = "bg-surface-panel dark:bg-transparent";
 
 
 export function PodsWorkspace({ active }: { active: boolean }) {
+  const allPods = useSelectedPods(active);
   const {
-    pods: allPods,
     selectedClusters,
     clusterById,
     density,
@@ -88,7 +87,14 @@ export function PodsWorkspace({ active }: { active: boolean }) {
       if (!c || c.connection === "connecting") continue;
       if (c.connection === "reconnecting" && c.stale) {
         const age = Math.round((Date.now() - c.stale.since) / 1000);
-        out.push({ ...p, health: "unknown" as const, status: `${p.status}?`, reason: tt("Last update {age}s ago", { age }), staleSeconds: age });
+        // One copy per pod and age: copies made on every frame would look like changed rows downstream.
+        const kept = staleCopies.get(p);
+        if (kept && kept.staleSeconds === age) out.push(kept);
+        else {
+          const copy = { ...p, health: "unknown" as const, status: `${p.status}?`, reason: tt("Last update {age}s ago", { age }), staleSeconds: age };
+          staleCopies.set(p, copy);
+          out.push(copy);
+        }
       } else out.push(p);
     }
     return out;
@@ -111,40 +117,35 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   const [autoHidden, setAutoHidden] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // The namespace and label menus count pods: at most once a second, not on every frame.
+  const podsForMenus = useThrottled(pods, 1000);
   const allNamespaces = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const p of pods) counts.set(p.namespace, (counts.get(p.namespace) ?? 0) + 1);
+    for (const p of podsForMenus) counts.set(p.namespace, (counts.get(p.namespace) ?? 0) + 1);
     return [...counts].sort(([a], [b]) => a.localeCompare(b));
-  }, [pods]);
+  }, [podsForMenus]);
 
   const labelSuggestions = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const p of pods) {
+    for (const p of podsForMenus) {
       for (const k of SUGGESTED_LABEL_KEYS) {
         const v = p.labels[k];
         if (v !== undefined) counts.set(`${k}=${v}`, (counts.get(`${k}=${v}`) ?? 0) + 1);
       }
     }
     return [...counts].sort(([a], [b]) => a.localeCompare(b));
-  }, [pods]);
+  }, [podsForMenus]);
 
-  // Everything except the health segment, so its counts stay meaningful.
-  const baseRows = useMemo(() => {
-    const f = parseFilter(deferredQuery);
-    return pods.filter(
-      (p) =>
-        (namespaces === null || namespaces.has(p.namespace)) &&
-        (owner === "any" || (owner === "none" ? p.owner === null : p.owner?.kind === owner)) &&
-        labelFilters.every((l) => matchesLabel(p.labels, l)) &&
-        matchesFilter(p, f),
-    );
-  }, [pods, namespaces, owner, labelFilters, deferredQuery]);
-  const filtered = deferredQuery.trim() !== "" || namespaces !== null || owner !== "any" || labelFilters.length > 0;
-  const attentionCount = useMemo(() => baseRows.filter((p) => isAttention(p.health)).length, [baseRows]);
-  const rows = useMemo(
-    () => (health === "attention" ? baseRows.filter((p) => isAttention(p.health)) : baseRows),
-    [baseRows, health],
+  // Filtered and sorted with memory (view.ts): a watch batch tests and sorts only the rows it changed.
+  const podViewOf = useMemo(podView, []);
+  const result = useMemo(
+    () => podViewOf(pods, { text: deferredQuery, namespaces, owner, labels: labelFilters, health }, sorting),
+    [podViewOf, pods, deferredQuery, namespaces, owner, labelFilters, health, sorting],
   );
+  const baseRows = result.base;
+  const filtered = deferredQuery.trim() !== "" || namespaces !== null || owner !== "any" || labelFilters.length > 0;
+  const attentionCount = result.attention;
+  const rows = result.rows;
 
   // Aggregated: the Node column gives way to the inspector. By cluster: the
   // group header names the cluster, so Node takes the Cluster column's place.
@@ -157,9 +158,8 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     [userColumns, inspectorOpen, grouped],
   );
 
-  // Sorted here, not by TanStack (see sort.ts); TanStack keeps the header state.
-  const sorter = useMemo(podSorter, []);
-  const sortedRows = useMemo(() => sorter(rows, sorting), [sorter, rows, sorting]);
+  // Sorted in view.ts, not by TanStack (see sort.ts); TanStack keeps the header state.
+  const sortedRows = result.sorted;
   const table = useReactTable({
     data: sortedRows,
     columns: podColumns,

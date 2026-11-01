@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { countRender } from "@/lib/renderCount";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { ChevronDown, Columns3, Layers, Plus, Search, SearchX } from "lucide-react";
 import { useNamespaceFilter } from "@/app/namespaceFilter";
@@ -92,6 +93,7 @@ export function useDeploymentDeps(nav: DeploymentNav) {
 }
 
 export function DeploymentsWorkspace({ cluster, namespace, active }: { cluster: string; namespace: string; active: boolean }) {
+  countRender("deployments");
   return cluster ? <ScopedDeployments cluster={cluster} namespace={namespace} /> : <DeploymentsExplorer active={active} />;
 }
 

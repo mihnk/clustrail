@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePodSelector } from "@/data/podStore";
+import type { PodRow } from "@/data/types";
+
+const NO_PODS: PodRow[] = [];
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { ArrowLeftRight, Box, KeyRound, Layers, Lock, Network, Search } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
@@ -46,7 +50,9 @@ const selectable = (c: Cluster) => c.connection !== "auth-expired" && c.connecti
  */
 export function ClustersWorkspace({ active }: { active: boolean }) {
   const ws = useWorkspace();
-  const { clusters, selectedClusterIds, setSelectedClusterIds, allPods, connectCluster, openView, reveal } = ws;
+  const { clusters, selectedClusterIds, setSelectedClusterIds, connectCluster, openView, reveal } = ws;
+  // Subscribed only while the tab is visible: hidden, pod frames do not render it.
+  const allPods = usePodSelector((rows) => (active ? rows : NO_PODS));
   const [show, setShow] = useState<"all" | "selected">("all");
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState<"all" | Environment>("all");

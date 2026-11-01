@@ -73,6 +73,21 @@ describe("podStream", () => {
     expect(seen.at(-1)).toBe(3);
   });
 
+  it("merges changed fields into the row it has, and resyncs on a change to a row it lacks", async () => {
+    const { podStream, s, sub, frame } = await fresh();
+    frame({ t: "snap", seq: 1, final: true, rows: [row("a", { restarts: 1, cpuMilli: 10 } as Partial<PodRow>), row("b")] });
+    flushFrames();
+    const before = podStream.rows().find((r) => r.name === "b");
+    frame({ t: "delta", seq: 2, ch: [{ id: "c1/ns/a", restarts: 2, cpuMilli: 15 }] });
+    flushFrames();
+    const a = podStream.rows().find((r) => r.name === "a")!;
+    expect(a).toMatchObject({ name: "a", status: "Running", restarts: 2, cpuMilli: 15 });
+    // The untouched row keeps its identity.
+    expect(podStream.rows().find((r) => r.name === "b")).toBe(before);
+    frame({ t: "delta", seq: 3, ch: [{ id: "c1/ns/zz", restarts: 9 }] });
+    expect(s.sent.at(-1)).toEqual({ op: "resync", sub });
+  });
+
   it("asks for a fresh snapshot when a frame is missing, and ignores what follows until it comes", async () => {
     const { podStream, s, sub, frame } = await fresh();
     frame({ t: "snap", seq: 1, final: true, rows: [row("a")] });

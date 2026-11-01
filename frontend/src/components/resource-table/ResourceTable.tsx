@@ -11,6 +11,7 @@ import {
   type ResourceAction,
 } from "@/components/resource-actions/ResourceActions";
 import { cn } from "@/lib/cn";
+import { useContentStable } from "@/lib/useContentStable";
 import { matchesShortcut } from "@/lib/shortcuts";
 import { t } from "@/i18n";
 
@@ -30,6 +31,8 @@ declare module "@tanstack/react-table" {
 
 const OVERSCAN = 12;
 const GROUP_HEIGHT = 32;
+
+const NO_HEADERS: number[] = [];
 
 export interface ResourceTableGrouping<T> {
   /** Group keys in display order. Groups without rows still show their header. */
@@ -158,39 +161,49 @@ export function ResourceTable<T>({
     });
   }, [rows, grouping]);
 
-  // Keyboard navigation moves between rows only, skipping group headers.
-  const rowPositions = useMemo(() => items.flatMap((it, i) => (it.kind === "row" ? [i] : [])), [items]);
-
-  // Stable between renders: the virtualizer recomputes every item's position
-  // when these change, which must happen per data change, not per scroll frame.
-  const estimateSize = useCallback((i: number) => (items[i]?.kind === "group" ? GROUP_HEIGHT : rowHeight), [items, rowHeight]);
-  const getItemKey = useCallback(
-    (i: number) => {
-      const it = items[i];
-      return it ? (it.kind === "group" ? `group:${it.key}` : it.row.id) : i;
-    },
-    [items],
-  );
-  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scrollRef.current, estimateSize, overscan: OVERSCAN, getItemKey });
+  // Rows and group headers have fixed heights, so positions depend only on
+  // the item count and where the headers are (issue C8). The virtualizer
+  // recomputes every item's position whenever its options change; before,
+  // they changed with every data change (a key function over the items), so
+  // each watch batch cost a pass over all rows. Now a batch that changes row
+  // contents leaves the layout alone. React keys come from the rows in view.
+  const headerAt = useContentStable(grouping ? items.flatMap((it, i) => (it.kind === "group" ? [i] : [])) : NO_HEADERS);
+  const headers = useMemo(() => new Set(headerAt), [headerAt]);
+  const estimateSize = useCallback((i: number) => (headers.has(i) ? GROUP_HEIGHT : rowHeight), [headers, rowHeight]);
+  const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scrollRef.current, estimateSize, overscan: OVERSCAN });
   const grouped = grouping !== undefined;
   useLayoutEffect(() => virtualizer.measure(), [rowHeight, grouped, virtualizer]);
 
+  // Keyboard navigation moves between rows only, skipping group headers. A
+  // row's position is its item index less the headers before it; nothing is
+  // built per data change (headerAt is sorted and holds a few entries).
+  const rowCount = items.length - headerAt.length;
+  const itemOfPos = (pos: number) => {
+    let i = pos;
+    for (const h of headerAt) {
+      if (h <= i) i++;
+      else break;
+    }
+    return i;
+  };
+  const posOfItem = (i: number) => (i < 0 ? -1 : i - headerAt.filter((h) => h < i).length);
+  // Found only when there is a selection, and only when the rows change.
   const selectedItem = useMemo(
     () => (selectedId === null ? -1 : items.findIndex((it) => it.kind === "row" && it.row.id === selectedId)),
     [items, selectedId],
   );
-  const selectedPos = useMemo(() => rowPositions.indexOf(selectedItem), [rowPositions, selectedItem]);
+  const selectedPos = posOfItem(selectedItem);
 
   const moveTo = (pos: number) => {
-    const p = Math.max(0, Math.min(rowPositions.length - 1, pos));
-    const itemIndex = rowPositions[p];
-    const it = itemIndex === undefined ? undefined : items[itemIndex];
+    const p = Math.max(0, Math.min(rowCount - 1, pos));
+    const itemIndex = itemOfPos(p);
+    const it = items[itemIndex];
     if (!it || it.kind !== "row") return;
     onSelect(it.row.id);
-    virtualizer.scrollToIndex(itemIndex!, { align: "auto" });
+    virtualizer.scrollToIndex(itemIndex, { align: "auto" });
   };
 
-  const rowIds = () => rowPositions.map((i) => (items[i] as { row: Row<T> }).row.id);
+  const rowIds = () => items.flatMap((it) => (it.kind === "row" ? [it.row.id] : []));
   // Row callbacks through a ref: rows stay memoized while these change identity every render.
   const live = useRef({ onSelect, onOpen, toggleChecked: (_: string) => {}, checkRange: (_: string) => {} });
   const toggleChecked = (id: string) => {
@@ -267,7 +280,7 @@ export function ResourceTable<T>({
         moveTo(0);
         break;
       case "End":
-        moveTo(rowPositions.length - 1);
+        moveTo(rowCount - 1);
         break;
       case "Enter":
         if (selectedId) onOpen?.(selectedId);
@@ -308,7 +321,7 @@ export function ResourceTable<T>({
           <div role="columnheader" className="flex items-center">
             <Checkbox
               aria-label={t("Select all rows")}
-              checked={checked.size === 0 ? false : checked.size >= rowPositions.length ? true : "indeterminate"}
+              checked={checked.size === 0 ? false : checked.size >= rowCount ? true : "indeterminate"}
               onCheckedChange={(on) => onCheckedChange(on ? new Set(rowIds()) : new Set())}
             />
           </div>
@@ -349,7 +362,7 @@ export function ResourceTable<T>({
                     const collapsed = grouping!.collapsed.has(it.key);
                     return (
                       <div
-                        key={v.key}
+                        key={`group:${it.key}`}
                         role="row"
                         aria-rowindex={v.index + 2}
                         className="absolute left-0 top-0 flex w-full items-center border-b border-line bg-surface-app"
@@ -379,7 +392,7 @@ export function ResourceTable<T>({
                   }
                   return (
                     <TableRow
-                      key={v.key}
+                      key={it.row.id}
                       row={it.row}
                       index={v.index}
                       start={v.start}

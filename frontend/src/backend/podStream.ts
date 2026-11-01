@@ -14,6 +14,8 @@ interface Frame {
   final?: boolean;
   rows?: PodRow[];
   up?: PodRow[];
+  /** Changed fields of rows the client has (with their id), merged into them. */
+  ch?: (Partial<PodRow> & { id: string })[];
   del?: string[];
   state?: StreamState;
   detail?: string;
@@ -135,10 +137,23 @@ class PodStream {
           if (sub.snapshotAt === null) sub.snapshotAt = at - sub.subscribedAt;
         }
         break;
-      case "delta":
+      case "delta": {
         for (const r of f.up ?? []) sub.rows.set(r.id, r);
+        let missing = false;
+        for (const c of f.ch ?? []) {
+          const cur = sub.rows.get(c.id);
+          // A new object: everything downstream sees the change by identity.
+          if (cur) sub.rows.set(c.id, { ...cur, ...c });
+          else missing = true;
+        }
         for (const id of f.del ?? []) sub.rows.delete(id);
+        // A change to a row this client does not have: its rows are out of step.
+        if (missing) {
+          this.metrics.gaps++;
+          this.send({ op: "resync", sub: sub.id });
+        }
         break;
+      }
       case "error":
         sub.rows = new Map();
         break;

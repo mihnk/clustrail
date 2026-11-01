@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { podStore } from "@/data/podStore";
 import {
   ArrowDown,
   ChevronDown,
@@ -111,7 +112,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
 
   const [maxPods] = usePersistentState("logs.maxPods", 30);
   // Desktop: what the stream follows; "Add source" appends, a source's × removes it. Mock: the checkout-api design.
-  const [specs, setSpecs] = useState<LogSourceSpec[]>(() => (backend ? initialSpecs(tab.params, tab.cluster, ws.allPods, ws.deployments) : []));
+  const [specs, setSpecs] = useState<LogSourceSpec[]>(() => (backend ? initialSpecs(tab.params, tab.cluster, podStore.get(), ws.deployments) : []));
   const specsKey = JSON.stringify(specs);
   const [followNew, setFollowNew] = useState(true);
   const [hideLeft, setHideLeft] = useState(false);

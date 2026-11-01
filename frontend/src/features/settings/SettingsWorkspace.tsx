@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { usePodSelector } from "@/data/podStore";
 import {
   Bell,
   ChevronDown,
@@ -153,9 +154,10 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
   const [checking, setChecking] = useState(false);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
 
+  const podCount = usePodSelector((rows) => rows.length);
   const cachedObjects = goMem
     ? Object.values(goMem.objects).reduce((a, b) => a + b, 0)
-    : ws.allPods.length + ws.deployments.length + ws.nodes.length + ws.helmReleases.length + ws.gitops.length;
+    : podCount + ws.deployments.length + ws.nodes.length + ws.helmReleases.length + ws.gitops.length;
   const heap = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize;
 
   useEffect(() => {
