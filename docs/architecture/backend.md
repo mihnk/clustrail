@@ -194,6 +194,24 @@ watchers, the probe, the node-shell sweep and the region lookup.
 The soak (`docs/benchmarks/soak.md`) checks that 200 connect/disconnect
 cycles leave no goroutine and no heap behind.
 
+## Crash and freeze reports
+
+`internal/app/crash.go` writes local reports in `crash/`, next to the log.
+Nothing is sent. Three things write one:
+
+- a Go panic that Clustrail recovered from (the hook in `kube.runSafe`);
+- a fatal crash: the runtime writes its output to `crash/fatal.txt`
+  (`debug.SetCrashOutput`), and the next start turns that into a report;
+- the window not answering for more than a second. A page timer that
+  should fire every 250 ms reports when it comes late, at most once a
+  minute.
+
+A report holds where it stopped, versions, a few settings and the last
+200 lines of Clustrail's own log. Cluster names, contexts, URLs, IP
+addresses, e-mail addresses and the home directory are replaced. A crash
+or panic is offered once at the next start. Settings › Privacy &
+diagnostics keeps the 20 newest, with Copy and Delete.
+
 ## Quiet mode
 
 `internal/kube/activity.go` keeps one state for the whole app: foreground or

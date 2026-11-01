@@ -32,6 +32,7 @@ var allowedReadOnly = []string{
 	"ResetDiagnostics", "LogClientError", "BenchConfig", "BenchWindow", "ReportBench", "SetSyntheticPaused", "PodChecksum", "CheckForUpdates",
 	"SetMetricsInterval", "SetCacheBudget", "SetUpdateMethod", "MemoryStats", "PauseWatches", "ResumeWatches",
 	"SetPageHidden", "SetPauseInBackground", "WatchWindow",
+	"ReportFreeze", "CrashReports", "PendingCrash", "AckCrash", "DeleteCrashReport", "RevealCrashReport",
 	// Clustrail's own settings and connections
 	"Clusters", "Snapshot", "Connect", "Disconnect", "HideCluster", "SetSelected", "AutoConnect", "ConfirmTarget",
 	"UpdateCluster", "AddCluster", "TestConnection", "Setup", "SetupTest", "PasteKubeconfig", "SkipSetup",

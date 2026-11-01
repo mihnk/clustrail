@@ -49,6 +49,7 @@ func (w *Workspace) ServiceStartup(ctx context.Context, _ application.ServiceOpt
 	}
 	w.m = kube.NewManager(ctx, store, eventEmitter{application.Get()})
 	w.m.SetAlertSink(w.alertSink)
+	w.installPanicReports()
 	w.startPods(ctx)
 	if u, err := user.Current(); err == nil {
 		w.user = u.Username

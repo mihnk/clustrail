@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useEffectEvent, useState } from "react";
+import { CrashOffer, useFreezeWatch } from "./crash";
 import { ViewErrorBoundary } from "@/components/ViewErrorBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
@@ -88,6 +89,7 @@ export function App() {
                 <AppShell setupSummary={summary} onSetupTipsClosed={() => setSummary(null)} />
               ) : null}
               <PortForwardHost />
+              <CrashOffer />
               <DebugHost />
             </ShortcutsProvider>
           </ConfirmationProvider>
@@ -107,6 +109,7 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
   const { theme, density, tabs, activeTabId, activeTab, clusterById } = ws;
   useBackendSync();
   useAlerts();
+  useFreezeWatch();
   // Development diagnostics (⌘⇧D) and the in-app benchmark runner (CLUSTRAIL_BENCH).
   const [diagnostics, setDiagnostics] = useState(false);
   // The benchmark opens Pods with the workspace as it is then, not as it was at startup.

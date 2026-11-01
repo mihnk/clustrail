@@ -37,7 +37,7 @@ import {
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { Logo } from "@/components/shell/Logo";
 import { cn } from "@/lib/cn";
-import { backend, backendInfo, errorText } from "@/backend/client";
+import { backend, backendInfo, errorText, type CrashReport } from "@/backend/client";
 import { LANGUAGE_PREFERENCE, locale, t as tt, tn, type LanguageSetting } from "@/i18n";
 import { SETUP_EVENT } from "@/features/setup/api";
 import { everyWhileVisible } from "@/lib/everyWhileVisible";
@@ -48,7 +48,6 @@ import { NotificationsSection } from "./NotificationsSection";
 export const APP_VERSION = "0.9.0";
 
 /** Shown on settings this build stores but does not act on yet. */
-const NOT_YET = tt("Not available in this build yet.");
 
 interface Category {
   id: string;
@@ -149,7 +148,6 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
   const [logMaxPods, setLogMaxPods] = usePersistentState("logs.maxPods", 30);
   const [repos, setRepos] = usePersistentState<HelmRepo[]>("settings.helmRepos", DEFAULT_REPOS);
   const [telemetry, setTelemetry] = usePersistentState("settings.telemetry", false);
-  const [crashReports, setCrashReports] = usePersistentState<"ask" | "never" | "always">("settings.crashReports", "ask");
   const [updateChannel, setUpdateChannel] = usePersistentState<"daily-stable" | "weekly-stable" | "daily-beta" | "off">("settings.updates", "daily-stable");
   const [checking, setChecking] = useState(false);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
@@ -520,21 +518,7 @@ export function SettingsWorkspace({ active }: { active: boolean }) {
               <Button size="sm" disabled={!backend} onClick={() => void backend?.revealLog().catch((e) => window.alert(errorText(e)))}>{tt("Show in folder")}</Button>
             </Setting>
           )}
-          {show("crash reports") && (
-            <Setting label={tt("Crash reports")} detail={tt("This build sends no crash reports. {NOT_YET}", { NOT_YET })}>
-              <Select
-                disabled
-                label={tt("Crash reports")}
-                value={crashReports}
-                onChange={(v) => setCrashReports(v as typeof crashReports)}
-                options={[
-                  ["ask", tt("Ask each time")],
-                  ["never", tt("Never send")],
-                  ["always", tt("Send automatically")],
-                ]}
-              />
-            </Setting>
-          )}
+          {show("crash reports", "freeze", "diagnostics") && <CrashReportsSetting />}
           {show("diagnostics bundle") && (
             <Setting label={tt("Diagnostics bundle")} detail={tt("Created locally with secrets and tokens redacted. You review it before sharing.")}>
               <Button size="sm" disabled title={tt("Available in the desktop app")}>{tt("Create…")}</Button>
@@ -809,5 +793,66 @@ function HelmRepos({ repos, setRepos, visible }: { repos: HelmRepo[]; setRepos: 
         </Setting>
       )}
     </Section>
+  );
+}
+
+/** Settings › Privacy & diagnostics: the local crash and freeze reports. */
+function CrashReportsSetting() {
+  const [reports, setReports] = useState<CrashReport[] | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  useEffect(() => {
+    if (!backend) return;
+    let cancelled = false;
+    void backend
+      .crashReports()
+      .then((r) => !cancelled && setReports(r ?? []))
+      .catch(() => !cancelled && setReports([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const remove = (id: string) => {
+    if (!backend) return;
+    void backend.deleteCrashReport(id).then(() => setReports((rs) => (rs ?? []).filter((r) => r.id !== id)));
+  };
+  return (
+    <div className="flex flex-col gap-2 border-t border-line-row px-3.5 py-2.5">
+      <span className="flex flex-col gap-0.5">
+        <span className="text-cell font-medium">{tt("Crash and freeze reports")}</span>
+        <span className="text-meta text-fg-muted">
+          {tt("Written on this computer when the backend fails or the window stops answering for more than a second. Clustrail sends nothing; copy one into an issue if you want to.")}
+        </span>
+      </span>
+      {!backend && <span className="text-meta text-fg-muted">{tt("Reports are written by the desktop app.")}</span>}
+      {backend && reports !== null && reports.length === 0 && <span className="text-meta text-fg-muted">{tt("None so far.")}</span>}
+      {reports?.map((r) => (
+        <div key={r.id} className="flex items-center gap-2.5 rounded-lg border border-line bg-surface-app px-3 py-2 text-cell">
+          <span className={cn("rounded px-1.5 py-px text-[10.5px] font-semibold", r.kind === "freeze" ? "bg-status-warning-soft text-status-warning" : "bg-status-critical-soft text-status-critical")}>
+            {r.kind === "freeze" ? tt("FREEZE") : r.kind === "crash" ? tt("CRASH") : tt("PANIC")}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate font-medium">{r.title}</span>
+            <span className="truncate text-meta text-fg-muted">{r.detail}</span>
+          </span>
+          <span className="whitespace-nowrap text-meta text-fg-muted">{new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
+          <Button
+            size="sm"
+            aria-label={tt("Copy report")}
+            onClick={() =>
+              void navigator.clipboard?.writeText(r.text).then(() => {
+                setCopied(r.id);
+                setTimeout(() => setCopied(null), 1500);
+              })
+            }
+          >
+            {copied === r.id ? tt("Copied") : tt("Copy")}
+          </Button>
+          <Button size="sm" aria-label={tt("Delete report")} onClick={() => remove(r.id)}>
+            {tt("Delete")}
+          </Button>
+        </div>
+      ))}
+      {reports && reports.length > 0 && <span className="text-meta text-fg-muted">{tt("The 20 newest are kept.")}</span>}
+    </div>
   );
 }

@@ -17,6 +17,12 @@ import (
 // panicNotice is told about each recovered panic; NewManager shows a notice.
 var panicNotice atomic.Pointer[func(component string)]
 
+// panicReporter, when set (the app), writes a local report for each recovered panic.
+var panicReporter atomic.Pointer[func(component, value, stack string)]
+
+// SetPanicReporter installs the hook that writes a report for each recovered panic.
+func SetPanicReporter(f func(component, value, stack string)) { panicReporter.Store(&f) }
+
 // safeGo runs fn in a goroutine. After a panic, onPanic (when set) puts the
 // component in a defined state, such as a failed job.
 func safeGo(component string, onPanic func(error), fn func()) {
@@ -32,9 +38,16 @@ func runSafe(component string, onPanic func(error), fn func()) (panicked bool) {
 		}
 		panicked = true
 		err := fmt.Errorf("internal error in %s: %v", component, r)
-		slog.Error("recovered from a panic", "component", component, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+		stack := string(debug.Stack())
+		slog.Error("recovered from a panic", "component", component, "panic", fmt.Sprint(r), "stack", stack)
 		if h := panicNotice.Load(); h != nil {
 			(*h)(component)
+		}
+		if h := panicReporter.Load(); h != nil {
+			func() {
+				defer func() { _ = recover() }() // a report that fails must not take the recovery with it
+				(*h)(component, fmt.Sprint(r), stack)
+			}()
 		}
 		if onPanic != nil {
 			func() {
@@ -83,4 +96,10 @@ func runLoop(ctx context.Context, component string, giveUp func(error), loop fun
 		case <-time.After(loopRestartDelay):
 		}
 	}
+}
+
+// ForcePanicForTest panics inside runSafe as component, so a test can check
+// what a recovered panic leaves behind. Not called by the app.
+func ForcePanicForTest(component string) {
+	runSafe(component, nil, func() { panic("boom for a test") })
 }

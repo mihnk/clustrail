@@ -13,6 +13,18 @@ function call<T>(method: string, ...args: unknown[]): Promise<T> {
   return Call.ByName(SERVICE + method, ...args) as Promise<T>;
 }
 
+export interface CrashReport {
+  id: string;
+  /** panic: recovered; crash: the app stopped; freeze: the window stopped answering. */
+  kind: "panic" | "crash" | "freeze";
+  at: number;
+  title: string;
+  detail: string;
+  /** The whole report, as Copy gives it. */
+  text: string;
+  offered: boolean;
+}
+
 export interface KubeconfigSourceInfo {
   path: string;
   resolved?: string;
@@ -760,6 +772,13 @@ export const backendApi = {
   memoryStats: () => call<{ heapMB: number; budgetMB: number; objects: Record<string, number>; processMB?: number; appMB?: number; holders?: Record<string, number> }>("MemoryStats"),
   pauseWatches: () => call<string[]>("PauseWatches"),
   resumeWatches: () => call<void>("ResumeWatches"),
+  /** Local crash and freeze reports (internal/app/crash.go); nothing is sent. */
+  crashReports: () => call<CrashReport[]>("CrashReports"),
+  pendingCrash: () => call<CrashReport | null>("PendingCrash"),
+  ackCrash: (id: string) => call<void>("AckCrash", id),
+  deleteCrashReport: (id: string) => call<void>("DeleteCrashReport", id),
+  revealCrashReport: (id: string) => call<void>("RevealCrashReport", id),
+  reportFreeze: (ms: number, where: string) => call<CrashReport>("ReportFreeze", ms, where),
   /** The page's visibility; the backend combines it with the native window state (quiet mode). */
   setPageHidden: (hidden: boolean) => call<void>("SetPageHidden", hidden),
   setPauseInBackground: (on: boolean) => call<void>("SetPauseInBackground", on),
