@@ -138,6 +138,23 @@ func (r *jobRegistry) prune() {
 	r.order = keep
 }
 
+// interrupt ends every running job as unknown with why: the app is closing
+// and cannot follow them to the end. A job never changes after it ended, so
+// a late success or failure from its goroutine is dropped.
+func (r *jobRegistry) interrupt(why string) {
+	r.mu.Lock()
+	var running []string
+	for id, j := range r.jobs {
+		if !j.State.terminal() {
+			running = append(running, id)
+		}
+	}
+	r.mu.Unlock()
+	for _, id := range running {
+		r.update(id, func(j *Job) { j.State, j.Error = JobUnknown, why })
+	}
+}
+
 func (r *jobRegistry) list() []Job {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -39,7 +39,8 @@ func TestHoldersStayBoundedUnderChurn(t *testing.T) {
 func TestMemoryStatsReportTheProcessApartFromTheHeap(t *testing.T) {
 	m := activityManager(t)
 	st := m.MemoryStats()
-	if runtime.GOOS == "linux" && (st.ProcessMB <= 0 || st.AppMB < st.ProcessMB) {
+	// Two readings a moment apart: the family may read a little lower than the process alone.
+	if runtime.GOOS == "linux" && (st.ProcessMB <= 0 || float64(st.AppMB) < 0.9*float64(st.ProcessMB)) {
 		t.Fatalf("process %d MB, app %d MB", st.ProcessMB, st.AppMB)
 	}
 	for _, k := range []string{"log streams", "shells", "list watches", "port forwards"} {

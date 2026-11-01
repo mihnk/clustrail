@@ -61,23 +61,26 @@ var (
 // safeLoop runs a long-lived loop in a goroutine and restarts it after a
 // panic while ctx is alive. A loop that returns ends for good.
 func safeLoop(ctx context.Context, component string, giveUp func(error), loop func()) {
-	go func() {
-		for restarts := 0; ; restarts++ {
-			var last error
-			if !runSafe(component, func(err error) { last = err }, loop) || ctx.Err() != nil {
-				return
-			}
-			if restarts >= loopRestarts {
-				if giveUp != nil {
-					runSafe(component+" (giving up)", nil, func() { giveUp(last) })
-				}
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(loopRestartDelay):
-			}
+	go runLoop(ctx, component, giveUp, loop)
+}
+
+// runLoop is safeLoop in the calling goroutine.
+func runLoop(ctx context.Context, component string, giveUp func(error), loop func()) {
+	for restarts := 0; ; restarts++ {
+		var last error
+		if !runSafe(component, func(err error) { last = err }, loop) || ctx.Err() != nil {
+			return
 		}
-	}()
+		if restarts >= loopRestarts {
+			if giveUp != nil {
+				runSafe(component+" (giving up)", nil, func() { giveUp(last) })
+			}
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(loopRestartDelay):
+		}
+	}
 }

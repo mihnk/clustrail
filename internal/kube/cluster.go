@@ -82,6 +82,13 @@ type clusterConn struct {
 
 	rest   *rest.Config
 	budget *budget // nil with fake clients
+	// Lifecycle (issue D8): every goroutine the connection starts is owned
+	// (own, ownLoop); stop cancels them and done closes once all have ended.
+	life     sync.Mutex
+	stopping bool
+	owned    sync.WaitGroup
+	done     chan struct{}
+	stopOnce sync.Once
 	// slowdown multiplies probe and metrics intervals (4 in the background, activity.go); nil means 1.
 	slowdown func() int
 	// probeKick runs a probe now (after a wake or a return to the foreground).
@@ -225,7 +232,7 @@ func connFromClients(id string, env func() Environment, emit Emitter, onState fu
 		id: id, env: env, emit: emit, client: client, dynamic: dyn, metrics: mc,
 		dirtyPods: map[string]bool{}, dirtyDeps: map[string]bool{}, dirtyNodes: map[string]bool{}, resetSent: map[string]bool{}, kicks: newKicker(),
 		podUsage: map[string]Usage{}, nodeUsage: map[string]Usage{}, samples: newSampleStore(120), alerts: newAlertDetector(),
-		onState: onState, disc: client.Discovery(), probeKick: newKicker(),
+		onState: onState, disc: client.Discovery(), probeKick: newKicker(), done: make(chan struct{}),
 	}
 }
 
@@ -511,23 +518,82 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 	c.helm.start(ctx)
 	c.gitops.start(ctx)
 
-	safeLoop(ctx, "row updates", func(err error) { c.health.fail("row updates", nil); c.onState(Reconnecting, err) }, func() { c.flushLoop(ctx) })
+	c.ownLoop(ctx, "row updates", func(err error) { c.health.fail("row updates", nil); c.onState(Reconnecting, err) }, func() { c.flushLoop(ctx) })
 	defer c.started.Store(true)
 	if withMetrics {
-		safeLoop(ctx, "metrics", nil, func() { c.metricsLoop(ctx) })
+		c.ownLoop(ctx, "metrics", nil, func() { c.metricsLoop(ctx) })
 	}
 	return nil
 }
 
+// own runs fn in a goroutine the connection owns: stop waits for it. After
+// stop it does not run.
+func (c *clusterConn) own(component string, onPanic func(error), fn func()) {
+	if !c.adopt() {
+		return
+	}
+	safeGo(component, onPanic, func() {
+		defer c.owned.Done()
+		fn()
+	})
+}
+
+// ownLoop is safeLoop for a loop the connection owns.
+func (c *clusterConn) ownLoop(ctx context.Context, component string, giveUp func(error), loop func()) {
+	if !c.adopt() {
+		return
+	}
+	safeGo(component, nil, func() {
+		defer c.owned.Done()
+		runLoop(ctx, component, giveUp, loop)
+	})
+}
+
+func (c *clusterConn) adopt() bool {
+	c.life.Lock()
+	defer c.life.Unlock()
+	if c.stopping {
+		return false
+	}
+	c.owned.Add(1)
+	return true
+}
+
+// stop cancels everything the connection runs. It does not wait: done closes
+// once every owned goroutine has ended (waitStopped).
 func (c *clusterConn) stop() {
-	if c.cancel != nil {
-		c.cancel()
+	c.stopOnce.Do(func() {
+		c.life.Lock()
+		c.stopping = true
+		c.life.Unlock()
+		if c.cancel != nil {
+			c.cancel()
+		}
+		if c.factory != nil {
+			c.factory.Shutdown()
+		}
+		if c.nsFactory != nil {
+			c.nsFactory.Shutdown()
+		}
+		safeGo("connection stop", nil, func() {
+			c.owned.Wait()
+			if c.done != nil {
+				close(c.done)
+			}
+		})
+	})
+}
+
+// waitStopped waits up to d for a stopped connection's goroutines to end.
+func (c *clusterConn) waitStopped(d time.Duration) bool {
+	if c.done == nil {
+		return true
 	}
-	if c.factory != nil {
-		c.factory.Shutdown()
-	}
-	if c.nsFactory != nil {
-		c.nsFactory.Shutdown()
+	select {
+	case <-c.done:
+		return true
+	case <-time.After(d):
+		return false
 	}
 }
 
@@ -1022,7 +1088,7 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 	key := fmt.Sprintf("poll-%p", idx)
 	var synced, delivered atomic.Bool // delivered: the first round reached the handlers
 	c.waitForAlerts(delivered.Load)
-	safeLoop(ctx, "polling "+key, func(err error) { c.health.fail(key, nil); c.onState(Reconnecting, err) }, func() {
+	c.ownLoop(ctx, "polling "+key, func(err error) { c.health.fail(key, nil); c.onState(Reconnecting, err) }, func() {
 		for {
 			lctx, cancel := context.WithTimeout(background(ctx), 60*time.Second)
 			objs, err := list(lctx)

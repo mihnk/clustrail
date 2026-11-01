@@ -169,7 +169,7 @@ func (g *gitopsWatcher) start(ctx context.Context) {
 		return
 	}
 	f.Start(ctx.Done())
-	safeLoop(ctx, "GitOps updates", nil, func() {
+	g.c.ownLoop(ctx, "GitOps updates", nil, func() {
 		flushUntilQuiet(ctx, "GitOps flush", time.Second, g.kicks, g.flush)
 		f.Shutdown()
 	})

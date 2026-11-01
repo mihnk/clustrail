@@ -170,6 +170,30 @@ through one Wails service (`internal/app.Workspace`) and its events.
   storage Secrets (values with credential-like keys redacted); Argo CD
   Applications and Flux Kustomizations/HelmReleases from their CRDs when served.
 
+## Lifecycle
+
+Every goroutine a connection starts belongs to it (`own`, `ownLoop` in
+`cluster.go`): the flush loop, metrics, polls, the Helm and GitOps
+watchers, the probe, the node-shell sweep and the region lookup.
+
+- `stop` cancels them and shuts the informers down. It returns at once;
+  `done` closes when the last owned goroutine has ended. Nothing new starts
+  on a stopped connection.
+- A new connection to the same cluster first waits, up to 5 s, for the
+  previous one to end. The old metrics loop saves its samples before the
+  new one loads them. Each samples file also has its own lock.
+- Callbacks of a connection that was replaced are dropped (`isCurrent`).
+- `Shutdown` works in order, within 5 s:
+  1. Running jobs end as unknown: the app is closing and cannot follow
+     them to the end. A late result from them is ignored.
+  2. Log streams and shells close.
+  3. Port forwards stop.
+  4. Pending connects are cancelled.
+  5. Connections stop, and their goroutines are waited for.
+
+The soak (`docs/benchmarks/soak.md`) checks that 200 connect/disconnect
+cycles leave no goroutine and no heap behind.
+
 ## Quiet mode
 
 `internal/kube/activity.go` keeps one state for the whole app: foreground or

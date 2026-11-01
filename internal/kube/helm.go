@@ -290,7 +290,7 @@ func (h *helmWatcher) start(ctx context.Context) {
 		f.Start(ctx.Done())
 		stop = f.Shutdown
 	}
-	safeLoop(ctx, "Helm updates", nil, func() {
+	h.c.ownLoop(ctx, "Helm updates", nil, func() {
 		flushUntilQuiet(ctx, "Helm flush", time.Second, h.kicks, h.flush)
 		stop()
 	})

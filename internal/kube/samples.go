@@ -113,10 +113,22 @@ func samplesPath(cluster string) string {
 }
 
 // save writes every series in time order; an empty store removes the file.
+// sampleFiles holds one lock per samples file: a connection that is ending
+// and the one that replaced it never write (or read) the same file at once.
+var sampleFiles sync.Map // path → *sync.Mutex
+
+func sampleFileLock(path string) *sync.Mutex {
+	l, _ := sampleFiles.LoadOrStore(path, &sync.Mutex{})
+	return l.(*sync.Mutex)
+}
+
 func (s *sampleStore) save(path string) error {
 	if path == "" {
 		return nil
 	}
+	l := sampleFileLock(path)
+	l.Lock()
+	defer l.Unlock()
 	s.mu.Lock()
 	keys := make([]string, 0, len(s.data))
 	for k := range s.data {
@@ -149,6 +161,9 @@ func (s *sampleStore) save(path string) error {
 // load adds saved samples newer than now-maxAge. Call it before collecting so
 // each series stays in time order.
 func (s *sampleStore) load(path string, now time.Time, maxAge time.Duration) {
+	l := sampleFileLock(path)
+	l.Lock()
+	defer l.Unlock()
 	if path == "" {
 		return
 	}

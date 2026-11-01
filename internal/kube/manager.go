@@ -26,6 +26,9 @@ type Manager struct {
 	ctx   context.Context
 	// activity: foreground or background, and the work that follows (activity.go).
 	activity *activity
+	// retired: stopped connections whose goroutines may still be ending; a new
+	// connection to the same cluster waits for them first (issue D8).
+	retired map[string]*clusterConn
 
 	mu       sync.Mutex
 	kc       *Kubeconfig
@@ -57,7 +60,7 @@ func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
 		store: store, emit: emit, ctx: ctx,
 		state: map[string]*Cluster{}, conns: map[string]*clusterConn{}, hidden: map[string]bool{}, attempts: map[string]int{}, pending: map[string]*connectAttempt{},
 		streams:  streams{logs: map[string]*logStream{}, exec: map[string]*execSession{}},
-		activity: newActivity(),
+		activity: newActivity(), retired: map[string]*clusterConn{},
 	}
 	notice := func(component string) {
 		m.emit.Emit(EventNotice, Notice{Kind: "warning", Title: "Internal error in " + component,
@@ -164,6 +167,7 @@ func (m *Manager) reload() {
 			if conn := m.conns[name]; conn != nil {
 				gone = append(gone, conn)
 				delete(m.conns, name)
+				m.retireLocked(name, conn)
 			}
 		}
 	}
@@ -434,6 +438,15 @@ func (m *Manager) connectPanicked(id string, a *connectAttempt, err error) {
 
 func (m *Manager) connect(id string, a *connectAttempt) {
 	defer a.cancel()
+	// The previous connection to this cluster ends first: its loops (the
+	// metrics loop saves its samples) never overlap the new one's.
+	m.mu.Lock()
+	old := m.retired[id]
+	delete(m.retired, id)
+	m.mu.Unlock()
+	if old != nil && !old.waitStopped(retireWait) {
+		slog.Warn("previous connection still ending", "cluster", id, "after", retireWait)
+	}
 	cfg, auth, fp, err := m.restConfigFP(id)
 	m.mu.Lock()
 	a.fingerprint = fp
@@ -518,10 +531,10 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 		return
 	}
 	m.mu.Unlock()
-	safeLoop(conn.ctx, "API probe", func(err error) { m.connStateFrom(id, conn, Reconnecting, err) }, func() {
+	conn.ownLoop(conn.ctx, "API probe", func(err error) { m.connStateFrom(id, conn, Reconnecting, err) }, func() {
 		conn.probeLoop(conn.ctx, func(ms int, err error) { m.probeFrom(id, conn, ms, err) })
 	})
-	safeGo("node shell sweep", nil, func() { m.sweepNodeShells(conn.ctx, id, conn) })
+	conn.own("node shell sweep", nil, func() { m.sweepNodeShells(conn.ctx, id, conn) })
 	safeGo("port-forward profiles", nil, func() { m.startProfilesOf(id) })
 	slog.Info("connected", "cluster", id, "version", info.Version, "identity", info.Identity, "latencyMs", info.LatencyMs, "metrics", info.Metrics,
 		"poll", pollMode.Load(), "forbidden", len(conn.forbidden))
@@ -539,7 +552,7 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 	})
 	// The region comes from node labels once the node cache filled.
 	// It ends with the connection, and never writes into a later one.
-	safeGo("cluster region", nil, func() {
+	conn.own("cluster region", nil, func() {
 		for range 20 {
 			select {
 			case <-conn.ctx.Done():
@@ -664,6 +677,9 @@ func (m *Manager) Disconnect(id string) {
 	}
 	conn := m.conns[id]
 	delete(m.conns, id)
+	if conn != nil {
+		m.retireLocked(id, conn)
+	}
 	m.mu.Unlock()
 	if conn != nil {
 		conn.stop()
@@ -788,18 +804,63 @@ func (m *Manager) Snapshot() Snapshot {
 }
 
 // Shutdown stops every connection.
+// retireLocked keeps a stopped connection until a new one to the same
+// cluster has waited for it. Caller holds m.mu.
+func (m *Manager) retireLocked(id string, c *clusterConn) {
+	if m.retired == nil {
+		m.retired = map[string]*clusterConn{}
+	}
+	m.retired[id] = c
+}
+
+// retireWait bounds how long a reconnect, or shutdown, waits for a stopped
+// connection's goroutines.
+var retireWait = 5 * time.Second
+
+// Shutdown ends everything in order, within retireWait: running jobs are
+// reported as interrupted, log streams and shells close, port forwards
+// stop, connections stop, and their goroutines are waited for.
 func (m *Manager) Shutdown() {
+	m.jobReg().interrupt("Clustrail closed while this ran. What it did so far stays (evictions, a cordon, a Helm revision); check the cluster.")
+	m.streams.mu.Lock()
+	var logs []string
+	for id := range m.streams.logs {
+		logs = append(logs, id)
+	}
+	var shells []string
+	for id := range m.streams.exec {
+		shells = append(shells, id)
+	}
+	m.streams.mu.Unlock()
+	for _, id := range logs {
+		m.StopLogs(id)
+	}
+	for _, id := range shells {
+		m.CloseExec(id)
+	}
 	m.stopAllForwards()
 	m.mu.Lock()
 	for id, a := range m.pending {
 		a.cancel()
 		delete(m.pending, id)
 	}
-	conns := m.conns
-	m.conns = map[string]*clusterConn{}
+	conns := make([]*clusterConn, 0, len(m.conns)+len(m.retired))
+	for _, c := range m.conns {
+		conns = append(conns, c)
+	}
+	for _, c := range m.retired {
+		conns = append(conns, c)
+	}
+	m.conns, m.retired = map[string]*clusterConn{}, map[string]*clusterConn{}
 	m.mu.Unlock()
 	for _, c := range conns {
 		c.stop()
+	}
+	deadline := time.Now().Add(retireWait)
+	for _, c := range conns {
+		if !c.waitStopped(time.Until(deadline)) {
+			slog.Warn("connection still ending at shutdown", "cluster", c.id)
+		}
 	}
 }
 
