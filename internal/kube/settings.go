@@ -39,6 +39,8 @@ type settingsFile struct {
 	// InstallID identifies this installation on the pods it starts in
 	// clusters (node shells), so it only ever cleans up its own.
 	InstallID string `json:"installId,omitempty"`
+	// PortForwardProfiles are saved forwards (pfprofiles.go).
+	PortForwardProfiles []PortForwardProfile `json:"portForwardProfiles,omitempty"`
 	// Version of this file's format; a file without one is version 1.
 	Version int `json:"version,omitempty"`
 }

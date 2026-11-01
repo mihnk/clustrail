@@ -45,6 +45,7 @@ type Manager struct {
 	synthetic  map[string]bool
 	jobsOnce   sync.Once
 	jobsReg    *jobRegistry
+	pfErrors   profileErrors
 }
 
 func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
@@ -486,6 +487,7 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 		conn.probeLoop(conn.ctx, func(ms int, err error) { m.probeFrom(id, conn, ms, err) })
 	})
 	safeGo("node shell sweep", nil, func() { m.sweepNodeShells(conn.ctx, id, conn) })
+	safeGo("port-forward profiles", nil, func() { m.startProfilesOf(id) })
 	slog.Info("connected", "cluster", id, "version", info.Version, "identity", info.Identity, "latencyMs", info.LatencyMs, "metrics", info.Metrics,
 		"poll", pollMode.Load(), "forbidden", len(conn.forbidden))
 	m.setState(id, func(c *Cluster) {

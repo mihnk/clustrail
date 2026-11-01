@@ -301,6 +301,30 @@ func (w *Workspace) StartPortForward(req kube.PortForwardRequest) (kube.PortForw
 
 func (w *Workspace) StopPortForward(id string) { w.m.StopPortForward(id) }
 
+// Port-forward profiles: saved forwards (settings on this machine).
+
+func (w *Workspace) PortForwardProfiles() []kube.PortForwardProfileState {
+	return w.m.PortForwardProfiles()
+}
+
+func (w *Workspace) SavePortForwardProfile(p kube.PortForwardProfile) (kube.PortForwardProfile, error) {
+	return w.m.SavePortForwardProfile(p)
+}
+
+func (w *Workspace) DeletePortForwardProfile(id string) error {
+	return w.m.DeletePortForwardProfile(id)
+}
+
+func (w *Workspace) StartPortForwardProfile(id string) (kube.PortForward, error) {
+	pf, err := w.m.StartPortForwardProfile(id)
+	if err != nil {
+		slog.Warn("port forward profile failed", "profile", id, "error", err)
+	}
+	return pf, err
+}
+
+func (w *Workspace) StopPortForwardProfile(id string) { w.m.StopPortForwardProfile(id) }
+
 func (w *Workspace) PortForwards() []kube.PortForward { return w.m.PortForwards() }
 
 func (w *Workspace) ForwardablePorts(cluster, kind, ns, name string) ([]kube.PortOption, error) {

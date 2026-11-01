@@ -59,6 +59,8 @@ function PortForwardDialog({ target }: { target: Target }) {
   const [local, setLocal] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [save, setSave] = useState(false);
+  const [profileName, setProfileName] = useState(`${target.name} (${target.cluster})`);
 
   useEffect(() => {
     if (!backend) return;
@@ -81,8 +83,14 @@ function PortForwardDialog({ target }: { target: Target }) {
     if (!backend || !valid) return;
     setBusy(true);
     setError(null);
-    backend
-      .startPortForward({ ...target, port: remote, localPort: localNum })
+    const api = backend;
+    // Saved as a profile: started from it, so it shows there (and reconnects as profiles do).
+    const started = save
+      ? api
+          .savePortForwardProfile({ id: "", name: profileName, cluster: target.cluster, namespace: target.namespace, kind: target.kind, target: target.name, port: remote, localPort: localNum, reconnect: true })
+          .then((p) => api.startPortForwardProfile(p.id))
+      : api.startPortForward({ ...target, port: remote, localPort: localNum });
+    started
       .then((f) => {
         closePortForward();
         toast.show({
@@ -156,6 +164,11 @@ function PortForwardDialog({ target }: { target: Target }) {
               onKeyDown={(e) => e.key === "Enter" && start()}
             />
           </div>
+          <label className="flex items-center gap-2 text-ui">
+            <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} className="accent-[var(--color-accent)]" />
+            {tt("Save as a profile")}
+          </label>
+          {save && <TextField label={tt("Profile name")} value={profileName} onChange={(e) => setProfileName(e.target.value)} />}
           <span className="text-meta text-fg-muted">{tt("Listens on 127.0.0.1 only.")}{" "}{target.kind !== "Pod" && tt("Reaches one ready pod; when it goes away, the forward reconnects to another.")}
           </span>
           {error && <span className="selectable rounded-md bg-status-critical-soft px-2.5 py-2 font-mono text-meta text-status-critical">{error}</span>}
@@ -178,6 +191,7 @@ function PortForwardDialog({ target }: { target: Target }) {
 /** Status bar item: active forwards with open and stop. */
 export function PortForwardIndicator() {
   const forwards = usePortForwards();
+  const { openView } = useWorkspace();
   if (!forwards.length) return null;
   const troubled = forwards.filter((f) => f.state !== "active").length;
   return (
@@ -190,7 +204,12 @@ export function PortForwardIndicator() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[380px]">
-        <DropdownMenuLabel>{tt("Port forwards")}</DropdownMenuLabel>
+        <DropdownMenuLabel className="flex items-center">
+          {tt("Port forwards")}
+          <button type="button" onClick={() => openView({ kind: "portforwards", title: tt("Port forwards") })} className="focus-ring ml-auto text-meta font-normal text-accent hover:underline">
+            {tt("Profiles…")}
+          </button>
+        </DropdownMenuLabel>
         {forwards.map((f) => (
           <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 text-ui">
             <span className={cn("size-1.5 shrink-0 rounded-full", f.state === "active" ? "bg-status-healthy" : "bg-status-warning")} />

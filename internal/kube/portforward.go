@@ -36,6 +36,10 @@ type PortForwardRequest struct {
 	Port int `json:"port"`
 	// LocalPort 0 picks a free port.
 	LocalPort int `json:"localPort"`
+	// NoReconnect: when the session ends, stop instead of reconnecting.
+	NoReconnect bool `json:"noReconnect,omitempty"`
+	// ProfileID: the saved profile this forward was started from.
+	ProfileID string `json:"profileId,omitempty"`
 }
 
 // PortForward is one forward as the UI lists it.
@@ -50,9 +54,12 @@ type PortForward struct {
 	// Pod and PodPort are what the forward currently reaches.
 	Pod     string `json:"pod,omitempty"`
 	PodPort int    `json:"podPort,omitempty"`
-	State   string `json:"state"` // starting, active, reconnecting, failed
+	State   string `json:"state"` // starting, active, reconnecting, failed, stopped
 	Error   string `json:"error,omitempty"`
 	Started string `json:"started"`
+	// Attempt counts reconnect tries since the forward was last up.
+	Attempt   int    `json:"attempt,omitempty"`
+	ProfileID string `json:"profileId,omitempty"`
 }
 
 type portForward struct {
@@ -92,6 +99,7 @@ func (m *Manager) StartPortForward(req PortForwardRequest) (PortForward, error) 
 	pf := &portForward{cancel: cancel, info: PortForward{
 		ID: fmt.Sprintf("pf-%d", m.forwards.seq), Cluster: req.Cluster, Namespace: req.Namespace, Kind: req.Kind, Name: req.Name,
 		Port: req.Port, LocalPort: req.LocalPort, Pod: pod, PodPort: podPort, State: "starting", Started: time.Now().UTC().Format(time.RFC3339),
+		ProfileID: req.ProfileID,
 	}}
 	m.forwards.byID[pf.info.ID] = pf
 	m.forwards.mu.Unlock()
@@ -123,7 +131,7 @@ func (m *Manager) runForward(ctx context.Context, c *clusterConn, req PortForwar
 		if attempt > 0 {
 			pod, podPort, err := resolveForwardTarget(ctx, c, req)
 			if err != nil {
-				m.setForward(pf, func(i *PortForward) { i.State, i.Error = "reconnecting", err.Error() })
+				m.setForward(pf, func(i *PortForward) { i.State, i.Error, i.Attempt = "reconnecting", err.Error(), attempt })
 				if !sleepCtx(ctx, backoff(attempt)) {
 					return
 				}
@@ -135,7 +143,7 @@ func (m *Manager) runForward(ctx context.Context, c *clusterConn, req PortForwar
 		info := pf.info
 		m.forwards.mu.Unlock()
 		localPort, err := forwardOnce(ctx, c, info, func(port int) {
-			m.setForward(pf, func(i *PortForward) { i.LocalPort, i.State, i.Error = port, "active", "" })
+			m.setForward(pf, func(i *PortForward) { i.LocalPort, i.State, i.Error, i.Attempt = port, "active", "", 0 })
 			if cameUp.CompareAndSwap(false, true) {
 				ready <- port
 			}
@@ -156,7 +164,14 @@ func (m *Manager) runForward(ctx context.Context, c *clusterConn, req PortForwar
 			pf.info.LocalPort = localPort
 			m.forwards.mu.Unlock()
 		}
-		m.setForward(pf, func(i *PortForward) { i.State, i.Error = "reconnecting", errText(err) })
+		if req.NoReconnect {
+			// The profile asked not to reconnect: stop and say why.
+			m.setForward(pf, func(i *PortForward) {
+				i.State, i.Error = "stopped", "the session ended (reconnect is off): "+errText(err)
+			})
+			return
+		}
+		m.setForward(pf, func(i *PortForward) { i.State, i.Error, i.Attempt = "reconnecting", errText(err), attempt+1 })
 		if !sleepCtx(ctx, backoff(attempt+1)) {
 			return
 		}
@@ -359,6 +374,7 @@ func (m *Manager) PortForwards() []PortForward {
 func (m *Manager) emitForwards() {
 	if m.emit != nil {
 		m.emit.Emit(EventPortForwards, m.PortForwards())
+		m.emit.Emit(EventPortForwardProfiles, m.PortForwardProfiles())
 	}
 }
 

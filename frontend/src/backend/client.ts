@@ -228,6 +228,29 @@ export interface PortForwardRequest {
   port: number;
   /** 0 picks a free port. */
   localPort: number;
+  /** When the session ends, stop instead of reconnecting. */
+  noReconnect?: boolean;
+  profileId?: string;
+}
+
+/** A saved forward (internal/kube/pfprofiles.go). */
+export interface PortForwardProfile {
+  id: string;
+  name: string;
+  group?: string;
+  cluster: string;
+  namespace: string;
+  kind: "Pod" | "Service" | "Deployment";
+  target: string;
+  port: number;
+  localPort: number;
+  reconnect: boolean;
+  autoStart?: boolean;
+}
+
+export interface PortForwardProfileState extends PortForwardProfile {
+  forward?: PortForwardInfo;
+  lastError?: string;
 }
 
 export interface PortForwardInfo {
@@ -240,9 +263,11 @@ export interface PortForwardInfo {
   localPort: number;
   pod?: string;
   podPort?: number;
-  state: "starting" | "active" | "reconnecting" | "failed";
+  state: "starting" | "active" | "reconnecting" | "failed" | "stopped";
   error?: string;
   started: string;
+  attempt?: number;
+  profileId?: string;
 }
 
 /** A log source: a workload ("Deployment/api"), a label selector or fixed pods, in one namespace. */
@@ -771,6 +796,11 @@ export const backendApi = {
   startPortForward: (req: PortForwardRequest) => call<PortForwardInfo>("StartPortForward", req),
   stopPortForward: (id: string) => call<void>("StopPortForward", id),
   portForwards: () => call<PortForwardInfo[]>("PortForwards"),
+  portForwardProfiles: () => call<PortForwardProfileState[]>("PortForwardProfiles"),
+  savePortForwardProfile: (p: PortForwardProfile) => call<PortForwardProfile>("SavePortForwardProfile", p),
+  deletePortForwardProfile: (id: string) => call<void>("DeletePortForwardProfile", id),
+  startPortForwardProfile: (id: string) => call<PortForwardInfo>("StartPortForwardProfile", id),
+  stopPortForwardProfile: (id: string) => call<void>("StopPortForwardProfile", id),
   forwardablePorts: (cluster: string, kind: string, ns: string, name: string) =>
     call<{ port: number; name?: string; detail?: string }[]>("ForwardablePorts", cluster, kind, ns, name),
 
@@ -822,6 +852,7 @@ export const EVENTS = {
   logs: "clustrail:logs",
   exec: "clustrail:exec",
   portForwards: "clustrail:portforwards",
+  pfProfiles: "clustrail:pfprofiles",
   list: "clustrail:list",
   notice: "clustrail:notice",
 } as const;

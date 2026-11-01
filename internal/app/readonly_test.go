@@ -35,6 +35,9 @@ var allowedReadOnly = []string{
 	"Clusters", "Snapshot", "Connect", "Disconnect", "HideCluster", "SetSelected", "AutoConnect", "ConfirmTarget",
 	"UpdateCluster", "AddCluster", "TestConnection", "Setup", "SetupTest", "PasteKubeconfig", "SkipSetup",
 	"RestartSetup", "CompleteSetup", "AddKubeconfig", "HelmRepositories",
+	// Port-forward profiles: Clustrail's own settings; a profile starts through
+	// StartPortForward, which refuses read-only contexts (tested in kube)
+	"PortForwardProfiles", "SavePortForwardProfile", "DeletePortForwardProfile", "StartPortForwardProfile", "StopPortForwardProfile",
 	// Background jobs: reading results, and stopping a job (it changes nothing in the cluster; jobs that change it called writable to start)
 	"Jobs", "CancelJob",
 	// Reading

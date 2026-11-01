@@ -237,6 +237,8 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
     case "access":
     case "whocan":
       return <ShieldCheck className={cls} aria-hidden />;
+    case "portforwards":
+      return <ArrowLeftRight className={cls} aria-hidden />;
     case "helm-upgrade":
       return <ArrowUpCircle className={cls} aria-hidden />;
     case "storage":

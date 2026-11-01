@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Dialog } from "radix-ui";
 import {
+  ArrowLeftRight,
   Box,
   GitBranch,
   KeyRound,
@@ -143,6 +144,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       ["Certificates", <FileBadge key="cert" />, () => ws.openView({ kind: "certificates", title: t("Certificates") })],
       ["Access", <ShieldCheck key="a" />, () => ws.openView({ kind: "access", title: t("Access") })],
       ["Who can?", <ShieldCheck key="wc" />, () => ws.openView({ kind: "whocan", title: t("Who can?") })],
+      ["Port forwards", <ArrowLeftRight key="pf" />, () => ws.openView({ kind: "portforwards", title: t("Port forwards") })],
       ["Storage", <HardDrive key="st" />, () => ws.openView({ kind: "storage", title: t("Storage") })],
       ["Network policies", <Waypoints key="np" />, () => ws.openView({ kind: "network", title: t("Network policies") })],
       ["Service chain", <Route key="sc" />, () => ws.openView({ kind: "chain", title: t("Service chain") })],

@@ -18,6 +18,7 @@ const DeploymentsWorkspace = lazy(() => import("@/features/deployments/Deploymen
 const ClustersWorkspace = lazy(() => import("@/features/clusters/ClustersWorkspace").then((m) => ({ default: m.ClustersWorkspace })));
 const NodesWorkspace = lazy(() => import("@/features/nodes/NodesWorkspace").then((m) => ({ default: m.NodesWorkspace })));
 const WhoCanWorkspace = lazy(() => import("@/features/insights/WhoCanWorkspace").then((m) => ({ default: m.WhoCanWorkspace })));
+const PortForwardsWorkspace = lazy(() => import("@/features/portforward/PortForwardsWorkspace").then((m) => ({ default: m.PortForwardsWorkspace })));
 const ShellWorkspace = lazy(() => import("@/features/terminal/ShellWorkspace").then((m) => ({ default: m.ShellWorkspace })));
 const YamlWorkspace = lazy(() => import("@/features/yaml/YamlWorkspace").then((m) => ({ default: m.YamlWorkspace })));
 const CreateResourceWorkspace = lazy(() => import("@/features/resources/CreateResourceWorkspace").then((m) => ({ default: m.CreateResourceWorkspace })));
@@ -228,6 +229,8 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <AccessWorkspace active={active} />;
     case "whocan":
       return <WhoCanWorkspace tab={tab} active={active} />;
+    case "portforwards":
+      return <PortForwardsWorkspace />;
     case "helm-upgrade":
       return <HelmUpgradeWorkspace tab={tab} active={active} />;
     case "storage":
