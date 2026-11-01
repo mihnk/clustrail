@@ -46,7 +46,7 @@ var allowedReadOnly = []string{
 	"Jobs", "CancelJob",
 	// Reading
 	"Namespaces", "PodDetail", "Events", "WhoCan", "WorkloadReplicas", "JobStatus", "ClusterWarnings", "AccessMatrix",
-	"WarningCount", "Expiry", "APIRemovals", "KnownAPIRemovals", "Quotas", "HelmUpgradeSource", "ServiceChain", "Storage", "PodNetworkPolicies",
+	"WarningCount", "Expiry", "APIRemovals", "KnownAPIRemovals", "Quotas", "PodContainers", "HelmUpgradeSource", "ServiceChain", "Storage", "PodNetworkPolicies",
 	"CheckConnection", "GetObject", "RevealSecretKey", "PortForwards", "ForwardablePorts", "ResourceKinds",
 	"ListResources", "StartListWatch", "StopListWatch", "StartLogs", "StopLogs", "HelmRevision",
 	"DeploymentRelations",

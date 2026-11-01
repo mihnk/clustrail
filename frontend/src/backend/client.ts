@@ -491,6 +491,80 @@ export interface ExpiryReport {
   notes: string[];
 }
 
+// Pod containers, read from the live pod (internal/kube/podspec.go).
+export interface ContainerPortInfo {
+  name?: string;
+  port: number;
+  protocol: string;
+}
+
+export interface EnvVarInfo {
+  name: string;
+  value?: string;
+  /** A literal value whose name looks secret: not sent. */
+  hidden?: boolean;
+  from?: "Secret" | "ConfigMap" | "field" | "resource";
+  ref?: string;
+  key?: string;
+  optional?: boolean;
+}
+
+export interface EnvSourceInfo {
+  kind: "ConfigMap" | "Secret";
+  name: string;
+  prefix?: string;
+  optional?: boolean;
+}
+
+export interface VolumeMountInfo {
+  path: string;
+  subPath?: string;
+  readOnly?: boolean;
+  volume: string;
+  source: string;
+  kind?: string;
+  ref?: string;
+}
+
+export interface ProbeInfo {
+  kind: "liveness" | "readiness" | "startup";
+  action: string;
+  initialDelay: number;
+  period: number;
+  timeout: number;
+  failureThreshold: number;
+  successThreshold: number;
+}
+
+export interface ContainerSpecInfo {
+  name: string;
+  type: "init" | "sidecar" | "main" | "ephemeral";
+  image: string;
+  imageID?: string;
+  pullPolicy?: string;
+  command: string[];
+  args: string[];
+  workingDir?: string;
+  ports: ContainerPortInfo[];
+  requests: Record<string, string>;
+  limits: Record<string, string>;
+  env: EnvVarInfo[];
+  envFrom: EnvSourceInfo[];
+  mounts: VolumeMountInfo[];
+  probes: ProbeInfo[];
+  security: string[];
+}
+
+export interface PodSpecInfo {
+  serviceAccount?: string;
+  node?: string;
+  qosClass?: string;
+  priorityClass?: string;
+  restartPolicy?: string;
+  hostNetwork?: boolean;
+  containers: ContainerSpecInfo[];
+}
+
 // API removals (internal/kube/apiremovals.go).
 export interface APIRemovalFinding {
   /** helm: a release's stored manifest; applied: kubectl's last-applied annotation; apiserver: the API server counted a request. */
@@ -882,6 +956,7 @@ export const backendApi = {
   completeSetup: (choices: SetupChoice[], selected: string[]) => call<void>("CompleteSetup", choices, selected),
 
   podDetail: (cluster: string, ns: string, name: string) => call<PodDetail>("PodDetail", cluster, ns, name),
+  podContainers: (cluster: string, ns: string, name: string) => call<PodSpecInfo>("PodContainers", cluster, ns, name),
   events: (cluster: string, ns: string, kind: string, name: string) => call<ResourceEvent[]>("Events", cluster, ns, kind, name),
   /** uid: the object the user confirmed; one recreated under the same name is not deleted. */
   deletePod: (cluster: string, ns: string, name: string, uid: string) => call<void>("DeletePod", cluster, ns, name, uid),

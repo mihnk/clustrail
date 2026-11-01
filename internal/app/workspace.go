@@ -207,6 +207,11 @@ func (w *Workspace) APIRemovals(cluster string) (kube.APIRemovalReport, error) {
 // KnownAPIRemovals is the removal table itself (Kubernetes' lifecycle tags).
 func (w *Workspace) KnownAPIRemovals() []kube.APIRemoval { return kube.KnownAPIRemovals() }
 
+// PodContainers describes each container of a pod, read from the live pod.
+func (w *Workspace) PodContainers(cluster, ns, name string) (kube.PodSpecInfo, error) {
+	return w.m.PodContainers(cluster, ns, name)
+}
+
 // Quotas lists ResourceQuotas with their use, LimitRanges, and the requests pods must carry.
 func (w *Workspace) Quotas(cluster string) (kube.QuotaReport, error) { return w.m.Quotas(cluster) }
 

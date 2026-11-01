@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState, type ReactNode } from "react";
+import { ContainerDetails } from "./ContainerDetails";
 import {
   Box,
   Check,
@@ -168,7 +169,7 @@ export function PodInspector({
         </TabPanel>
 
         <TabPanel value="containers">
-          <ContainerList containers={detail.containers} />
+          <ContainerDetails pod={pod} statuses={detail.containers} active={tab === "containers"} />
         </TabPanel>
 
         <TabsContent value="events" className="focus-ring flex min-h-0 flex-1 flex-col">

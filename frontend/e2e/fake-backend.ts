@@ -52,6 +52,8 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       return { clusters, ...fx.snapshot };
     case "PodDetail":
       return fx.podDetail;
+    case "PodContainers":
+      return { containers: [] };
     case "GetObject":
       if (args[1] === "Secret")
         return {
