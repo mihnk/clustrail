@@ -46,6 +46,8 @@ type Manager struct {
 	jobsOnce   sync.Once
 	jobsReg    *jobRegistry
 	pfErrors   profileErrors
+	alertsOnce sync.Once
+	alertsN    *notifier
 }
 
 func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
@@ -464,6 +466,7 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 	delete(m.pending, id)
 	m.conns[id] = conn
 	m.mu.Unlock()
+	conn.onAlert = m.notify().deliver
 	if err := conn.start(m.ctx, info.Identity, info.Metrics); err != nil {
 		conn.stop()
 		m.mu.Lock()

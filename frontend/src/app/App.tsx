@@ -47,6 +47,7 @@ import { usePersistentState } from "@/app/preferences";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "./workspace";
 import { ShortcutsProvider } from "./shortcuts";
 import { useBackendSync } from "./backendSync";
+import { useAlerts } from "./alerts";
 import { backend } from "@/backend/client";
 import { t } from "@/i18n";
 import type { SetupSummary } from "@/features/setup/SetupFlow";
@@ -105,6 +106,7 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
   }, [setupSummary]);
   const { theme, density, tabs, activeTabId, activeTab, clusterById } = ws;
   useBackendSync();
+  useAlerts();
   // Development diagnostics (⌘⇧D) and the in-app benchmark runner (CLUSTRAIL_BENCH).
   const [diagnostics, setDiagnostics] = useState(false);
   // The benchmark opens Pods with the workspace as it is then, not as it was at startup.

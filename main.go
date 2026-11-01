@@ -28,13 +28,15 @@ func main() {
 	// Exec auth plugins (aws, gcloud, kubelogin) must be on PATH even when started from Finder.
 	app.FixPath()
 
-	ws := &app.Workspace{}
+	desktop := app.NewDesktop()
+	ws := &app.Workspace{Desktop: desktop}
 	wails := application.New(application.Options{
 		Name:        "Clustrail",
 		Description: "Kubernetes desktop workspace",
 		Icon:        appIcon,
 		// The Workspace service is the only way the UI reaches clusters.
 		Services: []application.Service{
+			application.NewService(desktop), // first: started before the Workspace sends anything
 			application.NewService(ws),
 		},
 		Assets: application.AssetOptions{

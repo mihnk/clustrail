@@ -233,6 +233,29 @@ export interface PortForwardRequest {
   profileId?: string;
 }
 
+/** What to notify about and where (internal/kube/alerts.go). Off until namespaces are picked. */
+export interface NotifySettings {
+  enabled: boolean;
+  /** cluster id → namespaces */
+  scopes: Record<string, string[]>;
+  crashLoop: boolean;
+  oomKilled: boolean;
+  rollout: boolean;
+}
+
+/** One piece of news: a crash loop, an OOM kill, a stuck rollout, a recovery, or a grouped notice. */
+export interface Alert {
+  id: string;
+  kind: "crashloop" | "oomkilled" | "rollout" | "recovered" | "grouped" | "test";
+  cluster: string;
+  namespace: string;
+  objectKind: "Pod" | "Deployment" | "";
+  object: string;
+  title: string;
+  detail: string;
+  at: number;
+}
+
 /** A saved forward (internal/kube/pfprofiles.go). */
 export interface PortForwardProfile {
   id: string;
@@ -796,6 +819,11 @@ export const backendApi = {
   startPortForward: (req: PortForwardRequest) => call<PortForwardInfo>("StartPortForward", req),
   stopPortForward: (id: string) => call<void>("StopPortForward", id),
   portForwards: () => call<PortForwardInfo[]>("PortForwards"),
+  notificationSettings: () => call<NotifySettings>("NotificationSettings"),
+  setNotificationSettings: (s: NotifySettings) => call<void>("SetNotificationSettings", s),
+  alerts: () => call<Alert[]>("Alerts"),
+  /** Sends a sample; true when desktop notifications are available. */
+  testNotification: () => call<boolean>("TestNotification"),
   portForwardProfiles: () => call<PortForwardProfileState[]>("PortForwardProfiles"),
   savePortForwardProfile: (p: PortForwardProfile) => call<PortForwardProfile>("SavePortForwardProfile", p),
   deletePortForwardProfile: (id: string) => call<void>("DeletePortForwardProfile", id),
@@ -853,6 +881,8 @@ export const EVENTS = {
   exec: "clustrail:exec",
   portForwards: "clustrail:portforwards",
   pfProfiles: "clustrail:pfprofiles",
+  alert: "clustrail:alert",
+  reveal: "clustrail:reveal",
   list: "clustrail:list",
   notice: "clustrail:notice",
 } as const;

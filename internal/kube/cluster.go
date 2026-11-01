@@ -61,9 +61,18 @@ func SetMetricsInterval(seconds int) {
 // derived from them. Rows are rebuilt for changed objects only and sent to
 // the frontend as deltas at most every flushInterval.
 type clusterConn struct {
-	id   string
-	env  func() Environment
-	emit Emitter
+	// alertReady: every source has handed its first list to the handlers; until
+	// then what is wrong is recorded, not told. Sources started later (Helm,
+	// GitOps) add theirs while handlers read it, hence the lock.
+	alertMu    sync.Mutex
+	alertReady []func() bool
+	// alerts turns pod and Deployment changes into notifications (alerts.go);
+	// onAlert, set by the manager, delivers them.
+	alerts  *alertDetector
+	onAlert func(Alert)
+	id      string
+	env     func() Environment
+	emit    Emitter
 
 	rest   *rest.Config
 	client kubernetes.Interface
@@ -204,7 +213,7 @@ func connFromClients(id string, env func() Environment, emit Emitter, onState fu
 	return &clusterConn{
 		id: id, env: env, emit: emit, client: client, dynamic: dyn, metrics: mc,
 		dirtyPods: map[string]bool{}, dirtyDeps: map[string]bool{}, dirtyNodes: map[string]bool{}, resetSent: map[string]bool{}, kicks: newKicker(),
-		podUsage: map[string]Usage{}, nodeUsage: map[string]Usage{}, samples: newSampleStore(120),
+		podUsage: map[string]Usage{}, nodeUsage: map[string]Usage{}, samples: newSampleStore(120), alerts: newAlertDetector(),
 		onState: onState, disc: client.Discovery(),
 	}
 }
@@ -318,7 +327,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			c.health.fail(key, func() bool { return inf.LastSyncResourceVersion() != rv })
 			c.onState(Reconnecting, err)
 		})
-		_, _ = inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		reg, _ := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    onChange,
 			UpdateFunc: func(_, obj any) { onChange(obj) },
 			DeleteFunc: func(obj any) {
@@ -328,6 +337,10 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 				onChange(obj)
 			},
 		})
+		if reg != nil {
+			// The handler has had every object of the first list: alerts may start.
+			c.waitForAlerts(reg.HasSynced)
+		}
 	}
 
 	// Namespaced informers live in their own factory, used only for the
@@ -374,6 +387,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			}},
 			func(obj any) {
 				if p, ok := obj.(*corev1.Pod); ok {
+					c.alertPod(p)
 					c.publishPod(p.Namespace, p.Name)
 					c.mu.Lock()
 					c.dirtyPods[p.Namespace+"/"+p.Name] = true
@@ -421,6 +435,7 @@ func (c *clusterConn) start(parent context.Context, identity string, withMetrics
 			}, nil,
 			func(obj any) {
 				if d, ok := obj.(*appsv1.Deployment); ok {
+					c.alertDeployment(d)
 					c.mu.Lock()
 					c.dirtyDeps[d.Namespace+"/"+d.Name] = true
 					c.kicks.kick()
@@ -932,7 +947,8 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 	idx := cache.NewIndexer(cache.MetaNamespaceKeyFunc, indexers)
 	every := pollEvery
 	key := fmt.Sprintf("poll-%p", idx)
-	var synced atomic.Bool
+	var synced, delivered atomic.Bool // delivered: the first round reached the handlers
+	c.waitForAlerts(delivered.Load)
 	safeLoop(ctx, "polling "+key, func(err error) { c.health.fail(key, nil); c.onState(Reconnecting, err) }, func() {
 		for {
 			lctx, cancel := context.WithTimeout(ctx, 60*time.Second)
@@ -973,6 +989,7 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 				for _, o := range old {
 					onChange(o) // removed: handlers look it up and find it gone
 				}
+				delivered.Store(true)
 			}
 			select {
 			case <-ctx.Done():

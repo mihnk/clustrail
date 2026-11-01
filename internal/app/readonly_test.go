@@ -38,6 +38,8 @@ var allowedReadOnly = []string{
 	// Port-forward profiles: Clustrail's own settings; a profile starts through
 	// StartPortForward, which refuses read-only contexts (tested in kube)
 	"PortForwardProfiles", "SavePortForwardProfile", "DeletePortForwardProfile", "StartPortForwardProfile", "StopPortForwardProfile",
+	// Notifications: Clustrail's own settings and the alerts it sent
+	"NotificationSettings", "SetNotificationSettings", "Alerts", "TestNotification",
 	// Background jobs: reading results, and stopping a job (it changes nothing in the cluster; jobs that change it called writable to start)
 	"Jobs", "CancelJob",
 	// Reading
