@@ -38,7 +38,7 @@ var allowedReadOnly = []string{
 	// Background jobs: reading results, and stopping a job (it changes nothing in the cluster; jobs that change it called writable to start)
 	"Jobs", "CancelJob",
 	// Reading
-	"Namespaces", "PodDetail", "Events", "WorkloadReplicas", "JobStatus", "ClusterWarnings", "AccessMatrix",
+	"Namespaces", "PodDetail", "Events", "WhoCan", "WorkloadReplicas", "JobStatus", "ClusterWarnings", "AccessMatrix",
 	"WarningCount", "Expiry", "HelmUpgradeSource", "ServiceChain", "Storage", "PodNetworkPolicies",
 	"CheckConnection", "GetObject", "RevealSecretKey", "PortForwards", "ForwardablePorts", "ResourceKinds",
 	"ListResources", "StartListWatch", "StopListWatch", "StartLogs", "StopLogs", "HelmRevision",

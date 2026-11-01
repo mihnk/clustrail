@@ -181,6 +181,9 @@ func (w *Workspace) ClusterWarnings(cluster string, sinceSec int) (kube.WarningL
 	return w.m.ClusterWarnings(cluster, sinceSec)
 }
 
+// WhoCan lists who the cluster's RBAC objects allow a verb on an object.
+func (w *Workspace) WhoCan(req kube.WhoCanRequest) (kube.WhoCanResult, error) { return w.m.WhoCan(req) }
+
 func (w *Workspace) AccessMatrix(cluster string, subject kube.AccessSubject, namespace string) (kube.AccessResult, error) {
 	return w.m.AccessMatrix(cluster, subject, namespace)
 }

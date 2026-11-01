@@ -366,6 +366,36 @@ export interface AccessSubject {
   namespace?: string;
 }
 
+/** Who the cluster's RBAC objects allow a verb on an object (internal/kube/whocan.go). */
+export interface WhoCanRequest {
+  cluster: string;
+  verb: "get" | "list" | "watch" | "create" | "update" | "patch" | "delete" | "exec";
+  kind: string;
+  namespace: string;
+  name: string;
+}
+
+export interface WhoCanGrant {
+  subjectKind: "User" | "Group" | "ServiceAccount";
+  subject: string;
+  scope: string;
+  binding: string;
+  role: string;
+  rule: string;
+  ruleYAML: string;
+  wide: boolean;
+  onlyNames?: string[];
+}
+
+export interface WhoCanResult {
+  request: WhoCanRequest;
+  group: string;
+  resource: string;
+  grants: WhoCanGrant[];
+  missing: string[];
+  serviceAccountPods: Record<string, string[]>;
+}
+
 export interface AccessResult {
   subject: AccessSubject;
   user: string;
@@ -752,6 +782,7 @@ export const backendApi = {
   clusterWarnings: (cluster: string, sinceSec: number) => call<WarningList>("ClusterWarnings", cluster, sinceSec),
   warningCount: (cluster: string, sinceSec: number) => call<number>("WarningCount", cluster, sinceSec),
   accessMatrix: (cluster: string, subject: AccessSubject, namespace: string) => call<AccessResult>("AccessMatrix", cluster, subject, namespace),
+  whoCan: (req: WhoCanRequest) => call<WhoCanResult>("WhoCan", req),
   expiry: (cluster: string) => call<ExpiryReport>("Expiry", cluster),
 
   helmUpgradeSource: (cluster: string, ns: string, name: string) => call<HelmUpgradeSource>("HelmUpgradeSource", cluster, ns, name),

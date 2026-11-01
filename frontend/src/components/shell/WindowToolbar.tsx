@@ -235,6 +235,7 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
     case "certificates":
       return <FileBadge className={cls} aria-hidden />;
     case "access":
+    case "whocan":
       return <ShieldCheck className={cls} aria-hidden />;
     case "helm-upgrade":
       return <ArrowUpCircle className={cls} aria-hidden />;

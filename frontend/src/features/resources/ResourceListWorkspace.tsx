@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
-import { Cable, PanelTop, Route, Check, Code, Copy, LayoutGrid, Pencil, Plus, RefreshCw, Search, SearchX, Trash2, X } from "lucide-react";
+import { Cable, PanelTop, Route, Check, Code, Copy, LayoutGrid, Pencil, Plus, RefreshCw, Search, SearchX, ShieldCheck, Trash2, X } from "lucide-react";
 import { openPortForward } from "@/features/portforward/PortForward";
 import { useNamespaceFilter } from "@/app/namespaceFilter";
 import { SYSTEM_NAMESPACES, useWorkspace, type WorkspaceTab } from "@/app/workspace";
@@ -318,6 +318,15 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
           ? [{ id: "forward", group: "observe" as const, label: c?.readOnly ? tt("Port forward · read-only context") : tt("Port forward…"), icon: <Cable />, disabled: c?.readOnly, onSelect: () => openPortForward({ cluster: r.cluster, namespace: r.namespace ?? "", kind: "Service", name: r.name }) }]
           : []),
         ...extra.filter((a) => a.group === "modify"),
+        {
+          id: "whocan",
+          group: "observe" as const,
+          label: kind === "Secret" ? tt("Who can read it?") : tt("Who can change it?"),
+          icon: <ShieldCheck />,
+          disabled: !backend,
+          onSelect: () =>
+            ws.openView({ kind: "whocan", title: tt("Who can?"), cluster: r.cluster, params: { verb: kind === "Secret" ? "get" : "update", kind, namespace: r.namespace ?? "", name: r.name } }),
+        },
         { id: "edit", group: "modify", label: tt("Edit YAML…"), icon: <Pencil />, onSelect: () => ws.openView({ kind: "yaml", title: `YAML · ${r.name}`, cluster: r.cluster, params: { ...params, mode: "edit" } }) },
         {
           id: "delete",

@@ -142,6 +142,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       ["Warning events", <TriangleAlert key="w" />, () => ws.openView({ kind: "warnings", title: t("Warning events") })],
       ["Certificates", <FileBadge key="cert" />, () => ws.openView({ kind: "certificates", title: t("Certificates") })],
       ["Access", <ShieldCheck key="a" />, () => ws.openView({ kind: "access", title: t("Access") })],
+      ["Who can?", <ShieldCheck key="wc" />, () => ws.openView({ kind: "whocan", title: t("Who can?") })],
       ["Storage", <HardDrive key="st" />, () => ws.openView({ kind: "storage", title: t("Storage") })],
       ["Network policies", <Waypoints key="np" />, () => ws.openView({ kind: "network", title: t("Network policies") })],
       ["Service chain", <Route key="sc" />, () => ws.openView({ kind: "chain", title: t("Service chain") })],

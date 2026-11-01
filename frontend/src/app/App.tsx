@@ -17,6 +17,7 @@ import { ProtectedContextBar } from "@/components/safety/ProtectedContextBar";
 const DeploymentsWorkspace = lazy(() => import("@/features/deployments/DeploymentsWorkspace").then((m) => ({ default: m.DeploymentsWorkspace })));
 const ClustersWorkspace = lazy(() => import("@/features/clusters/ClustersWorkspace").then((m) => ({ default: m.ClustersWorkspace })));
 const NodesWorkspace = lazy(() => import("@/features/nodes/NodesWorkspace").then((m) => ({ default: m.NodesWorkspace })));
+const WhoCanWorkspace = lazy(() => import("@/features/insights/WhoCanWorkspace").then((m) => ({ default: m.WhoCanWorkspace })));
 const ShellWorkspace = lazy(() => import("@/features/terminal/ShellWorkspace").then((m) => ({ default: m.ShellWorkspace })));
 const YamlWorkspace = lazy(() => import("@/features/yaml/YamlWorkspace").then((m) => ({ default: m.YamlWorkspace })));
 const CreateResourceWorkspace = lazy(() => import("@/features/resources/CreateResourceWorkspace").then((m) => ({ default: m.CreateResourceWorkspace })));
@@ -225,6 +226,8 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <CertificatesWorkspace active={active} />;
     case "access":
       return <AccessWorkspace active={active} />;
+    case "whocan":
+      return <WhoCanWorkspace tab={tab} active={active} />;
     case "helm-upgrade":
       return <HelmUpgradeWorkspace tab={tab} active={active} />;
     case "storage":
