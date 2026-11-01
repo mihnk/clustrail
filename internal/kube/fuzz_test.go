@@ -243,3 +243,41 @@ func FuzzLogSourceSelector(f *testing.F) {
 		}
 	})
 }
+
+// Helm values in a GitOps resource (Argo CD values text): a credential's value
+// never survives masking, and the masked block put back against the live one
+// gives the live values again.
+func FuzzGitOpsValuesRoundTrip(f *testing.F) {
+	f.Add("password", "hunter2-hunter2", "host", "db.internal")
+	f.Add("apiToken", "a: b", "nested", "x\ny")
+	f.Fuzz(func(t *testing.T, secretKey, secret, otherKey, other string) {
+		s, ok := secretValue(secret)
+		if !ok || !looksSecret(secretKey) || looksSecret(otherKey) || otherKey == secretKey || !utf8.ValidString(s+secretKey+otherKey+other) {
+			return
+		}
+		text, err := yaml.Marshal(map[string]any{"app": map[string]any{secretKey: s, otherKey: other}})
+		if err != nil {
+			return
+		}
+		live := map[string]any{"values": string(text)}
+		shown := map[string]any{"values": string(text)}
+		maskHelmBlock(shown)
+		var parsed map[string]any
+		if yaml.Unmarshal([]byte(shown["values"].(string)), &parsed) == nil {
+			if leaf, _ := parsed["app"].(map[string]any); leaf != nil && leaf[secretKey] != redactedValue {
+				t.Fatalf("%q under %q was shown: %v", s, secretKey, parsed)
+			}
+		} else if shown["values"] != redactedValue {
+			t.Fatalf("unreadable masked text: %q", shown["values"])
+		}
+		if err := unmaskHelmBlock(shown, live, "values"); err != nil {
+			t.Fatal(err)
+		}
+		var back, want map[string]any
+		_ = yaml.Unmarshal([]byte(shown["values"].(string)), &back)
+		_ = yaml.Unmarshal(text, &want)
+		if !reflect.DeepEqual(back, want) {
+			t.Fatalf("round trip: %v, want %v", back, want)
+		}
+	})
+}

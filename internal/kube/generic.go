@@ -329,6 +329,9 @@ type CreateResult struct {
 // stops at the first failure and the rest are reported as skipped (nothing
 // already created is rolled back).
 func (m *Manager) CreateObjects(cluster, text string, dryRun bool) ([]CreateResult, error) {
+	if err := checkSize("the manifest", len(text), maxManifestBytes); err != nil {
+		return nil, err
+	}
 	var c *clusterConn
 	var err error
 	if dryRun {
@@ -360,6 +363,9 @@ func (m *Manager) CreateObjects(cluster, text string, dryRun bool) ([]CreateResu
 			return nil, fmt.Errorf("document %d (%s): metadata.name is required", len(docs)+1, u.GetKind())
 		}
 		docs = append(docs, u)
+		if len(docs) > maxManifestObjects {
+			return nil, fmt.Errorf("the manifest has more than %d objects; create them in parts", maxManifestObjects)
+		}
 	}
 	if len(docs) == 0 {
 		return nil, errors.New("the manifest has no objects")

@@ -182,6 +182,9 @@ func (m *Manager) GetObject(cluster, kind, ns, name string) (LiveObject, error) 
 	if isSecret(gvr) {
 		live.Secret = maskSecret(clean)
 	}
+	if isGitOpsValues(gvr) {
+		maskGitOpsValues(clean)
+	}
 	b, err := yaml.Marshal(clean.Object)
 	if err != nil {
 		return LiveObject{}, err
@@ -289,6 +292,9 @@ func (c *clusterConn) gitopsOwner(obj *unstructured.Unstructured) *GitOpsOwner {
 // without persisting.
 func (m *Manager) ApplyYAML(cluster, text, openedVersion string, dryRun, force bool) (ApplyResult, error) {
 	res := ApplyResult{DryRun: dryRun, Warnings: []string{}}
+	if err := checkSize("the YAML", len(text), maxObjectBytes); err != nil {
+		return res, err
+	}
 	var c *clusterConn
 	var err error
 	if dryRun {
@@ -312,6 +318,11 @@ func (m *Manager) ApplyYAML(cluster, text, openedVersion string, dryRun, force b
 	if isSecret(gvr) {
 		// Hidden values were never sent to the UI: put the live ones back.
 		if err := unmaskSecret(c, &obj); err != nil {
+			return res, err
+		}
+	}
+	if isGitOpsValues(gvr) {
+		if err := unmaskGitOpsValues(c, gvr, namespaced, &obj); err != nil {
 			return res, err
 		}
 	}

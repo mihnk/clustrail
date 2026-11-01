@@ -125,20 +125,24 @@ func helmHealth(status string) Health {
 
 var secretLike = []string{"password", "secret", "token", "apikey", "api_key", "privatekey", "private_key", "credentials"}
 
+// looksSecret reports whether a key names a credential.
+func looksSecret(key string) bool {
+	lk := strings.ToLower(key)
+	for _, s := range secretLike {
+		if strings.Contains(lk, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // redact replaces values whose key looks like a credential.
 func redact(v any) any {
 	switch t := v.(type) {
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			lk := strings.ToLower(k)
-			hit := false
-			for _, s := range secretLike {
-				if strings.Contains(lk, s) {
-					hit = true
-				}
-			}
-			if hit {
+			if looksSecret(k) {
 				if _, isMap := val.(map[string]any); !isMap {
 					out[k] = "[redacted by Clustrail]"
 					continue

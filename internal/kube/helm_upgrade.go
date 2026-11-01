@@ -205,6 +205,9 @@ func (m *Manager) loadChart(req HelmUpgradeRequest, installed *chartv2.Chart) (*
 // parseUpgradeValues reads the edited YAML and puts live values back where
 // the redaction placeholder was kept.
 func parseUpgradeValues(text string, live map[string]any) (map[string]any, error) {
+	if err := checkSize("the values", len(text), maxObjectBytes); err != nil {
+		return nil, err
+	}
 	vals := map[string]any{}
 	if strings.TrimSpace(text) != "" {
 		if err := yaml.Unmarshal([]byte(text), &vals); err != nil {

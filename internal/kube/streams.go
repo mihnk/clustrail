@@ -444,6 +444,9 @@ func (m *Manager) execSession(id string) *execSession {
 }
 
 func (m *Manager) ExecInput(id, data string) error {
+	if err := checkSize("the input", len(data), maxExecInputBytes); err != nil {
+		return err
+	}
 	s := m.execSession(id)
 	if s == nil {
 		return fmt.Errorf("session %s ended", id)

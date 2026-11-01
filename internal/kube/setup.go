@@ -202,6 +202,9 @@ func (m *Manager) RestartSetup() error {
 // PasteKubeconfig saves pasted kubeconfig text as a new file in ~/.kube
 // (owner-only, never over an existing file) and adds it to the loading chain.
 func (m *Manager) PasteKubeconfig(text string) (string, error) {
+	if err := checkSize("the pasted text", len(text), maxKubeconfigBytes); err != nil {
+		return "", err
+	}
 	cfg, err := clientcmd.Load([]byte(text))
 	if err != nil {
 		return "", fmt.Errorf("not a kubeconfig: %w", err)
