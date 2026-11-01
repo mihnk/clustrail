@@ -45,6 +45,8 @@ const (
 
 	flushInterval = 250 * time.Millisecond
 	probeInterval = 15 * time.Second
+	// probeTimeout ends a probe that hangs.
+	probeTimeout = 10 * time.Second
 )
 
 // metricsEvery is the metrics-server polling interval (Settings › Refresh & watch), in seconds.
@@ -75,6 +77,7 @@ type clusterConn struct {
 	emit    Emitter
 
 	rest   *rest.Config
+	budget *budget // nil with fake clients
 	client kubernetes.Interface
 	// disc has a request timeout; c.client has none so watches and streams stay open.
 	disc    discovery.DiscoveryInterface
@@ -177,7 +180,7 @@ func classifyError(err error) ConnectionState {
 
 func newClusterConn(id string, cfg *rest.Config, env func() Environment, emit Emitter, onState func(ConnectionState, error)) (*clusterConn, error) {
 	cfg = rest.CopyConfig(cfg)
-	cfg.QPS, cfg.Burst = 50, 100
+	b := withBudget(cfg) // shared by every client below and their copies (Helm)
 	cfg.UserAgent = "clustrail"
 	// Typed clients (pods, nodes, ReplicaSets…) take protobuf, which is cheaper
 	// to decode than JSON; every other client keeps the JSON config.
@@ -204,7 +207,7 @@ func newClusterConn(id string, cfg *rest.Config, env func() Environment, emit Em
 		return nil, err
 	}
 	c := connFromClients(id, env, emit, onState, client, dyn, mc)
-	c.rest, c.disc = cfg, disc
+	c.rest, c.disc, c.budget = cfg, disc, b
 	return c, nil
 }
 
@@ -771,6 +774,7 @@ func (c *clusterConn) allNodeRows(env Environment, now time.Time) []NodeRow {
 // metricsLoop polls metrics-server. It reports current usage only; the
 // samples kept here start when Clustrail connected and are labeled that way.
 func (c *clusterConn) metricsLoop(ctx context.Context) {
+	ctx = background(ctx)
 	tick := func() {
 		pm, err := c.metrics.MetricsV1beta1().PodMetricses(c.podsNS).List(ctx, metav1.ListOptions{})
 		if err == nil {
@@ -887,7 +891,10 @@ func (c *clusterConn) probeLoop(ctx context.Context, onLatency func(ms int, err 
 		case <-t.C:
 			wake("API probe")
 			start := time.Now()
-			_, err := c.client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(ctx)
+			// A probe that hangs must end: a stuck server is not a connected one.
+			pctx, cancel := context.WithTimeout(background(ctx), probeTimeout)
+			_, err := c.client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(pctx)
+			cancel()
 			if err != nil && apierrors.IsForbidden(err) {
 				err = nil // /readyz may be restricted; reaching RBAC proves the server answers
 			}
@@ -951,7 +958,7 @@ func (c *clusterConn) pollSource(ctx context.Context, list func(context.Context)
 	c.waitForAlerts(delivered.Load)
 	safeLoop(ctx, "polling "+key, func(err error) { c.health.fail(key, nil); c.onState(Reconnecting, err) }, func() {
 		for {
-			lctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			lctx, cancel := context.WithTimeout(background(ctx), 60*time.Second)
 			objs, err := list(lctx)
 			cancel()
 			if err != nil {

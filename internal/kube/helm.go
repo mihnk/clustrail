@@ -102,8 +102,13 @@ func decodeRelease(data []byte) (*storedRelease, error) {
 			return nil, err
 		}
 		defer zr.Close()
-		if raw, err = io.ReadAll(zr); err != nil {
+		// A release Secret holds at most 1 MiB, but gzip can expand it a
+		// thousandfold: read no more than a release could sensibly be.
+		if raw, err = io.ReadAll(io.LimitReader(zr, maxReleaseBytes+1)); err != nil {
 			return nil, err
+		}
+		if len(raw) > maxReleaseBytes {
+			return nil, fmt.Errorf("release is larger than %d MiB uncompressed", maxReleaseBytes>>20)
 		}
 	}
 	var r storedRelease

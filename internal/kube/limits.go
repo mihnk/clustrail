@@ -30,3 +30,7 @@ func byteSize(n int) string {
 	}
 	return fmt.Sprintf("%d bytes", n)
 }
+
+// maxReleaseBytes is the most a stored Helm release may hold once
+// decompressed (the Secret itself is at most 1 MiB).
+const maxReleaseBytes = 64 << 20
