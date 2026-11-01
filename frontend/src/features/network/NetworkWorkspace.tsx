@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { BAR, Header, NeedsClusters, useConnectedClusters } from "@/features/insights/shared";
 import { cn } from "@/lib/cn";
 import { t as tt } from "@/i18n";
+import { useQuery } from "@/lib/useQuery";
 
 /**
  * What NetworkPolicies let into and out of one pod, read from the objects, and
@@ -20,9 +21,6 @@ export function NetworkWorkspace({ tab }: { tab: WorkspaceTab; active: boolean }
   const clusters = useConnectedClusters();
   const [cluster, setCluster] = useState(tab.cluster ?? "");
   const [podText, setPodText] = useState(tab.params?.namespace && tab.params?.pod ? `${tab.params.namespace}/${tab.params.pod}` : "");
-  const [view, setView] = useState<NetPolView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   // Opened again from another pod's menu: follow it.
   useEffect(() => {
     if (tab.params?.namespace && tab.params?.pod) {
@@ -35,20 +33,10 @@ export function NetworkWorkspace({ tab }: { tab: WorkspaceTab; active: boolean }
   const [ns, pod] = podText.includes("/") ? (podText.split("/", 2) as [string, string]) : ["", ""];
 
   const podKnown = pods.includes(podText); // false until the pod list has it
-  useEffect(() => {
-    if (!backend || !target || !ns || !pod || !podKnown) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    backend
-      .podNetworkPolicies(target, ns, pod)
-      .then((v) => !cancelled && setView(v))
-      .catch((e) => !cancelled && (setView(null), setError(errorText(e))))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [target, ns, pod, podKnown]);
+  const q = useQuery<NetPolView>(backend && target && ns && pod && podKnown ? `podNetworkPolicies|${target}|${ns}|${pod}` : null, () => backend!.podNetworkPolicies(target, ns, pod));
+  const view = q.data ?? null;
+  const error = view ? null : q.error;
+  const loading = q.loading;
 
   const empty = NeedsClusters({ icon: <Waypoints />, title: tt("Network policies"), clusters });
   if (empty) return empty;

@@ -16,7 +16,7 @@ import {
   type DiffSection,
   type Snapshot,
 } from "@/data/compare";
-import { backend, errorText } from "@/backend/client";
+import { backend } from "@/backend/client";
 import { parse } from "yaml";
 import type { Cluster, Environment } from "@/data/types";
 import { Banner } from "@/components/ui/banner";
@@ -37,6 +37,7 @@ import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { StatusGlyph } from "@/components/status/StatusGlyph";
 import { cn } from "@/lib/cn";
 import { t as tt } from "@/i18n";
+import { useQuery } from "@/lib/useQuery";
 
 const MAX_COLUMNS = 3;
 const ENV_ORDER: Record<Environment, number> = { dev: 0, stg: 1, prod: 2 };
@@ -76,13 +77,11 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
   const clusters = clusterIds.map((id) => ws.clusterById(id)).filter((c): c is Cluster => !!c);
   const objects = clusters.map((c) => ws.deployments.find((d) => d.cluster === c.id && d.namespace === namespace && d.name === name));
   // Desktop: read each live object (and the ConfigMaps it references) from its cluster.
-  const [remote, setRemote] = useState<{ key: string; snaps: (Snapshot & { configData?: Record<string, Record<string, string>> })[]; error?: string } | null>(null);
   const objectsKey = objects.map((o) => (o ? `${o.id}@${o.revisions[0]?.rev ?? ""}:${o.readyReplicas}` : "-")).join("|");
-  useEffect(() => {
-    if (!backend) return;
-    const api = backend;
-    let cancelled = false;
-    void Promise.all(
+  // objectsKey names each object (cluster/namespace/name, revision): a new revision or rollout reads them again.
+  const q = useQuery(backend ? `compare|${kind}|${namespace}|${name}|${objectsKey}` : null, async () => {
+    const api = backend!;
+    const snaps = await Promise.all(
       objects.map(async (row) => {
         if (!row) return null;
         const live = await api.getObject(row.cluster, kind, namespace, name);
@@ -98,14 +97,10 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
         }
         return snapshotFromObject(row, obj, configs);
       }),
-    )
-      .then((snaps) => !cancelled && setRemote({ key: objectsKey, snaps: snaps.filter((x): x is NonNullable<typeof x> => !!x) }))
-      .catch((e) => !cancelled && setRemote({ key: objectsKey, snaps: [], error: errorText(e) }));
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- objectsKey names each object (cluster/namespace/name, revision); kind is fixed for the tab
-  }, [objectsKey]);
+    );
+    return snaps.filter((x): x is NonNullable<typeof x> => !!x);
+  });
+  const remote: { snaps: (Snapshot & { configData?: Record<string, Record<string, string>> })[]; error?: string } | null = q.data ? { snaps: q.data, error: q.error ?? undefined } : q.error ? { snaps: [], error: q.error } : null;
   // Rebuilt every render from the rows; the same object while its content is.
   const snaps = useContentStable(backend ? (remote?.snaps ?? []) : objects.filter((o) => !!o).map(snapshotFor));
   const comparable = snaps.length >= 2 && snaps.length === clusters.length;
@@ -287,7 +282,7 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
         </div>
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-          {backend && clusters.length >= 2 && (!remote || remote.key !== objectsKey) && !remote?.error ? (
+          {backend && clusters.length >= 2 && !remote ? (
             <div className="p-6 text-cell text-fg-secondary">{tt("Reading {kind} {object} from {clusters}…", { kind, object: `${namespace}/${name}`, clusters: clusters.map((c) => c.name).join(", ") })}</div>
           ) : remote?.error ? (
             <div className="p-6 text-cell text-status-critical">{remote.error}</div>

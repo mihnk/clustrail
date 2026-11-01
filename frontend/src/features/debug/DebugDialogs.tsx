@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { Dialog } from "radix-ui";
 import { Bug, Server, TriangleAlert, X } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
@@ -11,6 +11,7 @@ import { sessionRevealId } from "@/features/terminal/session";
 import { cn } from "@/lib/cn";
 import { quoteArg, splitArgs } from "@/lib/shellwords";
 import { t as tt, tn } from "@/i18n";
+import { useQuery } from "@/lib/useQuery";
 
 // Debug a pod with an ephemeral container, or a node through a privileged pod
 // (internal/kube/debug.go). One host for both; views ask with openDebug().
@@ -117,32 +118,19 @@ function useTyped(cluster: string) {
 function PodDebugDialog({ target }: { target: Extract<DebugTarget, { kind: "pod" }> }) {
   const ws = useWorkspace();
   const toast = useToast();
-  const [containers, setContainers] = useState<string[]>([]);
   const [image, setImage] = useState(IMAGES[1]!.image);
   const [custom, setCustom] = useState("");
-  const [targetContainer, setTargetContainer] = useState("");
+  const [pickedContainer, setTargetContainer] = useState("");
   const [profile, setProfile] = useState<(typeof PROFILES)[number]>("general");
   const [command, setCommand] = useState("sh");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const typed = useTyped(target.cluster);
 
-  useEffect(() => {
-    if (!backend) return;
-    let cancelled = false;
-    void backend
-      .podDetail(target.cluster, target.namespace, target.pod)
-      .then((d) => {
-        if (cancelled) return;
-        const names = d.containers.map((c) => c.name);
-        setContainers(names);
-        setTargetContainer((cur) => cur || names[0] || "");
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [target.cluster, target.namespace, target.pod]);
+  // The pod's containers, to pick the one whose processes the debug container sees (the first by default).
+  const detail = useQuery(backend ? `podDetail|${target.cluster}|${target.namespace}|${target.pod}` : null, () => backend!.podDetail(target.cluster, target.namespace, target.pod));
+  const containers = detail.data?.containers.map((c) => c.name) ?? [];
+  const targetContainer = pickedContainer || containers[0] || "";
 
   const chosen = image === "custom" ? custom.trim() : image;
   // Quoted like a shell: sh -c 'nslookup api; sh' is three arguments.

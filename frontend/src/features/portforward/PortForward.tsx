@@ -2,7 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Dialog } from "radix-ui";
 import { ArrowLeftRight, ExternalLink, Square, X } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
-import { backend, errorText, EVENTS, onEvent, openExternal, type PortForwardInfo, type PortForwardRequest } from "@/backend/client";
+import { backend, errorText, EVENTS, openExternal, type PortForwardInfo, type PortForwardRequest } from "@/backend/client";
 import { Button, IconButton } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -10,6 +10,7 @@ import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { t as tt } from "@/i18n";
+import { useLive } from "@/backend/hooks";
 
 type Target = Pick<PortForwardRequest, "cluster" | "namespace" | "kind" | "name">;
 
@@ -26,20 +27,11 @@ function closePortForward() {
   listeners.forEach((l) => l());
 }
 
+const NONE: PortForwardInfo[] = [];
+
 /** Active forwards, kept current by backend events. */
 export function usePortForwards(): PortForwardInfo[] {
-  const [list, setList] = useState<PortForwardInfo[]>([]);
-  useEffect(() => {
-    if (!backend) return;
-    let cancelled = false;
-    void backend.portForwards().then((l) => !cancelled && setList(l ?? []));
-    const off = onEvent<PortForwardInfo[]>(EVENTS.portForwards, (l) => setList(l ?? []));
-    return () => {
-      cancelled = true;
-      off();
-    };
-  }, []);
-  return list;
+  return useLive<PortForwardInfo[] | null>("portForwards", () => backend!.portForwards(), EVENTS.portForwards) ?? NONE;
 }
 
 const urlOf = (f: Pick<PortForwardInfo, "localPort">) => `http://localhost:${f.localPort}`;

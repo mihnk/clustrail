@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog } from "radix-ui";
 import { CirclePause, CirclePlay, Play, RotateCcw, Scaling, ScrollText, X } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
-import { backend, errorText, type JobStatus } from "@/backend/client";
+import { backend, type JobStatus } from "@/backend/client";
 import type { ResourceAction } from "@/components/resource-actions/ResourceActions";
 import type { ConfirmationRequest } from "@/components/safety/ConfirmationDialog";
 import { Button, IconButton } from "@/components/ui/button";
@@ -13,7 +13,8 @@ import { EmptyState } from "@/components/EmptyState";
 import type { Environment } from "@/data/types";
 import { kindName } from "./kinds";
 import { t as tt } from "@/i18n";
-import { everyWhileVisible } from "@/lib/everyWhileVisible";
+import { useQuery } from "@/lib/useQuery";
+import { StaleNote } from "@/components/StaleNote";
 
 // Actions of StatefulSets, DaemonSets, Jobs and CronJobs in the generic lists
 // (internal/kube/workloads.go). Deployments have their own workspace.
@@ -234,29 +235,15 @@ export function ScaleDialog({
 /** A Job's attempts: each retry is a new pod, with its exit code and reason. */
 export function JobAttempts({ cluster, namespace, name }: { cluster: string; namespace: string; name: string }) {
   const ws = useWorkspace();
-  const [status, setStatus] = useState<JobStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!backend) return;
-    let cancelled = false;
-    const load = () =>
-      backend
-        ?.jobStatus(cluster, namespace, name)
-        .then((s) => !cancelled && (setStatus(s), setError(null)))
-        .catch((e) => !cancelled && setError(errorText(e)));
-    void load();
-    const stop = everyWhileVisible(load, 5000);
-    return () => {
-      cancelled = true;
-      stop();
-    };
-  }, [cluster, namespace, name]);
+  const q = useQuery<JobStatus>(backend ? `jobStatus|${cluster}|${namespace}|${name}` : null, () => backend!.jobStatus(cluster, namespace, name), { every: 5000 });
+  const status = q.data;
   if (!backend) return <EmptyState title={tt("Job attempts come from your clusters in the desktop app.")} />;
-  if (error) return <EmptyState title={tt("Could not read the Job")}>{error}</EmptyState>;
+  if (q.error && !status) return <EmptyState title={tt("Could not read the Job")}>{q.error}</EmptyState>;
   if (!status) return <EmptyState title={tt("Reading attempts…")} />;
   const failedOut = status.condition === "Failed";
   return (
     <div className="flex flex-col gap-3 px-3.5 py-3">
+      <StaleNote error={q.error} updatedAt={q.updatedAt} />
       <dl className="m-0 grid grid-cols-[minmax(90px,auto)_1fr] gap-x-3 gap-y-1.5 text-ui">
         <dt className="text-fg-muted">{tt("Succeeded")}</dt>
         <dd className="m-0 font-mono">

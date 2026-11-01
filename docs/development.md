@@ -36,8 +36,18 @@ cd frontend && npm run typecheck && npm run lint && npm test
 ```
 
 `npm test` runs the frontend's unit tests (vitest, `src/**/*.test.ts`) in
-Node: the filter and command-line parsers, formatters, the table's row model
-and the pod stream client.
+Node: the filter and command-line parsers, formatters, the table's row model,
+the pod stream client and the query layer.
+
+Loading data in a view: use `useQuery` (`frontend/src/lib/useQuery.ts`), or
+`useQueries` for one request per cluster, rather than a `useEffect` with its
+own cancel flag. The key names the request (method and arguments): the
+latest answer for the current key wins, polls never overlap, a request no one
+waits for any more is cancelled, two views asking the same key share one
+request, retries are bounded and skip errors a retry cannot fix (RBAC, not
+found), and a failed refresh keeps the last data with the error
+(`components/StaleNote.tsx`). `useLive` (`backend/hooks.ts`) is for values
+that a backend event keeps current.
 
 Static analysis: `golangci-lint run` (v2.15.0, `.golangci.yml`) for Go and
 `npm run lint` (ESLint: hook rules and unhandled promises) for the frontend.

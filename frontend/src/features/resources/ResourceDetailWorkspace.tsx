@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Code, Layers } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
-import { backend, errorText } from "@/backend/client";
+import { backend } from "@/backend/client";
 import { useEvents } from "@/backend/hooks";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabCount } from "@/components/ui/tabs";
@@ -14,6 +14,7 @@ import { EventsPanel } from "@/features/pods/PodInspector";
 import { kindName } from "./kinds";
 import { SecretKeys } from "./SecretKeys";
 import { t } from "@/i18n";
+import { useQuery } from "@/lib/useQuery";
 
 /** One object in its own tab: the full Deployment inspector, or YAML and events for any other kind. */
 export function ResourceDetailWorkspace({ tab }: { tab: WorkspaceTab; active: boolean }) {
@@ -71,25 +72,11 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
   const cluster = ws.clusterById(tab.cluster ?? "");
   const ns = tab.params?.namespace ?? "";
   const name = tab.params?.name ?? tab.title;
-  const [yaml, setYaml] = useState<string | null>(null);
-  const [secret, setSecret] = useState<{ type: string; keys: { key: string; bytes: number }[] } | undefined>();
-  const [error, setError] = useState<string | null>(null);
+  const obj = useQuery(backend && tab.cluster ? `getObject|${tab.cluster}|${kind}|${ns}|${name}` : null, () => backend!.getObject(tab.cluster!, kind, ns, name));
+  const yaml = obj.data?.yaml ?? null;
+  const secret = obj.data?.secret;
+  const error = obj.data ? null : obj.error;
   const events = useEvents(tab.cluster ?? "", ns, kindName(kind), name, !!backend);
-  useEffect(() => {
-    if (!backend || !tab.cluster) return;
-    let cancelled = false;
-    backend
-      .getObject(tab.cluster, kind, ns, name)
-      .then((o) => {
-        if (cancelled) return;
-        setYaml(o.yaml);
-        setSecret(o.secret);
-      })
-      .catch((e) => !cancelled && setError(errorText(e)));
-    return () => {
-      cancelled = true;
-    };
-  }, [tab.cluster, kind, ns, name]);
   if (!backend) {
     return (
       <EmptyState className="flex-1" icon={<Layers />} title={`${name} · ${kindName(kind)}`}>{t("Object details read the cluster’s API server, so they need the desktop app.")}</EmptyState>

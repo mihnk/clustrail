@@ -26,8 +26,12 @@ export function NotificationsSection({ visible }: { visible: boolean }) {
   useEffect(() => {
     if (!backend) return;
     let cancelled = false;
-    void backend.notificationSettings().then((s) => !cancelled && setSettings({ ...s, scopes: s.scopes ?? {} }));
-    void backend.alerts().then((a) => !cancelled && setRecent(a ?? []));
+    void backend
+      .notificationSettings()
+      .then((s) => !cancelled && s && setSettings({ ...s, scopes: s.scopes ?? {} }))
+      .catch(() => {}); // without settings the section stays hidden
+    // An alert that came as an event before this answer stays: merged by id, newest first.
+    void backend.alerts().then((a) => !cancelled && setRecent((pushed) => [...pushed, ...(a ?? []).filter((x) => !pushed.some((p) => p.id === x.id))].slice(0, 50)));
     const off = onEvent<Alert>(EVENTS.alert, (a) => setRecent((r) => [a, ...r].slice(0, 50)));
     return () => {
       cancelled = true;

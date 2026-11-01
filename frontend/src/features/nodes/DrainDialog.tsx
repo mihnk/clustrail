@@ -27,7 +27,8 @@ export function DrainDialog({
   onCancel: () => void;
   onDrain: (opts: { force: boolean; deleteEmptyDir: boolean; timeoutSec: number }) => void;
 }) {
-  const loaded = useDrainPreflight(node);
+  const check = useDrainPreflight(node);
+  const loaded = check.preflight;
   // While the backend checks the node's pods, the dialog shows zeros and cannot drain.
   const pf: DrainPreflight = loaded ?? {
     evict: 0,
@@ -108,7 +109,16 @@ export function DrainDialog({
             <section className="flex flex-col">
               <div className="flex items-center pb-1.5">
                 <span className="section-label flex-1">{t("Preflight · {total} pods on this node", { total })}</span>
-                <span className="text-meta text-fg-muted">{t("checked just now")}</span>
+                {check.error ? (
+                  <span className="flex items-center gap-2 text-meta text-status-critical">
+                    {t("Could not check the pods: {error}", { error: check.error })}
+                    <Button size="sm" variant="ghost" onClick={check.retry}>
+                      {t("Retry")}
+                    </Button>
+                  </span>
+                ) : (
+                  <span className="text-meta text-fg-muted">{loaded ? t("checked just now") : t("checking the pods…")}</span>
+                )}
               </div>
               <Pre glyph="completed" count={pf.evict} first>{tn("will be {evicted} and recreated by their controllers on other nodes.", { evicted: <b className="font-semibold">{t("evicted")}</b> })}</Pre>
               {pf.pdbBlocked.pods.length > 0 && (

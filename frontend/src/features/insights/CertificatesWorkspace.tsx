@@ -35,7 +35,7 @@ const SOURCE_LABEL = (s: ExpiryItem["source"]) => (s === "kubeconfig" ? tt("Your
 export function CertificatesWorkspace({ active }: { active: boolean }) {
   const ws = useWorkspace();
   const [show, setShow] = useState<"soon" | "all">("soon");
-  const { clusters, data, errors, loading, refresh } = usePerCluster((c) => backend!.expiry(c), "", active, 0);
+  const { clusters, data, errors, loading, refresh } = usePerCluster("expiry", (c) => backend!.expiry(c), "", active, 0);
   const rows = useMemo(
     () =>
       Object.entries(data)

@@ -12,11 +12,12 @@ import { useConfirm } from "@/components/safety/ConfirmationDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { useEvents } from "@/backend/hooks";
 import { EventsPanel, RelatedList } from "@/features/pods/PodInspector";
-import { backend, errorText } from "@/backend/client";
+import { backend } from "@/backend/client";
 import { formatMemory } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { rollbackDeploymentRequest, scaleDeploymentRequest, strategyText } from "./requests";
 import { t as tt, tn } from "@/i18n";
+import { useQuery } from "@/lib/useQuery";
 
 export type DeploymentTab = "overview" | "pods" | "history" | "events" | "yaml" | "related";
 
@@ -415,18 +416,8 @@ function ObjectEvents({ cluster, namespace, kind, name }: { cluster: string; nam
 
 /** Desktop: what selects, scales, protects and configures this Deployment, as the API server reports it. */
 function DeploymentRelated({ d }: { d: DeploymentRow }) {
-  const [rels, setRels] = useState<PodRelation[] | { error: string } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    setRels(null);
-    void backend
-      ?.deploymentRelations(d.cluster, d.namespace, d.name)
-      .then((r) => !cancelled && setRels(r))
-      .catch((e) => !cancelled && setRels({ error: errorText(e) }));
-    return () => {
-      cancelled = true;
-    };
-  }, [d.cluster, d.namespace, d.name]);
+  const q = useQuery<PodRelation[]>(backend ? `deploymentRelations|${d.cluster}|${d.namespace}|${d.name}` : null, () => backend!.deploymentRelations(d.cluster, d.namespace, d.name));
+  const rels: PodRelation[] | { error: string } | null = q.data ?? (q.error ? { error: q.error } : null);
   if (rels === null) return <EmptyState title={tt("Finding related objects…")} />;
   if ("error" in rels) return <EmptyState title={tt("Could not read related objects")}>{rels.error}</EmptyState>;
   if (!rels.length) return <EmptyState title={tt("No related objects")}>{tt("No Service, HPA, PodDisruptionBudget or configuration references this Deployment.")}</EmptyState>;

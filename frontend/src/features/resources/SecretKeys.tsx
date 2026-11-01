@@ -4,6 +4,7 @@ import { backend, errorText } from "@/backend/client";
 import { Button, IconButton } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { t } from "@/i18n";
+import { useQuery } from "@/lib/useQuery";
 
 export interface SecretKeyInfo {
   key: string;
@@ -29,31 +30,15 @@ export function SecretKeys({
   type?: string;
   className?: string;
 }) {
-  const [keys, setKeys] = useState<SecretKeyInfo[] | null>(given ?? null);
-  const [kind, setKind] = useState(type);
+  // Keys come with the row when it has them; otherwise from the object (no values).
+  const q = useQuery(!given && backend ? `getObject|${cluster}|Secret|${namespace}|${name}` : null, () => backend!.getObject(cluster, "Secret", namespace, name));
+  const keys: SecretKeyInfo[] | null = given ?? (q.data ? (q.data.secret?.keys ?? []) : q.error ? [] : null);
+  const kind = given ? type : (q.data?.secret?.type ?? type);
   const [shown, setShown] = useState<Record<string, { value: string; binary: boolean } | { error: string }>>({});
   const [copied, setCopied] = useState<string | null>(null);
 
-  useEffect(() => {
-    setShown({});
-    if (given) {
-      setKeys(given);
-      return;
-    }
-    if (!backend) return;
-    let cancelled = false;
-    void backend
-      .getObject(cluster, "Secret", namespace, name)
-      .then((o) => {
-        if (cancelled) return;
-        setKeys(o.secret?.keys ?? []);
-        setKind(o.secret?.type);
-      })
-      .catch(() => !cancelled && setKeys([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [cluster, namespace, name, given]);
+  // Revealed values belong to one Secret.
+  useEffect(() => setShown({}), [cluster, namespace, name]);
 
   const reveal = (key: string) => {
     if (!backend) return;

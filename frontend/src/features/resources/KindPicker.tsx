@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "radix-ui";
 import { LayoutGrid, Search } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
-import { backend, errorText, type KindInfo } from "@/backend/client";
+import { backend, type KindInfo } from "@/backend/client";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import { kindKey, listLabel } from "./kinds";
 import { t } from "@/i18n";
+import { useQueries } from "@/lib/useQuery";
 
 interface Entry extends KindInfo {
   key: string;
@@ -16,8 +17,6 @@ interface Entry extends KindInfo {
 /** ⌘J: every kind the selected clusters serve (CRDs included); Enter opens its list. */
 export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const ws = useWorkspace();
-  const [kinds, setKinds] = useState<Entry[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -28,29 +27,27 @@ export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange
     if (!open) return;
     setQuery("");
     setIndex(0);
-    if (!backend) {
-      setKinds([]);
-      return;
+  }, [open]);
+
+  // Kinds per cluster, read while the picker is open; a slow cluster does not hold back the others.
+  const entries: [string, string][] = backend ? connected.map((c) => [c, `resourceKinds|${c}`]) : [];
+  const { states } = useQueries(entries, (c) => backend!.resourceKinds(c), { keepPrevious: true }, open);
+  const error = connected.map((c) => states[c]?.error).find(Boolean) ?? null;
+  const kinds = useMemo(() => {
+    if (!backend) return [];
+    const loaded = connectedKey ? connectedKey.split(",").filter((c) => states[c]?.data) : [];
+    if (!loaded.length) return connectedKey && connectedKey.split(",").some((c) => states[c]?.loading) ? null : [];
+    const byKey = new Map<string, Entry>();
+    for (const c of loaded) {
+      for (const k of states[c]!.data!) {
+        const key = kindKey(k);
+        const cur = byKey.get(key);
+        if (cur) cur.clusters.push(c);
+        else byKey.set(key, { ...k, key, clusters: [c] });
+      }
     }
-    const api = backend;
-    let cancelled = false;
-    const clusters = connectedKey ? connectedKey.split(",") : [];
-    void Promise.all(clusters.map((c) => api.resourceKinds(c).then((ks) => ks.map((k) => ({ ...k, cluster: c }))).catch((e) => (setError(errorText(e)), []))))
-      .then((all) => {
-        if (cancelled) return;
-        const byKey = new Map<string, Entry>();
-        for (const k of all.flat()) {
-          const key = kindKey(k);
-          const cur = byKey.get(key);
-          if (cur) cur.clusters.push(k.cluster);
-          else byKey.set(key, { ...k, key, clusters: [k.cluster] });
-        }
-        setKinds([...byKey.values()]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, connectedKey]);
+    return [...byKey.values()];
+  }, [connectedKey, states]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

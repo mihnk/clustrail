@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
-import { backend, errorText } from "@/backend/client";
+import { backend } from "@/backend/client";
 import { IconButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
 import { t as tt } from "@/i18n";
-import { everyWhileVisible } from "@/lib/everyWhileVisible";
+import { useQueries } from "@/lib/useQuery";
 
 export const BAR = "bg-surface-panel dark:bg-transparent";
 
@@ -20,53 +20,22 @@ export function useConnectedClusters(): string[] {
  * Reads something per connected cluster while the tab is active, again every
  * `everyMs` (0: only on demand). Errors stay per cluster.
  */
-export function usePerCluster<T>(load: (cluster: string) => Promise<T>, key: string, active: boolean, everyMs: number) {
+export function usePerCluster<T>(name: string, load: (cluster: string) => Promise<T>, key: string, active: boolean, everyMs: number) {
   const clusters = useConnectedClusters();
-  const [data, setData] = useState<Record<string, T>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
-  const [tick, setTick] = useState(0);
-  const loadRef = useRef(load);
-  loadRef.current = load;
-  const clustersKey = clusters.join(",");
-
-  useEffect(() => {
-    const list = clustersKey ? clustersKey.split(",") : [];
-    if (!backend || !active || !list.length) return;
-    let cancelled = false;
-    const run = () => {
-      setLoading(true);
-      void Promise.all(
-        list.map((c) =>
-          loadRef
-            .current(c)
-            .then((v) => {
-              if (cancelled) return;
-              setData((d) => ({ ...d, [c]: v }));
-              setErrors((e) => {
-                if (!(c in e)) return e;
-                const next = { ...e };
-                delete next[c];
-                return next;
-              });
-            })
-            .catch((err) => !cancelled && setErrors((e) => ({ ...e, [c]: errorText(err) }))),
-        ),
-      ).finally(() => !cancelled && setLoading(false));
-    };
-    run();
-    const stop = everyMs > 0 ? everyWhileVisible(run, everyMs) : undefined;
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
-  }, [clustersKey, key, active, tick, everyMs]);
-
-  const refresh = useCallback(() => setTick((n) => n + 1), []);
-  // Clusters no longer selected drop out of the result.
-  const current: Record<string, T> = {};
-  for (const c of clusters) if (data[c] !== undefined) current[c] = data[c]!;
-  return { clusters, data: current, errors, loading, refresh };
+  const entries: [string, string][] = backend ? clusters.map((c) => [c, `${name}|${c}|${key}`]) : [];
+  const { states, refresh } = useQueries(entries, load, { every: everyMs, keepPrevious: true }, active);
+  // Clusters no longer selected drop out of the result; a failed read keeps what was read before.
+  const data: Record<string, T> = {};
+  const errors: Record<string, string> = {};
+  let loading = false;
+  for (const c of clusters) {
+    const s = states[c];
+    if (!s) continue;
+    if (s.data !== undefined) data[c] = s.data;
+    if (s.error) errors[c] = s.error;
+    loading ||= s.loading;
+  }
+  return { clusters, data, errors, loading, refresh };
 }
 
 export function Header({ icon, title, sub, children, onRefresh, loading }: { icon: ReactNode; title: string; sub?: ReactNode; children?: ReactNode; onRefresh?: () => void; loading?: boolean }) {
@@ -133,28 +102,8 @@ export function kindKeyOf(kind: string): string {
 /** Warning events of the last 15 minutes across the connected selected clusters, for the sidebar. Read every minute while the window is visible. */
 export function useWarningCount(): number | null {
   const clusters = useConnectedClusters();
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const key = clusters.join(",");
-  useEffect(() => {
-    const list = key ? key.split(",") : [];
-    if (!backend || !list.length) return;
-    let cancelled = false;
-    const run = () => {
-      if (document.visibilityState !== "visible") return;
-      for (const c of list) {
-        backend!
-          .warningCount(c, 900)
-          .then((n) => !cancelled && setCounts((m) => (m[c] === n ? m : { ...m, [c]: n })))
-          .catch(() => {});
-      }
-    };
-    run();
-    const stop = everyWhileVisible(run, 60_000);
-    return () => {
-      cancelled = true;
-      stop();
-    };
-  }, [key]);
+  const entries: [string, string][] = backend ? clusters.map((c) => [c, `warningCount|${c}|900`]) : [];
+  const { states } = useQueries(entries, (c) => backend!.warningCount(c, 900), { every: 60_000, keepPrevious: true, retries: 0 });
   if (!backend || !clusters.length) return null;
-  return clusters.reduce((sum, c) => sum + (counts[c] ?? 0), 0);
+  return clusters.reduce((sum, c) => sum + (states[c]?.data ?? 0), 0);
 }

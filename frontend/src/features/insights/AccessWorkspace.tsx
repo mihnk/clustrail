@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
 import { BAR, Header, NeedsClusters, useConnectedClusters } from "./shared";
 import { t as tt } from "@/i18n";
+import { useQuery } from "@/lib/useQuery";
 
 type Kind = "me" | "User" | "Group" | "ServiceAccount";
 
@@ -25,7 +26,6 @@ export function AccessWorkspace({ active: _active }: { active: boolean }) {
   const [name, setName] = useState("");
   const [saNamespace, setSaNamespace] = useState("");
   const [namespace, setNamespace] = useState("");
-  const [namespaces, setNamespaces] = useState<string[]>([]);
   const [result, setResult] = useState<AccessResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,22 +33,16 @@ export function AccessWorkspace({ active: _active }: { active: boolean }) {
   const target = clusters.includes(cluster) ? cluster : (clusters[0] ?? "");
   // The cluster's context namespace, read when its namespaces arrive.
   const contextNamespace = useEffectEvent((cluster: string) => ws.clusterById(cluster)?.namespace);
+  const nsq = useQuery<string[]>(backend && target ? `namespaces|${target}` : null, () => backend!.namespaces(target));
+  const namespaces = nsq.data ?? [];
+  // A namespace that the cluster has stays picked; otherwise its context namespace, default, or the first.
+  const pickNamespace = useEffectEvent((ns: string[]) => {
+    const own = contextNamespace(target);
+    setNamespace((cur) => (cur && ns.includes(cur) ? cur : own && ns.includes(own) ? own : ns.includes("default") ? "default" : (ns[0] ?? "")));
+  });
   useEffect(() => {
-    if (!backend || !target) return;
-    let cancelled = false;
-    void backend
-      .namespaces(target)
-      .then((ns) => {
-        if (cancelled) return;
-        setNamespaces(ns);
-        const own = contextNamespace(target);
-        setNamespace((cur) => (cur && ns.includes(cur) ? cur : own && ns.includes(own) ? own : ns.includes("default") ? "default" : (ns[0] ?? "")));
-      })
-      .catch(() => setNamespaces([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [target]);
+    if (nsq.data) pickNamespace(nsq.data);
+  }, [nsq.data]);
 
   const empty = NeedsClusters({ icon: <ShieldCheck />, title: tt("Access"), clusters });
   if (empty) return empty;

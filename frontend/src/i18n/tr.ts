@@ -1840,4 +1840,8 @@ export const tr: Record<string, string> = {
   "Send a test": "Test gönder",
   "Sent lately": "Son gönderilenler",
   "Nothing yet.": "Henüz yok.",
+  "Could not check the pods: {error}": "Pod'lar kontrol edilemedi: {error}",
+  "checking the pods…": "pod'lar kontrol ediliyor…",
+  "Could not refresh; showing what was read at {at}.": "Yenilenemedi; {at} itibarıyla okunan gösteriliyor.",
+  "Could not refresh.": "Yenilenemedi.",
 };

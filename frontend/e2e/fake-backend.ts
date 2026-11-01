@@ -327,7 +327,7 @@ export interface FakeBackend {
 const EVENT_LIST = "clustrail:list";
 
 export interface FakeOptions {
-  /** Extra or replaced answers, by method name. */
+  /** Extra or replaced answers, by method name; a promise answers late, a throw fails the call. */
   answers?: Record<string, (args: Args) => unknown>;
   /** Pods the stream serves per cluster (default: the fixture's). */
   pods?: (cluster: string) => unknown[];
@@ -376,8 +376,14 @@ export async function openDesktop(page: Page, opts: FakeOptions = {}): Promise<F
       setTimeout(() => void emit(EVENT_LIST, { id, cluster: args[0], reset: true, columns: l.columns, namespaced: l.namespaced, shown: l.shown, upserts: l.rows, deletes: [], mode: "watch" }), 50);
       return;
     }
-    const res = opts.answers?.[method] ? opts.answers[method]!(args) : answer(d, method, args);
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(res ?? null) });
+    // An answer may be a promise (a slow cluster) and may throw (the call fails with that message).
+    let res: unknown;
+    try {
+      res = await (opts.answers?.[method] ? opts.answers[method]!(args) : answer(d, method, args));
+    } catch (e) {
+      return route.fulfill({ status: 500, contentType: "text/plain", body: e instanceof Error ? e.message : String(e) }).catch(() => {});
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(res ?? null) }).catch(() => {});
   });
   const streams = new FakeStreams(opts.pods ?? ((cluster) => (d.fx.snapshot.pods as { cluster: string }[]).filter((p) => p.cluster === cluster)));
   await page.route("**/wails/stream/send", async (route) => {

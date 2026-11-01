@@ -44,7 +44,7 @@ export function StorageWorkspace({ active }: { active: boolean }) {
   const [problems, setProblems] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const deferred = useDeferredValue(query);
-  const { clusters, data, errors, loading, refresh } = usePerCluster((c) => backend!.storage(c), "", active, 60_000);
+  const { clusters, data, errors, loading, refresh } = usePerCluster("storage", (c) => backend!.storage(c), "", active, 60_000);
 
   const claims = useMemo<Claim[]>(() => Object.entries(data).flatMap(([cluster, r]) => r.claims.map((c) => ({ ...c, cluster }))), [data]);
   const pending = claims.filter((c) => c.health !== "healthy").length;

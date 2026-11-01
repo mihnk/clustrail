@@ -30,7 +30,7 @@ export function WarningsWorkspace({ active }: { active: boolean }) {
   const [query, setQuery] = useState("");
   const [reason, setReason] = useState<string | null>(null);
   const deferred = useDeferredValue(query);
-  const { clusters, data, errors, loading, refresh } = usePerCluster((c) => backend!.clusterWarnings(c, WINDOWS[window]), window, active, 20_000);
+  const { clusters, data, errors, loading, refresh } = usePerCluster("clusterWarnings", (c) => backend!.clusterWarnings(c, WINDOWS[window]), window, active, 20_000);
 
   const rows = useMemo<Row[]>(
     () =>

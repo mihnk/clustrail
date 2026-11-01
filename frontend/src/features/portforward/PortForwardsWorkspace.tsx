@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowLeftRight, ExternalLink } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
-import { backend, errorText, EVENTS, onEvent, openExternal, type PortForwardInfo, type PortForwardProfile, type PortForwardProfileState } from "@/backend/client";
+import { backend, errorText, EVENTS, openExternal, type PortForwardInfo, type PortForwardProfile, type PortForwardProfileState } from "@/backend/client";
 import { Banner } from "@/components/ui/banner";
 import { Button, IconButton } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
@@ -11,21 +11,13 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { t as tt } from "@/i18n";
 import { usePortForwards } from "./PortForward";
+import { useLive } from "@/backend/hooks";
+
+const NO_PROFILES: PortForwardProfileState[] = [];
 
 /** Saved profiles with their state, kept current by backend events. */
 function useProfiles(): PortForwardProfileState[] {
-  const [list, setList] = useState<PortForwardProfileState[]>([]);
-  useEffect(() => {
-    if (!backend) return;
-    let cancelled = false;
-    void backend.portForwardProfiles().then((l) => !cancelled && setList(l ?? []));
-    const off = onEvent<PortForwardProfileState[]>(EVENTS.pfProfiles, (l) => setList(l ?? []));
-    return () => {
-      cancelled = true;
-      off();
-    };
-  }, []);
-  return list;
+  return useLive<PortForwardProfileState[] | null>("portForwardProfiles", () => backend!.portForwardProfiles(), EVENTS.pfProfiles) ?? NO_PROFILES;
 }
 
 type Tone = "healthy" | "warning" | "critical" | "neutral";

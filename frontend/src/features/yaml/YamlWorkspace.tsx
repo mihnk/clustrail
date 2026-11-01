@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import { parseDocument, parse } from "yaml";
 import { Code, Copy, Download, FoldVertical, GitBranch, Lock, Play, Search, Upload } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
@@ -16,7 +16,8 @@ import { cn } from "@/lib/cn";
 import { applyClustrailTheme, monaco } from "./monaco";
 import { SecretKeys } from "@/features/resources/SecretKeys";
 import { t as tt, tn } from "@/i18n";
-import { everyWhileVisible } from "@/lib/everyWhileVisible";
+import { useQuery } from "@/lib/useQuery";
+
 
 type Mode = "view" | "edit";
 type DiffMode = "none" | "inline" | "side";
@@ -64,7 +65,6 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   );
 
   const [live, setLive] = useState<LiveObject>(initial);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [openedVersion, setOpenedVersion] = useState(initial.resourceVersion);
   const [liveChanges, setLiveChanges] = useState(0);
   const [mode, setMode] = useState<Mode>(params.mode === "edit" || initial.gitops ? "edit" : "view");
@@ -72,40 +72,29 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const [edited, setEdited] = useState(() => (initial.gitops ? suggestedEdit(initial.yaml) : initial.yaml));
 
   // Desktop: load the live object, then poll so concurrent changes show up as a conflict.
+  // Polls never overlap and an older answer never replaces a newer one, so a
+  // slow poll cannot roll the object back or count a change that did not happen.
+  const objectKey = backend && tab.cluster ? `getObject|${tab.cluster}|${params.kind ?? "Deployment"}|${params.namespace ?? ""}|${params.name ?? ""}` : null;
+  const liveQuery = useQuery(objectKey, () => backend!.getObject(tab.cluster!, params.kind ?? "Deployment", params.namespace ?? "", params.name ?? ""), { every: 10_000 });
+  const loadError = liveQuery.error;
+  const opened = useRef<string | null>(null);
+  const applyLive = useEffectEvent((obj: NonNullable<typeof liveQuery.data>) => {
+    const next: LiveObject = { yaml: obj.yaml, resourceVersion: obj.resourceVersion, owners: obj.owners, gitops: obj.gitops, secret: obj.secret };
+    if (opened.current !== objectKey) {
+      opened.current = objectKey;
+      setLive(next);
+      setOpenedVersion(obj.resourceVersion);
+      setEdited(obj.yaml);
+      if (obj.gitops) setMode("edit");
+      return;
+    }
+    if (live.resourceVersion === obj.resourceVersion) return;
+    setLiveChanges((n) => n + 1);
+    setLive(next);
+  });
   useEffect(() => {
-    if (!backend || !tab.cluster) return;
-    const api = backend;
-    let first = true;
-    let cancelled = false;
-    const load = () =>
-      api
-        .getObject(tab.cluster!, params.kind ?? "Deployment", params.namespace ?? "", params.name ?? "")
-        .then((obj) => {
-          if (cancelled) return;
-          setLoadError(null);
-          const next: LiveObject = { yaml: obj.yaml, resourceVersion: obj.resourceVersion, owners: obj.owners, gitops: obj.gitops, secret: obj.secret };
-          if (first) {
-            first = false;
-            setLive(next);
-            setOpenedVersion(obj.resourceVersion);
-            setEdited(obj.yaml);
-            if (obj.gitops) setMode("edit");
-            return;
-          }
-          setLive((cur) => {
-            if (cur.resourceVersion === obj.resourceVersion) return cur;
-            setLiveChanges((n) => n + 1);
-            return next;
-          });
-        })
-        .catch((e) => !cancelled && setLoadError(errorText(e)));
-    void load();
-    const stop = everyWhileVisible(load, 10_000);
-    return () => {
-      cancelled = true;
-      stop();
-    };
-  }, [tab.cluster, params.kind, params.namespace, params.name]);
+    if (liveQuery.data) applyLive(liveQuery.data);
+  }, [liveQuery.data]);
   const [cursor, setCursor] = useState({ line: 1, col: 1 });
   const [dryRun, setDryRun] = useState<{ at: string; ms: number; checks: Check[] } | null>(null);
   const [panel, setPanel] = useState("dryrun");
