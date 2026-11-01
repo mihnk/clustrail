@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -131,6 +133,67 @@ func (s *Store) Settings(context, displayName string) (cs ContextSettings, ok bo
 		cs = ContextSettings{Env: env, Protected: env == EnvProd}
 	}
 	return cs, ok
+}
+
+// Rename is a context that disappeared from the kubeconfig while another,
+// with no settings yet, appeared pointing at the same API server.
+type Rename struct{ From, To string }
+
+// CarryOverRenamed gives each new context the settings of a context that is
+// gone from the kubeconfig and pointed at the same server (a context renamed
+// or re-added under another name), so a renamed production context keeps
+// its environment and protection. present maps every context now in the
+// kubeconfig to its server. When several gone contexts match, the strictest
+// settings win.
+func (s *Store) CarryOverRenamed(present map[string]string) []Rename {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Rename
+	for name, server := range present {
+		if _, has := s.data.Contexts[name]; has || server == "" {
+			continue
+		}
+		var from []string
+		for old := range s.data.Contexts {
+			if _, still := present[old]; still || s.data.Servers[old] != server {
+				continue
+			}
+			from = append(from, old)
+		}
+		if len(from) == 0 {
+			continue
+		}
+		sort.Strings(from)
+		merged := s.data.Contexts[from[0]]
+		for _, old := range from[1:] {
+			cs := s.data.Contexts[old]
+			merged.Protected = merged.Protected || cs.Protected
+			merged.ReadOnly = merged.ReadOnly || cs.ReadOnly
+			if envRank(cs.Env) < envRank(merged.Env) {
+				merged.Env = cs.Env
+			}
+		}
+		merged.Hidden = false
+		s.data.Contexts[name] = merged
+		s.markKnownLocked(name)
+		out = append(out, Rename{From: strings.Join(from, ", "), To: name})
+	}
+	if len(out) > 0 {
+		_ = s.save()
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].To < out[j].To })
+	return out
+}
+
+// envRank orders environments from the most careful.
+func envRank(e Environment) int {
+	switch e {
+	case EnvProd:
+		return 0
+	case EnvStg:
+		return 1
+	}
+	return 2
 }
 
 func (s *Store) SetSettings(context string, cs ContextSettings) error {

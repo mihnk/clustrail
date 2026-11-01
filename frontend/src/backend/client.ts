@@ -326,7 +326,8 @@ export interface BackendLogLine {
   ts: string;
   level: "INFO" | "WARN" | "ERROR" | "";
   msg: string;
-  event?: "failed" | "progressing" | "unknown" | "joined" | "left";
+  /** dropped: lines the backend dropped because they came faster than the view took them (msg says how many and when). */
+  event?: "failed" | "progressing" | "unknown" | "joined" | "left" | "dropped";
 }
 
 export interface LogPodInfo {

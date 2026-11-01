@@ -88,7 +88,18 @@ func (m *Manager) reload() {
 	if !m.store.FirstRunDone() {
 		_ = m.store.MarkKnown(names)
 	}
+	// Renamed or re-added contexts keep the settings of the one they replace
+	// (before RecordServers records their server as first seen).
+	var renames []Rename
+	if m.store.FirstRunDone() {
+		renames = m.store.CarryOverRenamed(servers)
+	}
 	_ = m.store.RecordServers(servers)
+	for _, r := range renames {
+		slog.Info("context renamed: settings carried over", "from", r.From, "to", r.To)
+		m.emit.Emit(EventNotice, Notice{Kind: "info", Title: "Settings carried over to " + r.To,
+			Detail: r.From + " is gone from the kubeconfig and " + r.To + " points at the same API server, so it keeps its environment and protection. Change them in Connections if that is wrong."})
+	}
 
 	m.mu.Lock()
 	m.kc = kc
@@ -112,7 +123,7 @@ func (m *Manager) reload() {
 		if id != slug(c.DisplayName) {
 			st.Name = c.Name
 		}
-		st.Env, st.Protected, st.ReadOnly = cs.Env, cs.Protected, cs.ReadOnly
+		st.Env, st.Protected, st.ReadOnly, st.ProtectedBy = cs.Env, cs.Protected, cs.ReadOnly, ""
 		st.Server, st.Auth, st.Source, st.Namespace = c.Server, c.Auth, c.Source, c.Namespace
 		m.hidden[id] = cs.Hidden
 		if confirmed := m.store.ConfirmedServer(c.Name); confirmed != "" && confirmed != c.Server {
@@ -125,6 +136,21 @@ func (m *Manager) reload() {
 		switch {
 		case m.conns[id] != nil && m.conns[id].fingerprint != fp, m.pending[id] != nil && m.pending[id].fingerprint != fp:
 			changed = append(changed, change{id, st.TargetChanged != nil})
+		}
+	}
+	// Protection follows the API server: another context name for a protected
+	// cluster is protected too, and says by which context.
+	protectedOn := map[string]string{}
+	for _, c := range kc.Contexts {
+		if st := m.state[ids[c.Name]]; st.Protected && c.Server != "" && protectedOn[c.Server] == "" {
+			protectedOn[c.Server] = st.Name
+		}
+	}
+	for _, c := range kc.Contexts {
+		if st := m.state[ids[c.Name]]; !st.Protected && !st.ReadOnly {
+			if by := protectedOn[c.Server]; by != "" {
+				st.Protected, st.ProtectedBy = true, by
+			}
 		}
 	}
 	var gone []*clusterConn

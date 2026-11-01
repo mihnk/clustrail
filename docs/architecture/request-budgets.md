@@ -52,7 +52,7 @@ most 60 requests in all and no more after that
 | Pod stream frames | At most 5,000 rows or changes per frame. Retries of a full transport back off from 10 ms to 500 ms. At most 64 subscriptions per connection. |
 | Generic list watch: events channel | 256 events; the producer waits, it never grows. |
 | Generic list watch: batch | One entry per object per 500 ms. |
-| Log lines between flushes | Flushed every interval. The per-stream line and byte budget comes with C11. |
+| Log lines between flushes | At most 20,000 lines or 8 MiB per stream. Past that the oldest waiting lines are dropped, and the next batch says how many and when (C11). |
 | One log line | Cut at the scanner limit and marked (patch 60). |
 | Exec input | 1 MiB per write (D10); terminal resizes buffer 4, the newest wins. |
 | Stored Helm release | Decompressed up to 64 MiB, then refused. Before, a gzip bomb in a release Secret could expand without limit. |
@@ -71,4 +71,4 @@ most 60 requests in all and no more after that
 - [x] No unbounded channel is fed by a cluster.
 - [x] Decompression of cluster data is bounded.
 - [x] Stream hub queues, frames and subscriptions are bounded (C9).
-- [ ] Line and byte budget per log stream: C11.
+- [x] Line and byte budget per log stream (C11).

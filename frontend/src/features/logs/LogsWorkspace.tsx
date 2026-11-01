@@ -146,6 +146,16 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const buffer = useRef<LogLine[]>(backend ? [] : initialBuffer());
   const [version, setVersion] = useState(0);
   const [dropped, setDropped] = useState(0);
+  // Lines that came while the tab was hidden are rendered when it is shown.
+  const activeRef = useRef(active);
+  const behindRef = useRef(false);
+  useEffect(() => {
+    activeRef.current = active;
+    if (active && behindRef.current) {
+      behindRef.current = false;
+      setVersion((v) => v + 1);
+    }
+  }, [active]);
   const [paused, setPaused] = useState(!backend);
   const [pausedAt, setPausedAt] = useState<{ count: number; time: string } | null>(backend ? null : { count: buffer.current.length, time: "12:01:17" });
   const nextId = useRef(buffer.current.length);
@@ -241,7 +251,10 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           }),
         );
       }
-      setVersion((v) => v + 1);
+      // A hidden tab keeps the lines but does not render (or parse fields)
+      // until it is shown again.
+      if (activeRef.current) setVersion((v) => v + 1);
+      else behindRef.current = true;
     };
     const off = onEvent<LogBatch>(EVENTS.logs, (b) => {
       if (streamId === null) early.push(b);

@@ -14,7 +14,7 @@ what drops it. `MemoryStats` (Settings › Memory) reports:
 
 | Holder | Owner | Lives | Dropped when |
 |---|---|---|---|
-| Informer caches (pods, Deployments, ReplicaSets, nodes, events…) | connection | while connected | disconnect, target change, cache budget (unselected clusters first), pause in background |
+| Informer caches (pods, Deployments, ReplicaSets, nodes, events…) | connection | while connected | disconnect, target change, cache budget (unselected clusters first), pause in background. Objects are kept without managed fields, last-applied, or container commands, probes and literal env values: no view reads them from the cache (C4). The initial list streams ([watchlist.md](../benchmarks/watchlist.md)). |
 | Rows built from them | connection | while connected | with the informers; a deleted object's row at once |
 | Stream hub topics | hub, per subscription key | while a window subscribes | the last consumer leaves (tested) |
 | Stream consumer queues | consumer | until sent | sent, or dropped for a snapshot past `MaxPending` changes (C9) |

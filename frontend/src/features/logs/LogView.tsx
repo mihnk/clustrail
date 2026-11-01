@@ -26,7 +26,7 @@ export function TagChip({ tag }: { tag: LogLine["tag"] }) {
   );
 }
 
-const MARKER_HEALTH: Record<LogMarker, Health> = { failed: "failed", progressing: "progressing", unknown: "unknown", joined: "healthy", left: "unknown" };
+const MARKER_HEALTH: Record<LogMarker, Health> = { failed: "failed", progressing: "progressing", unknown: "unknown", joined: "healthy", left: "unknown", dropped: "warning" };
 
 /**
  * Virtualized log lines on the terminal surface. Only lines in view exist in

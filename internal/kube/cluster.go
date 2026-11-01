@@ -939,11 +939,62 @@ func errText(err error) string {
 }
 
 // stripManagedFields drops metadata.managedFields from cached objects.
+//
+// It also drops what no view reads from the cache (issue C4; every reader
+// was checked, and TestLeanCacheKeepsWhatViewsRead guards it):
+//   - kubectl's last-applied annotation (the YAML editor reads the live object);
+//   - in pod specs (pods and the templates of workloads): container commands,
+//     arguments, probes, lifecycle hooks, and env entries with a literal
+//     value. Env entries that reference a ConfigMap or Secret stay, for the
+//     relations view. Literal values are often credentials in plain text, so
+//     not holding them is safer as well as smaller.
 func stripManagedFields(obj any) (any, error) {
 	if a, err := meta.Accessor(obj); err == nil {
 		a.SetManagedFields(nil)
+		if ann := a.GetAnnotations(); ann[lastApplied] != "" {
+			delete(ann, lastApplied)
+			a.SetAnnotations(ann)
+		}
+	}
+	switch o := obj.(type) {
+	case *corev1.Pod:
+		leanPodSpec(&o.Spec)
+	case *appsv1.Deployment:
+		leanPodSpec(&o.Spec.Template.Spec)
+	case *appsv1.ReplicaSet:
+		leanPodSpec(&o.Spec.Template.Spec)
+	case *appsv1.StatefulSet:
+		leanPodSpec(&o.Spec.Template.Spec)
+	case *appsv1.DaemonSet:
+		leanPodSpec(&o.Spec.Template.Spec)
 	}
 	return obj, nil
+}
+
+func leanPodSpec(spec *corev1.PodSpec) {
+	lean := func(c *corev1.Container) {
+		c.Command, c.Args = nil, nil
+		c.LivenessProbe, c.ReadinessProbe, c.StartupProbe, c.Lifecycle = nil, nil, nil, nil
+		env := c.Env[:0]
+		for _, e := range c.Env {
+			if e.ValueFrom != nil {
+				e.Value = ""
+				env = append(env, e)
+			}
+		}
+		c.Env = env
+	}
+	for i := range spec.InitContainers {
+		lean(&spec.InitContainers[i])
+	}
+	for i := range spec.Containers {
+		lean(&spec.Containers[i])
+	}
+	for i := range spec.EphemeralContainers {
+		ec := corev1.Container(spec.EphemeralContainers[i].EphemeralContainerCommon)
+		lean(&ec)
+		spec.EphemeralContainers[i].EphemeralContainerCommon = corev1.EphemeralContainerCommon(ec)
+	}
 }
 
 // items turns a typed list's items into pointers for a cache.

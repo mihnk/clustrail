@@ -28,6 +28,15 @@ const (
 	maxBatch = 2000
 )
 
+// Lines waiting for the window are bounded too (issue C11): a burst faster
+// than maxBatch every logFlushInterval would otherwise grow the queue without
+// limit. Past either bound the oldest waiting lines are dropped, and the next
+// batch says how many and from when to when, so nothing goes silently.
+var (
+	maxPendingLines = 20_000
+	maxPendingBytes = 8 << 20
+)
+
 type LogsRequest struct {
 	Cluster   string   `json:"cluster"`
 	Namespace string   `json:"namespace"`
@@ -110,8 +119,12 @@ type logStream struct {
 	cancel  context.CancelFunc
 	mu      sync.Mutex
 	lines   []LogLine
-	states  map[string]LogSourceState
-	dirty   bool
+	bytes   int // of the waiting lines' messages
+	// Lines dropped since the last batch because the window fell behind.
+	dropped                int
+	droppedFrom, droppedTo string
+	states                 map[string]LogSourceState
+	dirty                  bool
 	// Membership (logsources.go): ns/pod → the pod's entry and its followers.
 	pods      map[string]*followedPod
 	podsDirty bool
@@ -167,6 +180,17 @@ func (m *Manager) StartLogs(req LogsRequest) (string, error) {
 func (ls *logStream) add(l LogLine) {
 	ls.mu.Lock()
 	ls.lines = append(ls.lines, l)
+	ls.bytes += len(l.Msg)
+	for len(ls.lines) > maxPendingLines || (ls.bytes > maxPendingBytes && len(ls.lines) > 1) {
+		old := ls.lines[0]
+		ls.lines = ls.lines[1:]
+		ls.bytes -= len(old.Msg)
+		if ls.dropped == 0 {
+			ls.droppedFrom = old.TS
+		}
+		ls.dropped++
+		ls.droppedTo = old.TS
+	}
 	ls.dirty = true
 	ls.kicks.kick()
 	ls.mu.Unlock()
@@ -193,6 +217,15 @@ func (ls *logStream) flush(emit Emitter) bool {
 	} else {
 		ls.lines = nil
 		ls.dirty = false
+	}
+	for _, l := range lines {
+		ls.bytes -= len(l.Msg)
+	}
+	if ls.dropped > 0 {
+		marker := LogLine{Event: "dropped", TS: ls.droppedTo,
+			Msg: fmt.Sprintf("%d lines dropped (%s – %s): they came faster than the view could take them", ls.dropped, clockTS(ls.droppedFrom), clockTS(ls.droppedTo))}
+		lines = append([]LogLine{marker}, lines...)
+		ls.dropped, ls.droppedFrom, ls.droppedTo = 0, "", ""
 	}
 	states := make([]LogSourceState, 0, len(ls.states))
 	for _, s := range ls.states {
@@ -482,4 +515,15 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// clockTS shows a log timestamp as a time of day (the raw text if it is not RFC 3339).
+func clockTS(ts string) string {
+	if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+		return t.Local().Format("15:04:05")
+	}
+	if ts == "" {
+		return "?"
+	}
+	return ts
 }

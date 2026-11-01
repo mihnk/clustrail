@@ -78,6 +78,10 @@ type Cluster struct {
 	Paused bool `json:"paused,omitempty"`
 	// TargetChanged: the kubeconfig now points this context at another server
 	// than the one confirmed. Changes are refused until it is confirmed again.
+	// ProtectedBy names the protected context that points at the same API
+	// server: protection follows the server, so a second context name for a
+	// production cluster cannot bypass it.
+	ProtectedBy   string        `json:"protectedBy,omitempty"`
 	TargetChanged *TargetChange `json:"targetChanged,omitempty"`
 }
 

@@ -318,6 +318,11 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
             )}
             <section className="flex flex-col gap-1.5" aria-label={tt("Protection")}>
               <span className="section-label">{tt("Protection")}</span>
+              {selected.protectedBy && (
+                <span className="text-meta text-fg-secondary">
+                  {tt("Protected because {context} points at the same API server; protection follows the server.", { context: selected.protectedBy })}
+                </span>
+              )}
               <div role="radiogroup" aria-label={tt("Protection")} className="flex flex-col gap-1.5">
                 <ProtectionOption
                   value="standard"

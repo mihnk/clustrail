@@ -1847,4 +1847,5 @@ export const tr: Record<string, string> = {
   "Resident memory, which the budget does not limit: the WebView keeps its own.": "Bütçenin sınırlamadığı yerleşik bellek: WebView kendi belleğini tutar.",
   "· app {mb} MB": "· uygulama {mb} MB",
   "· process {mb} MB": "· süreç {mb} MB",
+  "Protected because {context} points at the same API server; protection follows the server.": "{context} aynı API sunucusunu gösterdiği için korumalı; koruma sunucuyu izler.",
 };

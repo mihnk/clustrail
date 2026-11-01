@@ -5,7 +5,7 @@
 export type LogLevel = "INFO" | "WARN" | "ERROR" | "";
 /** A source's short tag: A–D in the mock design, the pod name's distinct suffix on the desktop. */
 export type SourceTag = string;
-export type LogMarker = "failed" | "progressing" | "unknown" | "joined" | "left";
+export type LogMarker = "failed" | "progressing" | "unknown" | "joined" | "left" | "dropped";
 
 export interface LogLine {
   /** Monotonic id: the line's position in the merged stream. */

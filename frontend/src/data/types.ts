@@ -71,6 +71,8 @@ export interface Cluster {
   paused?: boolean;
   /** Desktop: the kubeconfig now points this context at another API server than the one confirmed; changes are locked. */
   targetChanged?: { from: string; to: string };
+  /** The protected context that points at the same API server: protection follows the server. */
+  protectedBy?: string;
 }
 
 export interface PodRow {
