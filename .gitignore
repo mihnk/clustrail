@@ -24,3 +24,4 @@ website/.wrangler/
 .idea/
 .vscode/
 *.swp
+perf-results/

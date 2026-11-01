@@ -54,6 +54,11 @@ Static analysis: `golangci-lint run` (v2.15.0, `.golangci.yml`) for Go and
 Both run in CI. A deliberate exception is suppressed on its line with the
 reason (`//nolint:<linter> // why`).
 
+Performance gate: `hack/perf-gate.sh` compares the Go benchmarks of the
+change with its base on the same machine. A median that got more than 10 %
+worse, with p < 0.05, fails. `AA=1` measures the noise floor. CI runs it on
+every change (docs/benchmarks/perf-gate.md).
+
 Fuzzing: `hack/fuzz.sh` runs every Go fuzz target (Secret masking, Helm
 redaction, log levels, log source selectors, the pod stream protocol) for
 `FUZZTIME` each; CI runs it for 15 s per target.

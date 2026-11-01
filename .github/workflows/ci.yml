@@ -77,6 +77,45 @@ jobs:
       - name: Chaos and soak
         run: hack/envtest.sh
 
+  # Performance gate: the Go benchmarks of the base and of the change, run
+  # interleaved on the same runner; a median worse by more than 10 % with
+  # p < 0.05 fails. The Chromium benchmark is reported, not gated (its noise
+  # on shared runners is above 10 %, docs/benchmarks/perf-gate.md).
+  perf:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Go benchmarks against the base
+        run: BASE_REF=${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }} hack/perf-gate.sh
+
+      - name: Chromium benchmark (reported)
+        working-directory: frontend
+        run: |
+          npm ci && npx playwright install --with-deps chromium && npm run build
+          mkdir -p ../perf-results/chromium
+          CLUSTRAIL_BENCH_PODS=10000 CLUSTRAIL_BENCH_SECONDS=10 CLUSTRAIL_BENCH_OUT=../perf-results/chromium/table-1.json npx playwright test e2e/bench.spec.ts
+          python3 ../hack/bench-summary.py ../perf-results/chromium >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: perf-results
+          retention-days: 30
+
   e2e:
     runs-on: ubuntu-24.04
     steps:
