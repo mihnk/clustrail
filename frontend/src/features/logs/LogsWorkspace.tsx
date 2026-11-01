@@ -51,6 +51,8 @@ import {
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { cn } from "@/lib/cn";
 import { LogView, TagChip } from "./LogView";
+import { FieldsView } from "./FieldsView";
+import { defaultColumns, fieldStats, matchesFieldFilters, type FieldFilter } from "./fields";
 import { AddSourceDialog } from "./AddSourceDialog";
 import { t as tt } from "@/i18n";
 
@@ -70,6 +72,7 @@ const clockOf = (iso?: string) => (iso ? new Date(iso).toTimeString().slice(0, 8
 export function initialSpecs(params: Record<string, string> | undefined, cluster: string | undefined, pods: PodRow[], deployments: DeploymentRow[]): LogSourceSpec[] {
   const p = params ?? {};
   const namespace = p.namespace ?? "";
+  if (p.all) return [{ namespace, all: true }];
   if (p.selector) return [{ namespace, selector: p.selector }];
   if (p.kind && p.workload) return [{ namespace, workload: `${p.kind}/${p.workload}` }];
   if (p.workload) {
@@ -82,6 +85,7 @@ export function initialSpecs(params: Record<string, string> | undefined, cluster
 }
 
 function specLabel(s: LogSourceSpec): string {
+  if (s.all) return tt("all pods in {namespace}", { namespace: s.namespace });
   if (s.workload) return s.workload;
   if (s.selector) return s.selector;
   return s.pods?.length === 1 ? `Pod/${s.pods[0]}` : tt("{n} pods", { n: s.pods?.length ?? 0 });
@@ -121,16 +125,20 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
     (): Record<string, Set<string>> => (backend ? {} : { A: new Set(["api"]), B: new Set(["api"]), C: new Set(["api"]), D: new Set(["api"]) }),
   );
   const [instance, setInstance] = useState<"current" | "previous">(tab.params?.previous ? "previous" : "current");
-  const [range, setRange] = useState<(typeof RANGES)[number]>("15m");
+  const [range, setRange] = useState<(typeof RANGES)[number]>(() => RANGES.find((r) => r === tab.params?.range) ?? "15m");
   const [layout, setLayout] = useState<"merged" | "split">("merged");
+  // Text, or one column per JSON field (opened that way to follow a trace).
+  const [display, setDisplay] = useState<"text" | "fields">(tab.params?.display === "fields" ? "fields" : "text");
+  const [fieldFilters, setFieldFilters] = useState<FieldFilter[]>([]);
+  const [chosenColumns, setChosenColumns] = useState<string[] | null>(null);
   // New log views start from the defaults in Settings › Logs & terminal.
   const [defaultTs] = usePersistentState("logs.timestamps", true);
   const [defaultWrap] = usePersistentState("logs.wrap", false);
   const [showTs, setShowTs] = useState(defaultTs);
   const [wrap, setWrap] = useState(defaultWrap);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(tab.params?.query ?? "");
   const [regex, setRegex] = useState(false);
-  const [onlyMatching, setOnlyMatching] = useState(false);
+  const [onlyMatching, setOnlyMatching] = useState(!!tab.params?.only);
   const [matchPos, setMatchPos] = useState(0);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
 
@@ -314,10 +322,24 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         !disabled.has(l.tag) &&
         !gone?.has(l.tag) &&
         (l.event || containers[l.tag]?.has(l.container)) &&
-        (!onlyMatching || !matcher || l.event || (matcher.lastIndex = 0, matcher.test(l.msg))),
+        (!onlyMatching || !matcher || l.event || (matcher.lastIndex = 0, matcher.test(l.msg))) &&
+        (l.event || matchesFieldFilters(l, fieldFilters)),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- version: the buffer is a ref that grows in place, and version says it did
-  }, [version, visibleCount, disabled, containers, instance, onlyMatching, matcher, hideLeft, sources, isOn]);
+  }, [version, visibleCount, disabled, containers, instance, onlyMatching, matcher, hideLeft, sources, isOn, fieldFilters]);
+  // Fields of the newest lines, only while the Fields display is on.
+  const fieldsInfo = useMemo(() => (display === "fields" ? fieldStats(lines) : null), [display, lines]);
+  const columns = chosenColumns ?? (fieldsInfo ? defaultColumns(fieldsInfo.stats) : []);
+  const toggleColumn = (name: string) => setChosenColumns(columns.includes(name) ? columns.filter((c) => c !== name) : [...columns, name]);
+  const addFieldFilter = (f: FieldFilter) => setFieldFilters((fs) => [...fs.filter((x) => x.key !== f.key), f]);
+  // A trace across the namespace: every pod, the last hour, lines that name the id.
+  const followTrace = (f: FieldFilter) =>
+    ws.openView({
+      kind: "logs",
+      title: tt("Trace {id}", { id: f.value.length > 12 ? `${f.value.slice(0, 8)}…` : f.value }),
+      cluster: tab.cluster,
+      params: { namespace: specs[0]?.namespace || namespace, all: "1", query: f.value, only: "1", range: "1h", display: "fields" },
+    });
 
   const matches = useMemo(() => {
     if (!matcher) return [];
@@ -535,14 +557,25 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
               <Pause aria-hidden />{tt("Pause")}</Button>
           )}
           <Segmented
-            aria-label={tt("Layout")}
-            value={layout}
-            onValueChange={setLayout}
+            aria-label={tt("Display")}
+            value={display}
+            onValueChange={setDisplay}
             options={[
-              { value: "merged", label: tt("Merged") },
-              { value: "split", label: <><Columns2 className="size-3.5" aria-hidden />{tt("Split")}</> },
+              { value: "text", label: tt("Text") },
+              { value: "fields", label: tt("Fields") },
             ]}
           />
+          {display === "text" && (
+            <Segmented
+              aria-label={tt("Layout")}
+              value={layout}
+              onValueChange={setLayout}
+              options={[
+                { value: "merged", label: tt("Merged") },
+                { value: "split", label: <><Columns2 className="size-3.5" aria-hidden />{tt("Split")}</> },
+              ]}
+            />
+          )}
           <ToggleIcon label={tt("Timestamps")} pressed={showTs} onClick={() => setShowTs(!showTs)}>
             <Clock />
           </ToggleIcon>
@@ -639,8 +672,36 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
           </DropdownMenu>
         </div>
 
+        {fieldFilters.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-line px-3 py-1.5">
+            {fieldFilters.map((f) => (
+              <span key={f.key} className="inline-flex h-6 items-center gap-1 rounded-full bg-surface-selected pl-2.5 pr-1 font-mono text-cell">
+                {f.key}={f.value}
+                <button type="button" aria-label={tt("Remove filter {key}", { key: f.key })} onClick={() => setFieldFilters((fs) => fs.filter((x) => x.key !== f.key))} className="focus-ring inline-flex size-5 items-center justify-center rounded-full hover:bg-surface-hover">
+                  <X className="size-3" aria-hidden />
+                </button>
+              </span>
+            ))}
+            <span className="text-meta text-fg-muted">{tt("{n} lines", { n: lines.length.toLocaleString() })}</span>
+          </div>
+        )}
         <div className="relative flex min-h-0 flex-1">
-          {layout === "merged" ? (
+          {display === "fields" && fieldsInfo ? (
+            <FieldsView
+              lines={lines}
+              stats={fieldsInfo.stats}
+              json={fieldsInfo.json}
+              seen={fieldsInfo.seen}
+              columns={columns}
+              onToggleColumn={toggleColumn}
+              selectedId={selectedLine}
+              onSelect={setSelectedLine}
+              onFilter={addFieldFilter}
+              onFollowTrace={followTrace}
+              follow={!paused && instance === "current"}
+              onScrollAway={pause}
+            />
+          ) : layout === "merged" ? (
             <LogView
               label={tt("Merged log stream")}
               lines={lines}

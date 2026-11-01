@@ -251,6 +251,8 @@ export interface LogSourceSpec {
   workload?: string;
   selector?: string;
   pods?: string[];
+  /** Every pod of the namespace (up to the pod limit): a search across pods. */
+  all?: boolean;
 }
 
 export interface LogsRequest {

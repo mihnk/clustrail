@@ -23,6 +23,9 @@ type LogSourceSpec struct {
 	Workload  string   `json:"workload,omitempty"`
 	Selector  string   `json:"selector,omitempty"`
 	Pods      []string `json:"pods,omitempty"`
+	// All follows every pod of the namespace (up to MaxPods, newest first):
+	// a search across pods, e.g. for one trace id.
+	All bool `json:"all,omitempty"`
 }
 
 // LogPod is a pod a log stream follows or followed.
@@ -189,6 +192,8 @@ func (m *Manager) followSources(ctx context.Context, c *clusterConn, ls *logStre
 	for i, spec := range req.Sources {
 		sources[i].spec = spec
 		switch {
+		case spec.All:
+			sources[i].selector = labels.Everything()
 		case spec.Selector != "":
 			sources[i].selector, sources[i].err = labels.Parse(spec.Selector)
 		case spec.Workload != "":

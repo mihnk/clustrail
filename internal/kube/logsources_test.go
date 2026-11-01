@@ -171,3 +171,24 @@ func TestWorkloadSourceAndFixedPods(t *testing.T) {
 		return false
 	})
 }
+
+// A source with All follows every pod of the namespace, whatever its labels:
+// a search across pods (e.g. for one trace id).
+func TestLogsOfAllPodsInANamespace(t *testing.T) {
+	a := pod("checkout-api-1", nil)
+	b := pod("cart-api-1", func(p *corev1.Pod) { p.Labels = map[string]string{"app": "cart-api"} })
+	elsewhere := pod("ledger-1", func(p *corev1.Pod) { p.Namespace = "ledger" })
+	c, _, rec := newFakeConn(t, a, b, elsewhere)
+	m := logManager(c)
+	id, err := m.StartLogs(LogsRequest{Cluster: "test", Sources: []LogSourceSpec{{Namespace: "payments", All: true}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.StopLogs(id)
+	waitFor(t, "both pods", func() bool { return len(rec.lastPods()) == 2 })
+	for _, p := range rec.lastPods() {
+		if p.Namespace != "payments" {
+			t.Fatalf("pod of another namespace followed: %+v", p)
+		}
+	}
+}
