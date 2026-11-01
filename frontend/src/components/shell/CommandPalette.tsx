@@ -28,10 +28,12 @@ import {
   ArchiveX,
   Gauge,
   PackagePlus,
+  SquareTerminal,
 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { IS_MOCK } from "@/data/mock";
 import { useConfirm } from "@/components/safety/ConfirmationDialog";
+import { backend } from "@/backend/client";
 import { restartDeploymentRequest } from "@/features/deployments/requests";
 import { EnvironmentBadge } from "@/components/status/EnvironmentBadge";
 import { Kbd } from "@/components/ui/kbd";
@@ -118,6 +120,37 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
           ws.revealResource("pod", p.id);
         },
       });
+    }
+    // A local terminal per connected cluster: kubectl in it can change the cluster, so it confirms like a shell.
+    if (backend) {
+      for (const c of ws.clusters) {
+        if (c.connection !== "connected" || c.readOnly) continue;
+        items.push({
+          id: `local-shell:${c.id}`,
+          section: "Navigate",
+          icon: <SquareTerminal />,
+          label: t("Local terminal · {cluster}", { cluster: c.name }),
+          env: c.env,
+          haystack: `local terminal shell kubectl ${c.name} ${c.context}`,
+          run: () =>
+            confirm({
+              action: t("Open a local terminal for"),
+              targetName: c.name,
+              icon: <SquareTerminal />,
+              env: c.env,
+              cluster: c.id,
+              protected: c.protected ?? false,
+              destructive: false,
+              whatHappens: <>{t("Starts your shell on this machine with KUBECONFIG set to a temporary file that holds only this context, deleted when the session ends. kubectl, helm and other tools in it act on this cluster; Clustrail's protection does not apply to them.")}</>,
+              command: `KUBECONFIG=<only ${c.context}> $SHELL`,
+              confirmLabel: t("Open terminal"),
+              onConfirm: () => {
+                ws.openView({ id: "shell", kind: "shell", title: "Shell", cluster: c.id });
+                ws.revealResource("session", JSON.stringify({ cluster: c.id, namespace: "", pod: "", container: "", mode: "local" }));
+              },
+            }),
+        });
+      }
     }
     for (const c of ws.clusters) {
       items.push({

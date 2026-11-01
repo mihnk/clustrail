@@ -46,6 +46,8 @@ export interface ShellSession {
   nodeShell?: { node: string };
   /** Desktop: an ephemeral debug container (it stays in the pod spec). */
   debug?: boolean;
+  /** Desktop: attach to the main process, or this machine's shell with the cluster's context. */
+  mode?: "attach" | "local";
 }
 
 
@@ -174,7 +176,8 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
         command: req.command,
         nodeShell: req.nodeShell,
         debug: req.debug,
-        shell: req.nodeShell ? "chroot /host" : "/bin/sh",
+        mode: req.mode,
+        shell: req.mode === "local" ? tt("local shell") : req.mode === "attach" ? tt("attach") : req.nodeShell ? "chroot /host" : "/bin/sh",
         state: "connected",
         openedAt: new Date().toTimeString().slice(0, 5),
         connection: 0,
@@ -374,12 +377,22 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
             >
               <div className="flex h-7 shrink-0 items-center gap-2 border-b border-line bg-surface-panel px-2.5 text-meta text-fg-secondary">
                 <EnvironmentBadge env={s.env} size="sm" />
-                <span className="truncate font-mono">
-                  {s.cluster} <span className="text-fg-muted">›</span> {s.namespace} <span className="text-fg-muted">›</span> {s.pod}{" "}
-                  <span className="text-fg-muted">›</span> <b className="font-semibold text-fg">{s.container}</b>
-                </span>
+                {s.mode === "local" ? (
+                  <span className="truncate font-mono">
+                    {s.cluster} <span className="text-fg-muted">›</span> <b className="font-semibold text-fg">{tt("local shell")}</b>
+                  </span>
+                ) : (
+                  <span className="truncate font-mono">
+                    {s.cluster} <span className="text-fg-muted">›</span> {s.namespace} <span className="text-fg-muted">›</span> {s.pod}{" "}
+                    <span className="text-fg-muted">›</span> <b className="font-semibold text-fg">{s.container || tt("default container")}</b>
+                  </span>
+                )}
                 <div className="flex-1" />
-                {s.nodeShell ? (
+                {s.mode === "local" ? (
+                  <span className="font-mono text-fg-muted">{tt("this machine")}</span>
+                ) : s.mode === "attach" ? (
+                  <span className="font-mono text-fg-muted">{tt("attached")}</span>
+                ) : s.nodeShell ? (
                   <span className="font-mono text-status-warning">{tt("root on node {node}", { node: s.nodeShell.node })}</span>
                 ) : s.debug ? (
                   <span className="font-mono text-fg-muted">{tt("debug container")}</span>
@@ -403,7 +416,7 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
                   onResize={(c, r) => setSize((m) => (m[s.id] === `${c}×${r}` ? m : { ...m, [s.id]: `${c}×${r}` }))}
                   onExit={(code, error) => onExit(s.id, code, error)}
                   connection={s.connection ?? 0}
-                  target={backend ? { cluster: s.cluster, namespace: s.namespace, pod: s.pod, container: s.container, command: s.command } : undefined}
+                  target={backend ? { cluster: s.cluster, namespace: s.namespace, pod: s.pod, container: s.container, command: s.command, mode: s.mode } : undefined}
                   onLeave={() => (document.querySelector('[role="tab"][aria-selected="true"]') as HTMLElement | null)?.focus()}
                 />
               </div>

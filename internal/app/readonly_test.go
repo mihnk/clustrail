@@ -18,7 +18,7 @@ var changesCluster = []string{
 	"SetNodeCordoned", "DrainNode",
 	"RestartWorkload", "ScaleWorkload", "TriggerCronJob", "SetCronJobSuspended",
 	"UpgradeRelease", "RollbackRelease", "InstallRelease", "UninstallRelease",
-	"AddDebugContainer", "StartNodeShell", "StartPortForward", "StartExec",
+	"AddDebugContainer", "StartNodeShell", "StartPortForward", "StartExec", "StartAttach", "StartLocalShell",
 	"CreateObjects", "ApplyYAML", "DeleteResource",
 	"RefreshGitOps", "SyncGitOps", "SetGitOpsSuspended",
 }

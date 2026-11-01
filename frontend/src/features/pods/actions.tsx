@@ -18,6 +18,8 @@ interface PodActionDeps {
   openResource: (cluster: string, kind: string, namespace: string, name: string) => void;
   openLogs: (pod: PodRow) => void;
   openShell: (pod: PodRow) => void;
+  /** Attaches to the pod's main container process (desktop). */
+  openAttach?: (pod: PodRow) => void;
   openYaml: (pod: PodRow) => void;
   /** Opens the network policies of the pod. */
   openNetwork?: (pod: PodRow) => void;
@@ -48,6 +50,15 @@ export function podActions(pod: PodRow, deps: PodActionDeps): ResourceAction[] {
       // A shell can change the workload: it confirms like a mutation and is blocked in read-only contexts.
       disabled: deps.cluster?.readOnly || pod.readyContainers === 0,
       onSelect: () => deps.confirm(shellRequest(pod, deps.cluster, () => deps.openShell(pod))),
+    },
+    {
+      id: "attach",
+      group: "observe",
+      label: deps.cluster?.readOnly ? t("Attach · read-only context") : t("Attach…"),
+      icon: <Cable />,
+      // Attach can send input to the main process: confirmed and blocked like a shell.
+      disabled: !backend || !deps.openAttach || deps.cluster?.readOnly || pod.status !== "Running",
+      onSelect: () => deps.confirm(attachRequest(pod, deps.cluster, () => deps.openAttach?.(pod))),
     },
     {
       id: "debug",
@@ -121,6 +132,23 @@ function shellRequest(pod: PodRow, cluster: Cluster | undefined, onConfirm: () =
     ),
     command: `kubectl --context ${pod.cluster} -n ${pod.namespace} exec -it ${pod.name} -- /bin/sh`,
     confirmLabel: t("Open shell"),
+    onConfirm,
+  };
+}
+
+function attachRequest(pod: PodRow, cluster: Cluster | undefined, onConfirm: () => void): ConfirmationRequest {
+  return {
+    action: t("Attach to"),
+    targetName: pod.name,
+    icon: <Cable />,
+    env: pod.env,
+    cluster: pod.cluster,
+    namespace: pod.namespace,
+    protected: cluster?.protected ?? false,
+    destructive: false,
+    whatHappens: <>{t("Connects to the main process of the pod's first container (pods/attach), like kubectl attach. What you type goes to that process when it reads stdin; Ctrl-C may stop it. Closing the session detaches.")}</>,
+    command: `kubectl --context ${pod.cluster} -n ${pod.namespace} attach -it ${pod.name}`,
+    confirmLabel: t("Attach"),
     onConfirm,
   };
 }

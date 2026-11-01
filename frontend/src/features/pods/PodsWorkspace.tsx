@@ -194,6 +194,10 @@ export function PodsWorkspace({ active }: { active: boolean }) {
               cluster: p.cluster,
               params: { kind: "Pod", namespace: p.namespace, name: p.name },
             }),
+          openAttach: (p) => {
+            openView({ id: "shell", kind: "shell", title: "Shell", cluster: p.cluster });
+            revealResource("session", JSON.stringify({ cluster: p.cluster, namespace: p.namespace, pod: p.name, container: "", mode: "attach" }));
+          },
           openShell: (p) => {
             openView({ id: "shell", kind: "shell", title: "Shell", cluster: p.cluster });
             // Desktop: an empty container means the pod's default container.

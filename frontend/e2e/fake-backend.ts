@@ -73,6 +73,10 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       return "logs-1";
     case "StartExec":
       return "exec-1";
+    case "StartAttach":
+      return { id: "exec-attach-1", stdin: true, tty: true };
+    case "StartLocalShell":
+      return { id: "exec-local-1", shell: "/bin/sh", context: String(args[0] && (args[0] as { cluster: string }).cluster) };
     case "HelmRevision": {
       const rev = args[3] as number;
       const img = rev === 8 ? "1.9.0" : "1.8.4";

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -388,6 +390,8 @@ type execSession struct {
 	stdin   *io.PipeWriter
 	sizes   chan remotecommand.TerminalSize
 	cancel  context.CancelFunc
+	// cleanup is a file removed when the session closes (a local shell's kubeconfig).
+	cleanup string
 }
 
 type sizeQueue chan remotecommand.TerminalSize
@@ -422,11 +426,67 @@ func (m *Manager) StartExec(req ExecRequest) (string, error) {
 	}
 	execReq := c.client.CoreV1().RESTClient().Post().Resource("pods").Namespace(req.Namespace).Name(req.Pod).SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{Container: req.Container, Command: req.Command, Stdin: true, Stdout: true, TTY: true}, scheme.ParameterCodec)
-	ws, err := remotecommand.NewWebSocketExecutor(c.rest, "GET", execReq.URL().String())
+	return m.startRemote(c, req, execReq.URL(), true, true)
+}
+
+// AttachInfo is what an attach can do, from the container's spec.
+type AttachInfo struct {
+	ID string `json:"id"`
+	// Stdin: the container was started with stdin open, so input reaches it.
+	Stdin bool `json:"stdin"`
+	// TTY: the container has a terminal; without one, output is plain lines.
+	TTY bool `json:"tty"`
+}
+
+// StartAttach attaches to a container's main process, like kubectl attach:
+// input only when the container keeps stdin open, a TTY only when it has one.
+// Closing the session detaches; the process keeps running. Attaching counts
+// as a change (it can send input): read-only contexts refuse it.
+func (m *Manager) StartAttach(req ExecRequest) (AttachInfo, error) {
+	c, err := m.writable(req.Cluster)
+	if err != nil {
+		return AttachInfo{}, err
+	}
+	ctx, cancel := actionCtx()
+	defer cancel()
+	pod, err := c.client.CoreV1().Pods(req.Namespace).Get(ctx, req.Pod, metav1.GetOptions{})
+	if err != nil {
+		return AttachInfo{}, err
+	}
+	var ct *corev1.Container
+	for i := range pod.Spec.Containers {
+		if req.Container == "" || pod.Spec.Containers[i].Name == req.Container {
+			ct = &pod.Spec.Containers[i]
+			break
+		}
+	}
+	if ct == nil {
+		for i := range pod.Spec.EphemeralContainers {
+			if pod.Spec.EphemeralContainers[i].Name == req.Container {
+				c := corev1.Container(pod.Spec.EphemeralContainers[i].EphemeralContainerCommon)
+				ct = &c
+			}
+		}
+	}
+	if ct == nil {
+		return AttachInfo{}, fmt.Errorf("container %q not found in pod %s", req.Container, req.Pod)
+	}
+	req.Container = ct.Name
+	info := AttachInfo{Stdin: ct.Stdin, TTY: ct.TTY && ct.Stdin}
+	attachReq := c.client.CoreV1().RESTClient().Post().Resource("pods").Namespace(req.Namespace).Name(req.Pod).SubResource("attach").
+		VersionedParams(&corev1.PodAttachOptions{Container: ct.Name, Stdin: info.Stdin, Stdout: true, Stderr: !info.TTY, TTY: info.TTY}, scheme.ParameterCodec)
+	info.ID, err = m.startRemote(c, req, attachReq.URL(), info.Stdin, info.TTY)
+	return info, err
+}
+
+// startRemote streams an exec or attach request into a session that
+// ExecInput, ExecResize and CloseExec drive.
+func (m *Manager) startRemote(c *clusterConn, req ExecRequest, u *url.URL, stdin, tty bool) (string, error) {
+	ws, err := remotecommand.NewWebSocketExecutor(c.rest, "GET", u.String())
 	if err != nil {
 		return "", err
 	}
-	spdy, err := remotecommand.NewSPDYExecutor(c.rest, "POST", execReq.URL())
+	spdy, err := remotecommand.NewSPDYExecutor(c.rest, "POST", u)
 	if err != nil {
 		return "", err
 	}
@@ -438,7 +498,7 @@ func (m *Manager) StartExec(req ExecRequest) (string, error) {
 	pr, pw := io.Pipe()
 	ctx, cancel := context.WithCancel(c.ctx)
 	sess := &execSession{cluster: req.Cluster, stdin: pw, sizes: make(chan remotecommand.TerminalSize, 4), cancel: cancel}
-	if req.Cols > 0 {
+	if req.Cols > 0 && tty {
 		sess.sizes <- remotecommand.TerminalSize{Width: req.Cols, Height: req.Rows}
 	}
 	m.streams.mu.Lock()
@@ -450,7 +510,16 @@ func (m *Manager) StartExec(req ExecRequest) (string, error) {
 		m.CloseExec(id)
 	}, func() {
 		out := emitWriter{id: id, emit: m.emit}
-		err := executor.StreamWithContext(ctx, remotecommand.StreamOptions{Stdin: pr, Stdout: out, Tty: true, TerminalSizeQueue: sizeQueue(sess.sizes)})
+		opts := remotecommand.StreamOptions{Stdout: out, Tty: tty}
+		if stdin {
+			opts.Stdin = pr
+		}
+		if tty {
+			opts.TerminalSizeQueue = sizeQueue(sess.sizes)
+		} else {
+			opts.Stderr = out
+		}
+		err := executor.StreamWithContext(ctx, opts)
 		code := 0
 		var exitErr exec.ExitError
 		res := ExecOutput{ID: id}
@@ -505,6 +574,9 @@ func (m *Manager) CloseExec(id string) {
 	if s != nil {
 		s.cancel()
 		_ = s.stdin.Close()
+		if s.cleanup != "" {
+			_ = os.Remove(s.cleanup)
+		}
 	}
 }
 

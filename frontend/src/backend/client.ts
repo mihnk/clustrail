@@ -491,6 +491,26 @@ export interface ExpiryReport {
   notes: string[];
 }
 
+// Attach and local shell (internal/kube/streams.go, localshell.go).
+export interface AttachInfo {
+  id: string;
+  /** Input reaches the container only when it was started with stdin. */
+  stdin: boolean;
+  tty: boolean;
+}
+
+export interface LocalShellRequest {
+  cluster: string;
+  cols: number;
+  rows: number;
+}
+
+export interface LocalShellInfo {
+  id: string;
+  shell: string;
+  context: string;
+}
+
 // Helm install and uninstall (internal/kube/helm_install.go).
 export interface HelmChartEntry {
   repo: string;
@@ -1082,6 +1102,8 @@ export const backendApi = {
   startLogs: (req: LogsRequest) => call<string>("StartLogs", req),
   stopLogs: (id: string) => call<void>("StopLogs", id),
   startExec: (req: ExecRequest) => call<string>("StartExec", req),
+  startAttach: (req: ExecRequest) => call<AttachInfo>("StartAttach", req),
+  startLocalShell: (req: LocalShellRequest) => call<LocalShellInfo>("StartLocalShell", req),
   execInput: (id: string, data: string) => call<void>("ExecInput", id, data),
   execResize: (id: string, cols: number, rows: number) => call<void>("ExecResize", id, cols, rows),
   closeExec: (id: string) => call<void>("CloseExec", id),

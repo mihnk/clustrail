@@ -42,11 +42,11 @@ telemetry.
   from what records the version used (Helm release manifests, kubectl's
   last-applied annotation, the API server's own count), and quotas with what
   each namespace may still create.
-- **Everyday operations.** Shells and debug containers, node shells, port
-  forwards, YAML with server-side dry run, scale, restart, rollback, cordon and
-  drain through the Eviction API, Helm installs and upgrades with a preview
-  before they run, uninstall,
-  Argo CD and Flux status.
+- **Everyday operations.** Shells, attach and debug containers, node shells,
+  a local terminal with the cluster's context, port forwards, YAML with
+  server-side dry run, scale, restart, rollback, cordon and drain through the
+  Eviction API, Helm installs and upgrades with a preview before they run,
+  uninstall, Argo CD and Flux status.
 - **Fast with large clusters.** Virtualized tables, coalesced pod streams and
   bounded buffers; measured in [docs/benchmarks](docs/benchmarks/m0-results.md).
 

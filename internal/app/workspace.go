@@ -207,6 +207,16 @@ func (w *Workspace) APIRemovals(cluster string) (kube.APIRemovalReport, error) {
 // KnownAPIRemovals is the removal table itself (Kubernetes' lifecycle tags).
 func (w *Workspace) KnownAPIRemovals() []kube.APIRemoval { return kube.KnownAPIRemovals() }
 
+// StartAttach attaches to a container's main process; refused on read-only contexts.
+func (w *Workspace) StartAttach(req kube.ExecRequest) (kube.AttachInfo, error) {
+	return w.m.StartAttach(req)
+}
+
+// StartLocalShell opens this machine's shell with the cluster's context; refused on read-only contexts.
+func (w *Workspace) StartLocalShell(req kube.LocalShellRequest) (kube.LocalShellInfo, error) {
+	return w.m.StartLocalShell(req)
+}
+
 // HelmCharts searches the charts of this machine's Helm repositories.
 func (w *Workspace) HelmCharts(query string) (kube.HelmChartSearch, error) {
 	return kube.HelmCharts(query)

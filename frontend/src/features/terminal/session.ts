@@ -12,6 +12,8 @@ export interface SessionRequest {
   nodeShell?: { node: string };
   /** An ephemeral debug container. */
   debug?: boolean;
+  /** attach: the container's main process (kubectl attach); local: this machine's shell with the cluster's context. */
+  mode?: "attach" | "local";
 }
 
 export function sessionRevealId(r: SessionRequest): string {

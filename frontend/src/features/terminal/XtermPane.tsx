@@ -17,6 +17,8 @@ export interface ExecTarget {
   container: string;
   /** Runs instead of the default shell (node shells chroot into the host). */
   command?: string[];
+  /** attach: kubectl attach; local: this machine's shell with the cluster's context. */
+  mode?: "attach" | "local";
 }
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -175,8 +177,21 @@ export const XtermPane = forwardRef<
       else if (o.id === execId) handle(o);
     });
     let disposed = false;
-    api
-      .startExec({ ...target, command: target.command ?? [], cols: term.cols, rows: term.rows })
+    const dim = (s: string) => term.write(`\x1b[2m${s}\x1b[0m\r\n`);
+    const start: Promise<string> =
+      target.mode === "local"
+        ? api.startLocalShell({ cluster: target.cluster, cols: term.cols, rows: term.rows }).then((info) => {
+            dim(tt("— {shell} on this machine · kubectl and helm use context {ctx} through a temporary kubeconfig, deleted when this session ends —", { shell: info.shell, ctx: info.context }));
+            return info.id;
+          })
+        : target.mode === "attach"
+          ? api.startAttach({ ...target, command: [], cols: term.cols, rows: term.rows }).then((info) => {
+              if (!info.stdin) dim(tt("— attached · output only: the container was started without stdin, so input cannot reach it —"));
+              else dim(tt("— attached to the container's main process · closing detaches, the process keeps running —"));
+              return info.id;
+            })
+          : api.startExec({ ...target, command: target.command ?? [], cols: term.cols, rows: term.rows });
+    start
       .then((id) => {
         if (disposed) return void api.closeExec(id);
         execId = id;
