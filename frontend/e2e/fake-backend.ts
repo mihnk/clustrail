@@ -158,6 +158,10 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
         ],
         notes: ["API server certificate: dial tcp: i/o timeout"],
       };
+    case "APIRemovals":
+      return { cluster: args[0], server: "1.30", minor: 30, releases: 0, objects: 0, findings: [], notes: [] };
+    case "Quotas":
+      return { cluster: args[0], quotas: [], limits: [], rules: [], notes: [] };
     case "Namespaces":
       return ["default", "payments"];
     case "WarningCount":

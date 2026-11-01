@@ -83,9 +83,10 @@ type storedRelease struct {
 	Config   map[string]any `json:"config"`
 	Manifest string         `json:"manifest"`
 	Hooks    []struct {
-		Name   string   `json:"name"`
-		Kind   string   `json:"kind"`
-		Events []string `json:"events"`
+		Name     string   `json:"name"`
+		Kind     string   `json:"kind"`
+		Events   []string `json:"events"`
+		Manifest string   `json:"manifest"`
 	} `json:"hooks"`
 }
 

@@ -13,7 +13,6 @@ package kube
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"runtime"
 	"sync"
@@ -103,6 +102,6 @@ func TestInitialListMemory(t *testing.T) {
 		_ = os.WriteFile(f, out, 0o644)
 	}
 	if got := len(shownPods(m, "big")); got != pods {
-		t.Fatal(fmt.Sprintf("shown %d pods of %d", got, pods))
+		t.Fatalf("shown %d pods of %d", got, pods)
 	}
 }

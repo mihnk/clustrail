@@ -27,6 +27,8 @@ import {
   ShieldCheck,
   HardDrive,
   Waypoints,
+  ArchiveX,
+  Gauge,
 } from "lucide-react";
 import { DEFAULT_INVESTIGATION, useWorkspace } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
@@ -156,6 +158,8 @@ export function ClusterNavigation() {
           trailing={warnings ? <CountPill tone="warning" className="ml-auto" title={t("Warning events in the last 15 minutes")}>{warnings}</CountPill> : undefined}
         />
         <NavItem icon={<FileBadge />} label={t("Certificates")} active={kind === "certificates"} onClick={() => openView({ kind: "certificates", title: t("Certificates") })} />
+        <NavItem icon={<ArchiveX />} label={t("API removals")} active={kind === "apiremovals"} onClick={() => openView({ kind: "apiremovals", title: t("API removals") })} />
+        <NavItem icon={<Gauge />} label={t("Quotas and limits")} active={kind === "quotas"} onClick={() => openView({ kind: "quotas", title: t("Quotas and limits") })} />
         <NavItem icon={<ShieldCheck />} label={t("Access")} active={kind === "access"} onClick={() => openView({ kind: "access", title: t("Access") })} />
         <NavItem icon={<Waypoints />} label={t("Network policies")} active={kind === "network"} onClick={() => openView({ kind: "network", title: t("Network policies") })} />
       </NavSection>

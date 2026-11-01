@@ -38,6 +38,8 @@ export type WorkspaceTabKind =
   | "storage"
   | "network"
   | "certificates"
+  | "apiremovals"
+  | "quotas"
   | "access"
   | "whocan"
   | "portforwards"
@@ -57,7 +59,7 @@ export interface WorkspaceTab {
 
 const SAVED_TABS = "workspace.desktop.tabs";
 /** Tabs that reopen on launch. Streams (Logs, Shell) and unsaved drafts (Create) start fresh. */
-const RESTORABLE: WorkspaceTabKind[] = ["clusters", "pods", "deployments", "nodes", "helm", "gitops", "warnings", "certificates", "access", "whocan", "portforwards", "storage", "network", "chain", "connections", "settings", "list", "yaml", "investigation", "compare"];
+const RESTORABLE: WorkspaceTabKind[] = ["clusters", "pods", "deployments", "nodes", "helm", "gitops", "warnings", "certificates", "apiremovals", "quotas", "access", "whocan", "portforwards", "storage", "network", "chain", "connections", "settings", "list", "yaml", "investigation", "compare"];
 const DEFAULT_TABS: WorkspaceTab[] = [
   { id: "clusters", kind: "clusters", title: tt("Clusters") },
   { id: "pods", kind: "pods", title: tt("Pods") },
@@ -73,7 +75,7 @@ function launchTabs(): { tabs: WorkspaceTab[]; active: string } {
 }
 
 /** Explorer kinds have one tab each; tool tabs (Logs, Shell, YAML, Compare) open per target. */
-const SINGLETON_KINDS: WorkspaceTabKind[] = ["clusters", "pods", "nodes", "helm", "gitops", "warnings", "certificates", "access", "whocan", "portforwards", "storage", "network", "connections", "settings"];
+const SINGLETON_KINDS: WorkspaceTabKind[] = ["clusters", "pods", "nodes", "helm", "gitops", "warnings", "certificates", "apiremovals", "quotas", "access", "whocan", "portforwards", "storage", "network", "connections", "settings"];
 
 export interface MockScenarios {
   /** prod-us-east-1 loses its watch: rows go stale while it retries. */

@@ -38,6 +38,8 @@ const ResourceListWorkspace = lazy(() => import("@/features/resources/ResourceLi
 const ResourceDetailWorkspace = lazy(() => import("@/features/resources/ResourceDetailWorkspace").then((m) => ({ default: m.ResourceDetailWorkspace })));
 const WarningsWorkspace = lazy(() => import("@/features/insights/WarningsWorkspace").then((m) => ({ default: m.WarningsWorkspace })));
 const CertificatesWorkspace = lazy(() => import("@/features/insights/CertificatesWorkspace").then((m) => ({ default: m.CertificatesWorkspace })));
+const ApiRemovalsWorkspace = lazy(() => import("@/features/insights/ApiRemovalsWorkspace").then((m) => ({ default: m.ApiRemovalsWorkspace })));
+const QuotasWorkspace = lazy(() => import("@/features/insights/QuotasWorkspace").then((m) => ({ default: m.QuotasWorkspace })));
 const AccessWorkspace = lazy(() => import("@/features/insights/AccessWorkspace").then((m) => ({ default: m.AccessWorkspace })));
 const HelmUpgradeWorkspace = lazy(() => import("@/features/helm/HelmUpgradeWorkspace").then((m) => ({ default: m.HelmUpgradeWorkspace })));
 const StorageWorkspace = lazy(() => import("@/features/storage/StorageWorkspace").then((m) => ({ default: m.StorageWorkspace })));
@@ -232,6 +234,10 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <WarningsWorkspace active={active} />;
     case "certificates":
       return <CertificatesWorkspace active={active} />;
+    case "apiremovals":
+      return <ApiRemovalsWorkspace active={active} />;
+    case "quotas":
+      return <QuotasWorkspace active={active} />;
     case "access":
       return <AccessWorkspace active={active} />;
     case "whocan":

@@ -198,6 +198,18 @@ func (w *Workspace) WarningCount(cluster string, sinceSec int) (int, error) {
 
 func (w *Workspace) Expiry(cluster string) (kube.ExpiryReport, error) { return w.m.Expiry(cluster) }
 
+// APIRemovals lists what records an API version a Kubernetes release removes:
+// Helm release manifests, last-applied annotations and the API server's own count.
+func (w *Workspace) APIRemovals(cluster string) (kube.APIRemovalReport, error) {
+	return w.m.APIRemovals(cluster)
+}
+
+// KnownAPIRemovals is the removal table itself (Kubernetes' lifecycle tags).
+func (w *Workspace) KnownAPIRemovals() []kube.APIRemoval { return kube.KnownAPIRemovals() }
+
+// Quotas lists ResourceQuotas with their use, LimitRanges, and the requests pods must carry.
+func (w *Workspace) Quotas(cluster string) (kube.QuotaReport, error) { return w.m.Quotas(cluster) }
+
 // Helm upgrade, storage and network policies.
 
 func (w *Workspace) HelmUpgradeSource(cluster, ns, name string) (kube.HelmUpgradeSource, error) {

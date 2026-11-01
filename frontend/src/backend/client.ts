@@ -489,6 +489,85 @@ export interface ExpiryReport {
   notes: string[];
 }
 
+// API removals (internal/kube/apiremovals.go).
+export interface APIRemovalFinding {
+  /** helm: a release's stored manifest; applied: kubectl's last-applied annotation; apiserver: the API server counted a request. */
+  source: "helm" | "applied" | "apiserver";
+  apiVersion: string;
+  kind?: string;
+  /** apiserver only: the metric names the resource. */
+  resource?: string;
+  /** Kubernetes minor version ("1.25"); "" when none is set. */
+  removed: string;
+  deprecated?: string;
+  replacement?: string;
+  namespace?: string;
+  name?: string;
+  release?: string;
+  revision?: number;
+  hook?: boolean;
+}
+
+export interface APIRemovalReport {
+  cluster: string;
+  server: string;
+  minor: number;
+  findings: APIRemovalFinding[];
+  notes: string[];
+  apiServerStarted?: string;
+  releases: number;
+  objects: number;
+}
+
+// Quotas and limits (internal/kube/quotas.go).
+export interface QuotaItem {
+  resource: string;
+  used: string;
+  hard: string;
+  ratio: number;
+  full: boolean;
+}
+
+export interface QuotaInfo {
+  namespace: string;
+  name: string;
+  scopes: string[];
+  items: QuotaItem[];
+}
+
+export interface LimitItem {
+  type: string;
+  resource: string;
+  defaultRequest?: string;
+  default?: string;
+  min?: string;
+  max?: string;
+  maxLimitRequestRatio?: string;
+}
+
+export interface LimitRangeInfo {
+  namespace: string;
+  name: string;
+  items: LimitItem[];
+}
+
+export interface QuotaRule {
+  namespace: string;
+  /** needs: containers must set it (a request or a limit); defaults: a LimitRange fills it in. */
+  kind: "needs" | "defaults";
+  resource: string;
+  quota?: string;
+  value?: string;
+}
+
+export interface QuotaReport {
+  cluster: string;
+  quotas: QuotaInfo[];
+  limits: LimitRangeInfo[];
+  rules: QuotaRule[];
+  notes: string[];
+}
+
 // Helm upgrade (internal/kube/helm_upgrade.go).
 export interface HelmUpgradeRequest {
   cluster: string;
@@ -867,6 +946,8 @@ export const backendApi = {
   accessMatrix: (cluster: string, subject: AccessSubject, namespace: string) => call<AccessResult>("AccessMatrix", cluster, subject, namespace),
   whoCan: (req: WhoCanRequest) => call<WhoCanResult>("WhoCan", req),
   expiry: (cluster: string) => call<ExpiryReport>("Expiry", cluster),
+  apiRemovals: (cluster: string) => call<APIRemovalReport>("APIRemovals", cluster),
+  quotas: (cluster: string) => call<QuotaReport>("Quotas", cluster),
 
   helmUpgradeSource: (cluster: string, ns: string, name: string) => call<HelmUpgradeSource>("HelmUpgradeSource", cluster, ns, name),
   planHelmUpgrade: (req: HelmUpgradeRequest) => call<HelmUpgradePlan>("PlanHelmUpgrade", req),

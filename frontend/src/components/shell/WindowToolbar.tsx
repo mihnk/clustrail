@@ -24,6 +24,8 @@ import {
   HardDrive,
   Waypoints,
   Route,
+  ArchiveX,
+  Gauge,
 } from "lucide-react";
 import { IS_MOCK } from "@/data/mock";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -236,6 +238,10 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
       return <TriangleAlert className={cls} aria-hidden />;
     case "certificates":
       return <FileBadge className={cls} aria-hidden />;
+    case "apiremovals":
+      return <ArchiveX className={cls} aria-hidden />;
+    case "quotas":
+      return <Gauge className={cls} aria-hidden />;
     case "access":
     case "whocan":
       return <ShieldCheck className={cls} aria-hidden />;

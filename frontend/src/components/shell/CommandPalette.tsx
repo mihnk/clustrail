@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   HardDrive,
   Waypoints,
+  ArchiveX,
+  Gauge,
 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { IS_MOCK } from "@/data/mock";
@@ -145,6 +147,8 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       ["GitOps", <GitBranch key="g" />, () => ws.openView({ kind: "gitops", title: t("GitOps") })],
       ["Warning events", <TriangleAlert key="w" />, () => ws.openView({ kind: "warnings", title: t("Warning events") })],
       ["Certificates", <FileBadge key="cert" />, () => ws.openView({ kind: "certificates", title: t("Certificates") })],
+      ["API removals", <ArchiveX key="apirm" />, () => ws.openView({ kind: "apiremovals", title: t("API removals") })],
+      ["Quotas and limits", <Gauge key="quota" />, () => ws.openView({ kind: "quotas", title: t("Quotas and limits") })],
       ["Access", <ShieldCheck key="a" />, () => ws.openView({ kind: "access", title: t("Access") })],
       ["Who can?", <ShieldCheck key="wc" />, () => ws.openView({ kind: "whocan", title: t("Who can?") })],
       ["Port forwards", <ArrowLeftRight key="pf" />, () => ws.openView({ kind: "portforwards", title: t("Port forwards") })],

@@ -36,6 +36,10 @@ telemetry.
   service chain from Ingress to pods that names the first broken link, network
   policies of a pod with a connection check, Warning events, expiring
   certificates and an RBAC access matrix.
+- **Before an upgrade.** API versions the next Kubernetes release removes,
+  from what records the version used (Helm release manifests, kubectl's
+  last-applied annotation, the API server's own count), and quotas with what
+  each namespace may still create.
 - **Everyday operations.** Shells and debug containers, node shells, port
   forwards, YAML with server-side dry run, scale, restart, rollback, cordon and
   drain through the Eviction API, Helm upgrades with a diff before they run,
