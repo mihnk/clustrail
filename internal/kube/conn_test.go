@@ -432,9 +432,9 @@ func TestHelmReleasesFromSecrets(t *testing.T) {
 func TestOwnersFromManagedFields(t *testing.T) {
 	obj := &unstructured.Unstructured{}
 	obj.SetManagedFields([]metav1.ManagedFieldsEntry{
-		{Manager: "argocd-controller", Operation: "Apply", FieldsType: "FieldsV1", FieldsV1: &metav1.FieldsV1{Raw: []byte(
-			`{"f:spec":{"f:replicas":{},"f:template":{"f:spec":{"f:containers":{"k:{\"name\":\"api\"}":{".":{},"f:image":{},"f:resources":{"f:limits":{"f:memory":{}}}}}}}}}`)}},
-		{Manager: "kube-controller-manager", Subresource: "status", FieldsV1: &metav1.FieldsV1{Raw: []byte(`{"f:status":{"f:replicas":{}}}`)}},
+		{Manager: "argocd-controller", Operation: "Apply", FieldsType: "FieldsV1", FieldsV1: metav1.NewFieldsV1(
+			`{"f:spec":{"f:replicas":{},"f:template":{"f:spec":{"f:containers":{"k:{\"name\":\"api\"}":{".":{},"f:image":{},"f:resources":{"f:limits":{"f:memory":{}}}}}}}}}`)},
+		{Manager: "kube-controller-manager", Subresource: "status", FieldsV1: metav1.NewFieldsV1(`{"f:status":{"f:replicas":{}}}`)},
 	})
 	owners := ownersOf(obj)
 	for _, path := range []string{"spec.replicas", "spec.template.spec.containers[api].image", "spec.template.spec.containers[api].resources.limits.memory"} {

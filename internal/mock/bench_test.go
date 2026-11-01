@@ -12,8 +12,6 @@ import (
 // The Go half of the pipeline, without the transport: synthetic changes into
 // a hub topic, coalesced per consumer, taken and JSON-encoded as the sender does.
 
-type hubSink struct{ s streaming.Sink[kube.PodRow] }
-
 func benchHub(b *testing.B, pods int) (*Generator, streaming.Sink[kube.PodRow], *streaming.Consumer[kube.PodRow]) {
 	g := New(Config{Cluster: "bench", Pods: pods, Seed: 1})
 	got := make(chan streaming.Sink[kube.PodRow], 1)

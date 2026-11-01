@@ -42,11 +42,11 @@ hack/kind-smoke.sh
 ## Before you open a pull request
 
 ```bash
-cd frontend && npm run typecheck && npm test && npm run build
+cd frontend && npm run typecheck && npm run lint && npm test && npm run build
 ```
 
 ```bash
-go vet ./... && go test -race ./internal/...
+go vet ./... && golangci-lint run && go test -race ./internal/...
 ```
 
 ```bash

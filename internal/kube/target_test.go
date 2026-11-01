@@ -108,7 +108,7 @@ func TestKubeconfigChangesReconnectOrLockChanges(t *testing.T) {
 
 	// Another server: disconnected, not reconnected, changes locked. The change
 	// is caught by the next action even before the 3 s poll reloads.
-	conn = fakeConnected(t, m)
+	fakeConnected(t, m)
 	writeKubeconfig(t, cfg, "https://10.9.9.9:6443", "token-2")
 	if _, err := m.writable("dev-local"); !errors.Is(err, ErrTargetChanged) {
 		t.Fatalf("writable after a server change = %v", err)

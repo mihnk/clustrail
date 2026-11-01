@@ -104,7 +104,7 @@ func Serve[R Row](h *Hub[R], conn Conn) {
 				continue
 			}
 			s := &sender[R]{id: m.Sub, c: c, conn: conn, stats: h.Stats, tokens: inflight}
-			s.ctx, s.cancel = context.WithCancel(ctx)
+			s.ctx, s.cancel = context.WithCancel(ctx) //nolint:gosec // called by s.stop() on unsub and when the connection ends
 			subs[m.Sub] = s
 			mu.Unlock()
 			go s.run()

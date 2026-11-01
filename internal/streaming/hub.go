@@ -79,7 +79,7 @@ func (h *Hub[R]) Subscribe(key Key) (*Consumer[R], error) {
 		if err != nil {
 			return nil, err
 		}
-		ctx, cancel := context.WithCancel(h.ctx)
+		ctx, cancel := context.WithCancel(h.ctx) //nolint:gosec // kept in the topic; called when its last consumer leaves
 		t = &topic[R]{key: key, hub: h, rows: map[string]R{}, state: Connecting, consumers: map[*Consumer[R]]struct{}{}, cancel: cancel}
 		h.topics[key] = t
 		h.Stats.Topics.Add(1)

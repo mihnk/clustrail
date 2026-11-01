@@ -388,12 +388,14 @@ var (
 // sweepNodeShells deletes this installation's node shell pods that no open
 // shell uses: left behind by a crash, or by quitting while the cluster was
 // unreachable. Pods of other installations are never touched.
-func (m *Manager) sweepNodeShells(cluster string, c *clusterConn) {
+func (m *Manager) sweepNodeShells(ctx context.Context, cluster string, c *clusterConn) {
 	install := m.store.InstallID()
 	if install == "" {
 		return
 	}
-	ctx, cancel := actionCtx()
+	// ctx is the connection's: a sweep stops when the cluster is disconnected,
+	// and the next connect sweeps again.
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	sel := nodeShellLabel + "=true," + installLabel + "=" + install
 	list, err := c.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{LabelSelector: sel})

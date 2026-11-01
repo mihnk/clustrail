@@ -128,7 +128,7 @@ func (w *Workspace) ReportBench(result string) error {
 	if out == "" {
 		out = "clustrail-bench.json"
 	}
-	err := os.WriteFile(out, []byte(result), 0o644)
+	err := os.WriteFile(out, []byte(result), 0o600) //nolint:gosec // benchmarks only: the path is the CLUSTRAIL_BENCH_OUT the runner chose
 	slog.Info("benchmark finished", "out", out, "error", err)
 	go func() {
 		time.Sleep(200 * time.Millisecond)

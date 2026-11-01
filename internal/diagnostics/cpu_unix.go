@@ -7,12 +7,6 @@ import (
 	"time"
 )
 
-// processCPU is user + system CPU time of this process.
-func processCPU() time.Duration {
-	u := usage()
-	return u.cpu
-}
-
 type rusage struct {
 	cpu                    time.Duration
 	voluntary, involuntary int64

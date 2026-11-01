@@ -199,7 +199,7 @@ func ownersOf(obj *unstructured.Unstructured) map[string]string {
 			continue
 		}
 		var tree map[string]any
-		if json.Unmarshal(mf.FieldsV1.Raw, &tree) != nil {
+		if json.Unmarshal(mf.FieldsV1.GetRawBytes(), &tree) != nil {
 			continue
 		}
 		var walk func(node map[string]any, path string)

@@ -45,7 +45,7 @@ func loginShellPath(timeout time.Duration) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, shell, "-l", "-i", "-c", `printf '%s%s%s' "`+pathMarker+`" "$PATH" "`+pathMarker+`"`)
+	cmd := exec.CommandContext(ctx, shell, "-l", "-i", "-c", `printf '%s%s%s' "`+pathMarker+`" "$PATH" "`+pathMarker+`"`) //nolint:gosec // the user's own login shell ($SHELL), to read the PATH it sets up
 	cmd.Stdin = nil
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {

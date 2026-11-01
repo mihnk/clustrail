@@ -61,10 +61,10 @@ func newer(a, b string) bool {
 	for i := 0; i < max(len(pa), len(pb)); i++ {
 		var x, y int
 		if i < len(pa) {
-			fmt.Sscan(pa[i], &x)
+			_, _ = fmt.Sscan(pa[i], &x) // not a number: 0
 		}
 		if i < len(pb) {
-			fmt.Sscan(pb[i], &y)
+			_, _ = fmt.Sscan(pb[i], &y)
 		}
 		if x != y {
 			return x > y

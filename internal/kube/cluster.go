@@ -296,8 +296,8 @@ func (c *clusterConn) scope(ctx context.Context, identity, group, resource, labe
 
 // start launches informers and the flush, probe and metrics loops.
 func (c *clusterConn) start(parent context.Context, identity string, withMetrics bool) error {
-	c.ctx, c.cancel = context.WithCancel(parent)
-	ctx := c.ctx
+	ctx, cancel := context.WithCancel(parent)
+	c.ctx, c.cancel = ctx, cancel
 	// managedFields are never read from the caches (YAML views fetch the live
 	// object), and they are often the largest part of an object.
 	c.factory = informers.NewSharedInformerFactoryWithOptions(c.client, 0, informers.WithTransform(stripManagedFields))

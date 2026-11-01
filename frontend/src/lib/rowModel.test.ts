@@ -9,7 +9,10 @@ interface Item {
   n: number;
 }
 
-const columns: ColumnDef<Item>[] = [{ id: "n", accessorFn: (r) => r.n }];
+const columns: ColumnDef<Item>[] = [
+  { id: "n", accessorFn: (r) => r.n },
+  { id: "none", accessorFn: () => undefined },
+];
 
 function table(data: Item[]) {
   const options: TableOptionsResolved<Item> = {
@@ -54,7 +57,7 @@ describe("cachedCoreRowModel", () => {
     const t = table([{ id: "a", n: 1 }]);
     const row = t.getCoreRowModel().rows[0]!;
     t.setOptions((prev) => ({ ...prev, renderFallbackValue: "–" }));
-    expect(row.renderValue("missing")).toBe("–");
+    expect(row.renderValue("none")).toBe("–");
   });
 
   // A kept row held the options of the render that made it, and with them that

@@ -74,10 +74,9 @@ func TestWriteUIFixture(t *testing.T) {
 
 	c, client, _ := newFakeConn(t, dep, rs, crash, ok1, ok2, node, pdb, svc, ev)
 	client.Fake.Resources = []*metav1.APIResourceList{{GroupVersion: "apps/v1", APIResources: []metav1.APIResource{{Name: "deployments", Kind: "Deployment", Namespaced: true}}}}
-	raw, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(dep)
 	dep.ManagedFields = []metav1.ManagedFieldsEntry{{Manager: "argocd-controller", Operation: "Apply", FieldsType: "FieldsV1",
-		FieldsV1: &metav1.FieldsV1{Raw: []byte(`{"f:spec":{"f:replicas":{}}}`)}}}
-	raw, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(dep)
+		FieldsV1: metav1.NewFieldsV1(`{"f:spec":{"f:replicas":{}}}`)}}
+	raw, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(dep)
 	_ = raw
 	c.dynamic = dynamicfake.NewSimpleDynamicClient(scheme.Scheme, dep.DeepCopy())
 	c.id = "prod-eu-west-1"

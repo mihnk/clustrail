@@ -56,7 +56,7 @@ func NewManager(ctx context.Context, store *Store, emit Emitter) *Manager {
 			Detail: "Clustrail recovered and kept running; the details are in its log (Settings › Privacy & diagnostics)."})
 	}
 	panicNotice.Store(&notice)
-	m.reload()
+	m.reload() //nolint:contextcheck // the manager keeps the app's context (m.ctx); its methods are the UI's entry points and take none
 	safeLoop(ctx, "kubeconfig watch", nil, m.watchKubeconfig)
 	safeLoop(ctx, "cache budget", nil, func() { m.budgetLoop(ctx) })
 	return m
@@ -375,13 +375,6 @@ func (m *Manager) Connect(id string) {
 	safeGo("connect "+id, func(err error) { m.connectPanicked(id, a, err) }, func() { m.connect(id, a) })
 }
 
-// current reports whether a is still the attempt pending for id.
-func (m *Manager) current(id string, a *connectAttempt) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.pending[id] == a
-}
-
 // connectPanicked ends a connect attempt that panicked the way a failed one
 // ends, so the cluster does not stay "connecting".
 func (m *Manager) connectPanicked(id string, a *connectAttempt, err error) {
@@ -490,7 +483,7 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 	safeLoop(conn.ctx, "API probe", func(err error) { m.connStateFrom(id, conn, Reconnecting, err) }, func() {
 		conn.probeLoop(conn.ctx, func(ms int, err error) { m.probeFrom(id, conn, ms, err) })
 	})
-	safeGo("node shell sweep", nil, func() { m.sweepNodeShells(id, conn) })
+	safeGo("node shell sweep", nil, func() { m.sweepNodeShells(conn.ctx, id, conn) })
 	slog.Info("connected", "cluster", id, "version", info.Version, "identity", info.Identity, "latencyMs", info.LatencyMs, "metrics", info.Metrics,
 		"poll", pollMode.Load(), "forbidden", len(conn.forbidden))
 	m.setState(id, func(c *Cluster) {

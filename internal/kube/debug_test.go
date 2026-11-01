@@ -130,7 +130,7 @@ func TestNodeShellSweepDeletesOnlyOwnOrphans(t *testing.T) {
 	m := managerWith(c, false)
 	m.store = &Store{data: settingsFile{InstallID: "inst1"}}
 	m.shells.track("test/kube-system/"+open.Name, NodeShell{Namespace: "kube-system", Pod: open.Name})
-	m.sweepNodeShells("test", c)
+	m.sweepNodeShells(context.Background(), "test", c)
 	exists := func(name string) bool {
 		_, err := client.CoreV1().Pods("kube-system").Get(context.Background(), name, metav1.GetOptions{})
 		return err == nil

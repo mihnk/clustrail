@@ -32,12 +32,17 @@ cd frontend && npm run build && cd .. && go build -tags production -o bin/clustr
 Checks:
 
 ```bash
-cd frontend && npm run typecheck && npm test
+cd frontend && npm run typecheck && npm run lint && npm test
 ```
 
 `npm test` runs the frontend's unit tests (vitest, `src/**/*.test.ts`) in
 Node: the filter and command-line parsers, formatters, the table's row model
 and the pod stream client.
+
+Static analysis: `golangci-lint run` (v2.15.0, `.golangci.yml`) for Go and
+`npm run lint` (ESLint: hook rules and unhandled promises) for the frontend.
+Both run in CI. A deliberate exception is suppressed on its line with the
+reason (`//nolint:<linter> // why`).
 
 ```bash
 go vet ./... && go test -race ./internal/...

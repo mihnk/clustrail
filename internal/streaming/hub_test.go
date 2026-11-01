@@ -212,8 +212,8 @@ func TestServeStaysConsistentUnderLoadAndBackpressure(t *testing.T) {
 	// 20k changes with a stall in the middle: sends fail, the backlog folds, nothing is lost.
 	for i := range 20000 {
 		id := "r" + itoa(i%1200)
-		switch {
-		case i%7 == 0:
+		switch i % 7 {
+		case 0:
 			s.Delete(id)
 			delete(truth, id)
 		default:

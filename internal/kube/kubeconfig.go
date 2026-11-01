@@ -202,12 +202,12 @@ func describeAuth(a *clientcmdapi.AuthInfo) (label, plugin string) {
 	switch {
 	case a.Exec != nil:
 		cmd := filepath.Base(a.Exec.Command)
-		switch {
-		case cmd == "aws" || cmd == "aws-iam-authenticator":
+		switch cmd {
+		case "aws", "aws-iam-authenticator":
 			return "exec · aws eks", cmd
-		case cmd == "gke-gcloud-auth-plugin" || cmd == "gcloud":
+		case "gke-gcloud-auth-plugin", "gcloud":
 			return "exec · gcloud", cmd
-		case cmd == "kubelogin":
+		case "kubelogin":
 			return "exec · kubelogin", cmd
 		default:
 			return "exec · " + cmd, cmd

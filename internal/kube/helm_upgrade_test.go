@@ -119,16 +119,21 @@ func TestUpgradeValuesKeepRedactedLiveValues(t *testing.T) {
 func TestChartVersionsFromLocalRepositoryIndexes(t *testing.T) {
 	dir := t.TempDir()
 	cache := filepath.Join(dir, "cache")
-	os.MkdirAll(cache, 0o755)
-	os.WriteFile(filepath.Join(dir, "repositories.yaml"), []byte(`repositories:
+	must := func(err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.MkdirAll(cache, 0o755))
+	must(os.WriteFile(filepath.Join(dir, "repositories.yaml"), []byte(`repositories:
 - name: acme
   url: https://charts.acme.example
   username: ci
   password: s3cret
 - name: other
   url: https://other.example
-`), 0o600)
-	os.WriteFile(filepath.Join(cache, "acme-index.yaml"), []byte(`apiVersion: v1
+`), 0o600))
+	must(os.WriteFile(filepath.Join(cache, "acme-index.yaml"), []byte(`apiVersion: v1
 entries:
   payments-workers:
   - name: payments-workers
@@ -139,8 +144,8 @@ entries:
     version: 2.4.1
     appVersion: 1.9.1
     urls: [payments-workers-2.4.1.tgz]
-`), 0o600)
-	os.WriteFile(filepath.Join(cache, "other-charts.txt"), []byte("unrelated\n"), 0o600)
+`), 0o600))
+	must(os.WriteFile(filepath.Join(cache, "other-charts.txt"), []byte("unrelated\n"), 0o600))
 	t.Setenv("HELM_REPOSITORY_CONFIG", filepath.Join(dir, "repositories.yaml"))
 	t.Setenv("HELM_REPOSITORY_CACHE", cache)
 
