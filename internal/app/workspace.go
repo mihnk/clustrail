@@ -207,6 +207,31 @@ func (w *Workspace) APIRemovals(cluster string) (kube.APIRemovalReport, error) {
 // KnownAPIRemovals is the removal table itself (Kubernetes' lifecycle tags).
 func (w *Workspace) KnownAPIRemovals() []kube.APIRemoval { return kube.KnownAPIRemovals() }
 
+// HelmCharts searches the charts of this machine's Helm repositories.
+func (w *Workspace) HelmCharts(query string) (kube.HelmChartSearch, error) {
+	return kube.HelmCharts(query)
+}
+
+// HelmChartDefaults is a chart version's values.yaml.
+func (w *Workspace) HelmChartDefaults(repo, chart, version string) (string, error) {
+	return kube.HelmChartDefaults(repo, chart, version)
+}
+
+// PlanHelmInstall previews an install with a server-side dry run.
+func (w *Workspace) PlanHelmInstall(req kube.HelmInstallRequest) (kube.HelmInstallPlan, error) {
+	return w.m.PlanHelmInstall(req)
+}
+
+// InstallRelease installs a chart; refused on read-only contexts.
+func (w *Workspace) InstallRelease(req kube.HelmInstallRequest) (string, error) {
+	return w.m.InstallRelease(req)
+}
+
+// UninstallRelease uninstalls a release; refused on read-only contexts.
+func (w *Workspace) UninstallRelease(cluster, ns, name string, keepHistory bool) (string, error) {
+	return w.m.UninstallRelease(cluster, ns, name, keepHistory)
+}
+
 // PodContainers describes each container of a pod, read from the live pod.
 func (w *Workspace) PodContainers(cluster, ns, name string) (kube.PodSpecInfo, error) {
 	return w.m.PodContainers(cluster, ns, name)

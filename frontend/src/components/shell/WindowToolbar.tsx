@@ -26,6 +26,7 @@ import {
   Route,
   ArchiveX,
   Gauge,
+  PackagePlus,
 } from "lucide-react";
 import { IS_MOCK } from "@/data/mock";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -249,6 +250,8 @@ function TabIcon({ tab }: { tab: WorkspaceTab }) {
       return <ArrowLeftRight className={cls} aria-hidden />;
     case "helm-upgrade":
       return <ArrowUpCircle className={cls} aria-hidden />;
+    case "helm-install":
+      return <PackagePlus className={cls} aria-hidden />;
     case "storage":
       return <HardDrive className={cls} aria-hidden />;
     case "network":

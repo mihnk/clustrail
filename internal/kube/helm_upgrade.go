@@ -15,8 +15,6 @@ import (
 
 	"helm.sh/helm/v4/pkg/action"
 	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
-	"helm.sh/helm/v4/pkg/chart/v2/loader"
-	"helm.sh/helm/v4/pkg/cli"
 	helmkube "helm.sh/helm/v4/pkg/kube"
 	releasev1 "helm.sh/helm/v4/pkg/release/v1"
 	repov1 "helm.sh/helm/v4/pkg/repo/v1"
@@ -183,23 +181,7 @@ func (m *Manager) loadChart(req HelmUpgradeRequest, installed *chartv2.Chart) (*
 	if req.Repo == "" && req.Version == "" {
 		return installed, nil
 	}
-	repos, err := helmRepoEntries()
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range repos {
-		if r.Name != req.Repo {
-			continue
-		}
-		opts := action.ChartPathOptions{RepoURL: r.URL, Version: req.Version, Username: r.Username, Password: r.Password, CaFile: r.CAFile, CertFile: r.CertFile, KeyFile: r.KeyFile, InsecureSkipTLSVerify: r.InsecureSkipTLSVerify, PassCredentialsAll: r.PassCredentialsAll}
-		settings := cli.New()
-		path, err := opts.LocateChart(installed.Metadata.Name, settings)
-		if err != nil {
-			return nil, fmt.Errorf("download %s %s from %s: %w", installed.Metadata.Name, req.Version, r.Name, err)
-		}
-		return loader.Load(path)
-	}
-	return nil, fmt.Errorf("no Helm repository named %q on this machine", req.Repo)
+	return locateChart(req.Repo, installed.Metadata.Name, req.Version)
 }
 
 // parseUpgradeValues reads the edited YAML and puts live values back where

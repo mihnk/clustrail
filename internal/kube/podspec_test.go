@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-
 func TestPodContainersFromTheLivePod(t *testing.T) {
 	always := corev1.ContainerRestartPolicyAlways
 	p := &corev1.Pod{

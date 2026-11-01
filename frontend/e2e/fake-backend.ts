@@ -212,6 +212,12 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       };
     case "UpgradeRelease":
       return "helm-up-1";
+    case "HelmCharts":
+      return { charts: [] };
+    case "InstallRelease":
+      return "helm-in-1";
+    case "UninstallRelease":
+      return "helm-un-1";
     case "Storage":
       return {
         cluster: args[0], scope: "", usage: "kubelet", notes: [],

@@ -41,6 +41,7 @@ const CertificatesWorkspace = lazy(() => import("@/features/insights/Certificate
 const ApiRemovalsWorkspace = lazy(() => import("@/features/insights/ApiRemovalsWorkspace").then((m) => ({ default: m.ApiRemovalsWorkspace })));
 const QuotasWorkspace = lazy(() => import("@/features/insights/QuotasWorkspace").then((m) => ({ default: m.QuotasWorkspace })));
 const AccessWorkspace = lazy(() => import("@/features/insights/AccessWorkspace").then((m) => ({ default: m.AccessWorkspace })));
+const HelmInstallWorkspace = lazy(() => import("@/features/helm/HelmInstallWorkspace").then((m) => ({ default: m.HelmInstallWorkspace })));
 const HelmUpgradeWorkspace = lazy(() => import("@/features/helm/HelmUpgradeWorkspace").then((m) => ({ default: m.HelmUpgradeWorkspace })));
 const StorageWorkspace = lazy(() => import("@/features/storage/StorageWorkspace").then((m) => ({ default: m.StorageWorkspace })));
 const NetworkWorkspace = lazy(() => import("@/features/network/NetworkWorkspace").then((m) => ({ default: m.NetworkWorkspace })));
@@ -140,7 +141,7 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
   // Single-cluster workspaces and investigations need the width: the sidebar collapses to a rail.
   // Investigations, single-cluster lists and tool tabs (Logs, Shell, YAML, Compare) need the width.
   const railNav =
-    ["investigation", "logs", "shell", "yaml", "compare", "helm-upgrade", "connections", "settings"].includes(activeTab?.kind ?? "") ||
+    ["investigation", "logs", "shell", "yaml", "compare", "helm-upgrade", "helm-install", "connections", "settings"].includes(activeTab?.kind ?? "") ||
     (activeTab?.kind === "deployments" && !!activeTab.cluster);
 
   const [fontSize] = usePersistentState("settings.fontSize", 13);
@@ -246,6 +247,8 @@ function TabContent({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
       return <PortForwardsWorkspace />;
     case "helm-upgrade":
       return <HelmUpgradeWorkspace tab={tab} active={active} />;
+    case "helm-install":
+      return <HelmInstallWorkspace active={active} />;
     case "storage":
       return <StorageWorkspace active={active} />;
     case "network":

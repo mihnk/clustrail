@@ -27,6 +27,7 @@ import {
   Waypoints,
   ArchiveX,
   Gauge,
+  PackagePlus,
 } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { IS_MOCK } from "@/data/mock";
@@ -144,6 +145,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
         () => ws.openInvestigation(ws.currentInvestigation),
       ],
       ["Helm releases", <LifeBuoy key="h" />, () => ws.openView({ kind: "helm", title: t("Helm releases") })],
+      ["Install a Helm chart", <PackagePlus key="hi" />, () => ws.openView({ kind: "helm-install", title: t("Install a chart") })],
       ["GitOps", <GitBranch key="g" />, () => ws.openView({ kind: "gitops", title: t("GitOps") })],
       ["Warning events", <TriangleAlert key="w" />, () => ws.openView({ kind: "warnings", title: t("Warning events") })],
       ["Certificates", <FileBadge key="cert" />, () => ws.openView({ kind: "certificates", title: t("Certificates") })],

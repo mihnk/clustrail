@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
-import { ArrowUpCircle, History, LifeBuoy, Search, SearchX } from "lucide-react";
+import { ArrowUpCircle, History, LifeBuoy, PackagePlus, Search, SearchX, Trash2 } from "lucide-react";
 import { upgradeTab } from "./upgradeTab";
 import { useWorkspace } from "@/app/workspace";
 import { ROW_HEIGHT } from "@/app/preferences";
@@ -31,6 +31,7 @@ import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { backend, errorText } from "@/backend/client";
 import { useToast } from "@/components/ui/toast";
+import { Button } from "@/components/ui/button";
 import { helmColumns } from "./columns";
 import { HelmInspector } from "./HelmInspector";
 import { t as tt } from "@/i18n";
@@ -126,6 +127,39 @@ export function HelmWorkspace({ active }: { active: boolean }) {
     [confirm, clusterById, rollbackRelease, toast],
   );
 
+  const requestUninstall = useCallback(
+    (r: HelmRelease, keepHistory: boolean) => {
+      const c = clusterById(r.cluster);
+      const objects = r.resources.map((o) => `${o.kind} ${o.name}`);
+      confirm({
+        action: keepHistory ? tt("Uninstall release, keep history") : tt("Uninstall release"),
+        targetName: r.name,
+        icon: <Trash2 />,
+        env: c?.env ?? r.env,
+        cluster: r.cluster,
+        namespace: r.namespace,
+        meta: `${r.chart} ${r.chartVersion} · ${tt("revision {n}", { n: r.revision })}`,
+        protected: c?.protected ?? false,
+        destructive: true,
+        whatHappens: (
+          <>
+            {tt("Helm deletes the {n} objects of the release: {list}.", { n: objects.length, list: objects.slice(0, 6).join(", ") + (objects.length > 6 ? ", …" : "") })}{" "}
+            {tt("PersistentVolumeClaims made by StatefulSets are not part of the release and stay.")}{" "}
+            {keepHistory ? tt("Its history stays, so it can be rolled back.") : tt("Its history is deleted too.")}
+          </>
+        ),
+        command: `helm --kube-context ${c?.context ?? r.cluster} -n ${r.namespace} uninstall ${r.name}${keepHistory ? " --keep-history" : ""}`,
+        confirmLabel: tt("Uninstall"),
+        phrase: `${r.cluster}/${r.name}`,
+        onConfirm: () =>
+          backend!.uninstallRelease(r.cluster, r.namespace, r.name, keepHistory).catch((e) =>
+            toast.show({ kind: "error", title: tt("Uninstall failed"), target: `${r.name} · ${r.cluster}`, detail: errorText(e), copyText: errorText(e) }),
+          ),
+      });
+    },
+    [confirm, clusterById, toast],
+  );
+
   const actionsFor = useCallback(
     (r: HelmRelease): ResourceAction[] => {
       const lastGood = r.history.find((h) => h.rev !== r.revision && (h.status === "deployed" || h.status === "superseded"));
@@ -146,9 +180,27 @@ export function HelmWorkspace({ active }: { active: boolean }) {
           disabled: !lastGood,
           onSelect: () => lastGood && void requestRollback(r, lastGood.rev),
         },
+        {
+          id: "uninstall-keep",
+          group: "modify",
+          label: tt("Uninstall, keep history…"),
+          icon: <Trash2 />,
+          danger: true,
+          disabled: !backend || clusterById(r.cluster)?.readOnly,
+          onSelect: () => requestUninstall(r, true),
+        },
+        {
+          id: "uninstall",
+          group: "modify",
+          label: tt("Uninstall…"),
+          icon: <Trash2 />,
+          danger: true,
+          disabled: !backend || clusterById(r.cluster)?.readOnly,
+          onSelect: () => requestUninstall(r, false),
+        },
       ];
     },
-    [requestRollback, ws],
+    [requestRollback, requestUninstall, clusterById, ws],
   );
 
   const rowActions = useCallback(
@@ -194,6 +246,10 @@ export function HelmWorkspace({ active }: { active: boolean }) {
           <span className="text-title font-semibold">{tt("Helm releases")}</span>
           <span className="truncate text-meta text-fg-muted max-[1360px]:hidden">{tt("read from release Secrets in each namespace")}</span>
           <div className="flex-1" />
+          <Button disabled={!backend} title={!backend ? tt("Charts are installed into your clusters in the desktop app.") : undefined} onClick={() => ws.openView({ kind: "helm-install", title: tt("Install a chart") })}>
+            <PackagePlus aria-hidden />
+            {tt("Install chart…")}
+          </Button>
           <Segmented
             aria-label={tt("Cluster view")}
             value={view}

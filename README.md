@@ -44,7 +44,8 @@ telemetry.
   each namespace may still create.
 - **Everyday operations.** Shells and debug containers, node shells, port
   forwards, YAML with server-side dry run, scale, restart, rollback, cordon and
-  drain through the Eviction API, Helm upgrades with a diff before they run,
+  drain through the Eviction API, Helm installs and upgrades with a preview
+  before they run, uninstall,
   Argo CD and Flux status.
 - **Fast with large clusters.** Virtualized tables, coalesced pod streams and
   bounded buffers; measured in [docs/benchmarks](docs/benchmarks/m0-results.md).

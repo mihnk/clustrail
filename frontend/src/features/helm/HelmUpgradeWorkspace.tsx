@@ -13,7 +13,7 @@ import { cn } from "@/lib/cn";
 import { t as tt } from "@/i18n";
 
 const BAR = "bg-surface-panel dark:bg-transparent";
-const CHANGE_STYLE: Record<HelmObjectChange["change"], { sign: string; cls: string }> = {
+export const CHANGE_STYLE: Record<HelmObjectChange["change"], { sign: string; cls: string }> = {
   changed: { sign: "~", cls: "text-diff-chg-fg" },
   added: { sign: "+", cls: "text-diff-add-fg" },
   removed: { sign: "−", cls: "text-diff-del-fg" },
@@ -265,7 +265,7 @@ export function HelmUpgradeWorkspace({ tab }: { tab: WorkspaceTab; active: boole
   );
 }
 
-function ObjectDiff({ change }: { change: HelmObjectChange | undefined }) {
+export function ObjectDiff({ change }: { change: HelmObjectChange | undefined }) {
   const lines = useMemo(() => (change ? hunks(lineDiff(change.before ?? "", change.after ?? ""), change.change === "changed" ? 3 : 1000) : []), [change]);
   if (!change) return <div className="flex-1" />;
   return (

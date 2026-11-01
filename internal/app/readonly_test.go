@@ -17,7 +17,7 @@ var changesCluster = []string{
 	"DeletePod", "RestartDeployment", "ScaleDeployment", "RollbackDeployment", "SetDeploymentPaused", "DeleteDeployment",
 	"SetNodeCordoned", "DrainNode",
 	"RestartWorkload", "ScaleWorkload", "TriggerCronJob", "SetCronJobSuspended",
-	"UpgradeRelease", "RollbackRelease",
+	"UpgradeRelease", "RollbackRelease", "InstallRelease", "UninstallRelease",
 	"AddDebugContainer", "StartNodeShell", "StartPortForward", "StartExec",
 	"CreateObjects", "ApplyYAML", "DeleteResource",
 	"RefreshGitOps", "SyncGitOps", "SetGitOpsSuspended",
@@ -36,7 +36,7 @@ var allowedReadOnly = []string{
 	// Clustrail's own settings and connections
 	"Clusters", "Snapshot", "Connect", "Disconnect", "HideCluster", "SetSelected", "AutoConnect", "ConfirmTarget",
 	"UpdateCluster", "AddCluster", "TestConnection", "Setup", "SetupTest", "PasteKubeconfig", "SkipSetup",
-	"RestartSetup", "CompleteSetup", "AddKubeconfig", "HelmRepositories",
+	"RestartSetup", "CompleteSetup", "AddKubeconfig", "HelmRepositories", "HelmCharts", "HelmChartDefaults",
 	// Port-forward profiles: Clustrail's own settings; a profile starts through
 	// StartPortForward, which refuses read-only contexts (tested in kube)
 	"PortForwardProfiles", "SavePortForwardProfile", "DeletePortForwardProfile", "StartPortForwardProfile", "StopPortForwardProfile",
@@ -51,7 +51,7 @@ var allowedReadOnly = []string{
 	"ListResources", "StartListWatch", "StopListWatch", "StartLogs", "StopLogs", "HelmRevision",
 	"DeploymentRelations",
 	// Planning: nothing is changed
-	"PreviewDrain", "PlanHelmUpgrade",
+	"PreviewDrain", "PlanHelmUpgrade", "PlanHelmInstall",
 	// Sessions that only exist because a change was allowed, and cleanup
 	"StopPortForward", "ExecInput", "ExecResize", "CloseExec", "DeleteNodeShell",
 }

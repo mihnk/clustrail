@@ -491,6 +491,41 @@ export interface ExpiryReport {
   notes: string[];
 }
 
+// Helm install and uninstall (internal/kube/helm_install.go).
+export interface HelmChartEntry {
+  repo: string;
+  name: string;
+  version: string;
+  appVersion?: string;
+  description?: string;
+  deprecated?: boolean;
+  versions: { repo: string; version: string; appVersion?: string }[];
+}
+
+export interface HelmChartSearch {
+  charts: HelmChartEntry[];
+  note?: string;
+}
+
+export interface HelmInstallRequest {
+  cluster: string;
+  namespace: string;
+  name: string;
+  repo: string;
+  chart: string;
+  version: string;
+  values: string;
+  createNamespace: boolean;
+  wait: boolean;
+  atomic: boolean;
+  timeoutSec: number;
+}
+
+export interface HelmInstallPlan extends HelmUpgradePlan {
+  /** Rendered without the API server's validation: the namespace does not exist yet. */
+  renderedOnly?: boolean;
+}
+
 // Pod containers, read from the live pod (internal/kube/podspec.go).
 export interface ContainerPortInfo {
   name?: string;
@@ -1028,6 +1063,11 @@ export const backendApi = {
 
   helmUpgradeSource: (cluster: string, ns: string, name: string) => call<HelmUpgradeSource>("HelmUpgradeSource", cluster, ns, name),
   planHelmUpgrade: (req: HelmUpgradeRequest) => call<HelmUpgradePlan>("PlanHelmUpgrade", req),
+  helmCharts: (query: string) => call<HelmChartSearch>("HelmCharts", query),
+  helmChartDefaults: (repo: string, chart: string, version: string) => call<string>("HelmChartDefaults", repo, chart, version),
+  planHelmInstall: (req: HelmInstallRequest) => call<HelmInstallPlan>("PlanHelmInstall", req),
+  installRelease: (req: HelmInstallRequest) => call<string>("InstallRelease", req),
+  uninstallRelease: (cluster: string, ns: string, name: string, keepHistory: boolean) => call<string>("UninstallRelease", cluster, ns, name, keepHistory),
   upgradeRelease: (req: HelmUpgradeRequest) => call<string>("UpgradeRelease", req),
   storage: (cluster: string) => call<StorageReport>("Storage", cluster),
   serviceChain: (cluster: string, ns: string, kind: string, name: string) => call<ServiceChain>("ServiceChain", cluster, ns, kind, name),
