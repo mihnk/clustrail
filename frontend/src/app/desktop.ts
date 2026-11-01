@@ -162,6 +162,7 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
       offJob();
       if (frame) cancelAnimationFrame(frame);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- subscribed once for the app's life: the handlers use only state setters, refs and the toast API, which never change; autoConnect is read once, at startup
   }, []);
 
   // The selection is stored by the backend so the next launch connects the same clusters.
@@ -255,6 +256,7 @@ export function useDesktopWorkspace(a: Args): { actions: DesktopActions | null; 
         if (o) api.setGitOpsSuspended(o.cluster, o.kind, o.namespace, o.name, suspended).then(done(suspended ? "Suspended" : "Resumed", `${o.name} · ${o.cluster}`, o.env), fail("Update failed", o.name));
       },
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a is a new object every render: the actions read only the fields listed here, and setSelectedClusterIds, a state setter
   }, [a.allPods, a.deployments, a.nodes, a.helmReleases, a.gitops, a.clusters, a.selectedClusterIds, toast, fail]);
 
   return { actions, meta };

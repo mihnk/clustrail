@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -81,12 +81,13 @@ export function SetupFlow({ onDone, onSkip }: { onDone: (summary: SetupSummary) 
       toast.show({ kind: "error", title: t("Could not read kubeconfig files"), detail: errorText(e) });
     }
   };
-  useEffect(() => void load(), []);
+  const reload = useEffectEvent(() => void load());
+  useEffect(() => reload(), []);
   // No kubeconfig yet: Go watches the files; pick up one created meanwhile.
   const empty = info !== null && info.contexts.length === 0;
   useEffect(() => {
     if (!empty) return;
-    const timer = setInterval(() => void load(), 3000);
+    const timer = setInterval(reload, 3000);
     return () => clearInterval(timer);
   }, [empty]);
 

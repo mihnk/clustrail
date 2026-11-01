@@ -22,6 +22,7 @@ export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange
   const [index, setIndex] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
   const connected = ws.selectedClusters.filter((c) => c.connection === "connected").map((c) => c.id);
+  const connectedKey = connected.join(",");
 
   useEffect(() => {
     if (!open) return;
@@ -33,7 +34,8 @@ export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange
     }
     const api = backend;
     let cancelled = false;
-    void Promise.all(connected.map((c) => api.resourceKinds(c).then((ks) => ks.map((k) => ({ ...k, cluster: c }))).catch((e) => (setError(errorText(e)), []))))
+    const clusters = connectedKey ? connectedKey.split(",") : [];
+    void Promise.all(clusters.map((c) => api.resourceKinds(c).then((ks) => ks.map((k) => ({ ...k, cluster: c }))).catch((e) => (setError(errorText(e)), []))))
       .then((all) => {
         if (cancelled) return;
         const byKey = new Map<string, Entry>();
@@ -48,7 +50,7 @@ export function KindPicker({ open, onOpenChange }: { open: boolean; onOpenChange
     return () => {
       cancelled = true;
     };
-  }, [open, connected.join(",")]);
+  }, [open, connectedKey]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

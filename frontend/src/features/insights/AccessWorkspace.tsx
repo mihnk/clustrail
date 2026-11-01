@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Check, Minus, ShieldCheck, X } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { backend, errorText, type AccessResult, type AccessSubject } from "@/backend/client";
@@ -31,6 +31,8 @@ export function AccessWorkspace({ active: _active }: { active: boolean }) {
   const [busy, setBusy] = useState(false);
 
   const target = clusters.includes(cluster) ? cluster : (clusters[0] ?? "");
+  // The cluster's context namespace, read when its namespaces arrive.
+  const contextNamespace = useEffectEvent((cluster: string) => ws.clusterById(cluster)?.namespace);
   useEffect(() => {
     if (!backend || !target) return;
     let cancelled = false;
@@ -39,8 +41,8 @@ export function AccessWorkspace({ active: _active }: { active: boolean }) {
       .then((ns) => {
         if (cancelled) return;
         setNamespaces(ns);
-        const c = ws.clusterById(target);
-        setNamespace((cur) => (cur && ns.includes(cur) ? cur : c?.namespace && ns.includes(c.namespace) ? c.namespace : ns.includes("default") ? "default" : (ns[0] ?? "")));
+        const own = contextNamespace(target);
+        setNamespace((cur) => (cur && ns.includes(cur) ? cur : own && ns.includes(own) ? own : ns.includes("default") ? "default" : (ns[0] ?? "")));
       })
       .catch(() => setNamespaces([]));
     return () => {

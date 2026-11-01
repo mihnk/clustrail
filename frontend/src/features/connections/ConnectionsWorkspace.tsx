@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Copy, Eye, FileText, KeyRound, Lock, Play, Plus, RefreshCw, Shield, Unplug, X } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
 import { connectionTest, discoveredContexts, kubeconfigSources, type TestStep } from "@/data/connections";
@@ -87,10 +87,13 @@ export function ConnectionsWorkspace({ active }: { active: boolean }) {
     );
   };
 
-  useEffect(() => {
-    if (!active) return;
+  // Test a cluster when it is selected (once); not again when its row or the results change.
+  const testSelected = useEffectEvent(() => {
     const c = clusters.find((x) => x.id === selectedId);
     if (c && !tests[c.id]) runTest(c);
+  });
+  useEffect(() => {
+    if (active) testSelected();
   }, [active, selectedId]);
 
   const setProtection = (c: Cluster, p: Protection) => {

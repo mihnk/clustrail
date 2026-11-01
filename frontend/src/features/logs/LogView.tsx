@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef } from "react";
+import { memo, useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { tagColor, type LogLine, type LogMarker } from "@/data/logs";
 import type { Health } from "@/data/types";
@@ -78,6 +78,7 @@ export function LogView({
       programmatic.current = true;
       virtualizer.scrollToIndex(lines.length - 1, { align: "end" });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the view opens: start at the newest lines
   }, []);
 
   useLayoutEffect(() => {
@@ -87,13 +88,15 @@ export function LogView({
     }
   }, [follow, lines.length, virtualizer]);
 
-  useEffect(() => {
-    if (scrollToId === null) return;
-    const i = lines.findIndex((l) => l.id === scrollToId);
+  const scrollTo = useEffectEvent((id: number) => {
+    const i = lines.findIndex((l) => l.id === id);
     if (i >= 0) {
       programmatic.current = true;
       virtualizer.scrollToIndex(i, { align: "center" });
     }
+  });
+  useEffect(() => {
+    if (scrollToId !== null) scrollTo(scrollToId);
   }, [scrollToId]);
 
   useLayoutEffect(() => virtualizer.measure(), [wrap, showTimestamps, virtualizer]);

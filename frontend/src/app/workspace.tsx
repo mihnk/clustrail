@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   clusters as initialClusters,
   deployments as initialDeployments,
@@ -284,13 +284,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [closedTabs, setClosedTabs] = useState<WorkspaceTab[]>([]);
   const [activeTabId, setActiveTabId] = useState(launch.active);
   // The investigation you look at last receives new pins.
-  useEffect(() => {
+  const followActiveTab = useEffectEvent(() => {
     const t = tabs.find((x) => x.id === activeTabId);
     if (t?.kind === "investigation" && t.id !== currentInvestigation) setCurrentInvestigation(t.id);
-  }, [activeTabId]);
+  });
+  useEffect(() => followActiveTab(), [activeTabId]);
   useEffect(() => {
     if (desktop) writePreference(SAVED_TABS, { tabs: tabs.filter((t) => RESTORABLE.includes(t.kind)), active: activeTabId });
-  }, [tabs, activeTabId]);
+  }, [desktop, tabs, activeTabId]);
   const [scenarios, setScenarios] = useState<MockScenarios>({ watchLost: false, noMetrics: false });
   const [reveal, setReveal] = useState<RevealRequest | null>(null);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());

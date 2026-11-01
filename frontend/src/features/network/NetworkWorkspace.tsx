@@ -34,8 +34,9 @@ export function NetworkWorkspace({ tab }: { tab: WorkspaceTab; active: boolean }
   const pods = useMemo(() => ws.allPods.filter((p) => p.cluster === target).map((p) => `${p.namespace}/${p.name}`).sort(), [ws.allPods, target]);
   const [ns, pod] = podText.includes("/") ? (podText.split("/", 2) as [string, string]) : ["", ""];
 
+  const podKnown = pods.includes(podText); // false until the pod list has it
   useEffect(() => {
-    if (!backend || !target || !ns || !pod || !pods.includes(podText)) return;
+    if (!backend || !target || !ns || !pod || !podKnown) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -47,7 +48,7 @@ export function NetworkWorkspace({ tab }: { tab: WorkspaceTab; active: boolean }
     return () => {
       cancelled = true;
     };
-  }, [target, podText, pods.length > 0]);
+  }, [target, ns, pod, podKnown]);
 
   const empty = NeedsClusters({ icon: <Waypoints />, title: tt("Network policies"), clusters });
   if (empty) return empty;

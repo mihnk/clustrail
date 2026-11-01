@@ -39,6 +39,7 @@ export function SetupTips({ summary, onClose }: { summary: SetupSummary; onClose
   useEffect(() => {
     const timer = setTimeout(() => setPresent(all.map((a) => a.anchor).filter((a) => document.querySelector(`[data-tour="${a}"]`))), 400);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the anchors are fixed: looked up once, after the workspace has painted
   }, []);
   const tips = all.filter((tip) => present?.includes(tip.anchor));
   const [index, setIndex] = useState(0);
@@ -46,20 +47,22 @@ export function SetupTips({ summary, onClose }: { summary: SetupSummary; onClose
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const tip = showTips ? tips[index] : undefined;
 
+  const anchor = tip?.anchor;
+  const side = tip?.side;
   useLayoutEffect(() => {
-    if (!tip) return;
+    if (!anchor) return;
     const place = () => {
-      const r = document.querySelector(`[data-tour="${tip.anchor}"]`)?.getBoundingClientRect();
+      const r = document.querySelector(`[data-tour="${anchor}"]`)?.getBoundingClientRect();
       if (!r) return setPos(null);
       const w = 268;
-      if (tip.side === "right") setPos({ left: r.right + 12, top: r.top + 8 });
-      else if (tip.side === "below") setPos({ left: Math.min(window.innerWidth - w - 12, r.left), top: r.bottom + 10 });
+      if (side === "right") setPos({ left: r.right + 12, top: r.top + 8 });
+      else if (side === "below") setPos({ left: Math.min(window.innerWidth - w - 12, r.left), top: r.bottom + 10 });
       else setPos({ left: Math.min(window.innerWidth - w - 12, Math.max(12, r.right - w)), top: r.top - 10 });
     };
     place();
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
-  }, [tip?.anchor]);
+  }, [anchor, side]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

@@ -59,6 +59,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   // Mock: a fixed object (with the investigation's suggested edit). Desktop: loaded from the API server below.
   const initial = useMemo<LiveObject>(
     () => (backend ? { yaml: "", resourceVersion: "", owners: {} } : liveObject(params, tab.cluster ?? "")),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the object a tab shows is fixed for the tab; params is a new object every render
     [tab.id],
   );
 
@@ -104,7 +105,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       cancelled = true;
       stop();
     };
-  }, [tab.id]);
+  }, [tab.cluster, params.kind, params.namespace, params.name]);
   const [cursor, setCursor] = useState({ line: 1, col: 1 });
   const [dryRun, setDryRun] = useState<{ at: string; ms: number; checks: Check[] } | null>(null);
   const [panel, setPanel] = useState("dryrun");
@@ -195,6 +196,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       modified.dispose();
       editorRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the editor owns the text once built; edited only seeds a rebuild (mode, diff or theme) with what was typed
   }, [mode, diff, live.yaml, ws.theme, tab.id]);
 
   // Markers for syntax problems.
@@ -261,6 +263,7 @@ export function YamlWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
     if (mode !== "edit" || problems.length || !changes.length) return;
     const t = setTimeout(runDryRun, 700);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced on edits: dry-runs this render's text, with this render's checks
   }, [edited, mode]);
 
   useEffect(() => {

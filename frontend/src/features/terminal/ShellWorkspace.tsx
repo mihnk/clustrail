@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Columns2, Copy, Eraser, Pin, Plus, RefreshCw, Scaling, Search, X } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
 import { useOverlays } from "@/app/shortcuts";
@@ -149,7 +149,9 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
     );
 
   // Sessions requested from elsewhere (pod inspector, row menu) after confirmation.
-  useEffect(() => {
+  const reveal = ws.reveal;
+  // Opens the revealed session, with the clusters as they are then.
+  const openSession = useEffectEvent(() => {
     if (ws.reveal?.kind !== "session") return;
     let req: SessionRequest;
     if (ws.reveal.id.startsWith("{")) {
@@ -180,7 +182,8 @@ export function ShellWorkspace({ active }: { tab: WorkspaceTab; active: boolean 
       },
     ]);
     setActiveId(id);
-  }, [ws.reveal?.seq]);
+  });
+  useEffect(() => openSession(), [reveal]); // a new object only when something is revealed
 
   useEffect(() => {
     if (!active) return;

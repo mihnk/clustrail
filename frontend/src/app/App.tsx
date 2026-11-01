@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useEffectEvent, useState } from "react";
 import { ViewErrorBoundary } from "@/components/ViewErrorBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
@@ -97,13 +97,16 @@ export function App() {
 function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSummary | null; onSetupTipsClosed: () => void }) {
   const ws = useWorkspace();
   // Right after setup: the overview of the clusters it connected.
+  const openClusters = useEffectEvent(() => ws.openView({ kind: "clusters", title: t("Clusters") }));
   useEffect(() => {
-    if (setupSummary) ws.openView({ kind: "clusters", title: t("Clusters") });
+    if (setupSummary) openClusters();
   }, [setupSummary]);
   const { theme, density, tabs, activeTabId, activeTab, clusterById } = ws;
   useBackendSync();
   // Development diagnostics (⌘⇧D) and the in-app benchmark runner (CLUSTRAIL_BENCH).
   const [diagnostics, setDiagnostics] = useState(false);
+  // The benchmark opens Pods with the workspace as it is then, not as it was at startup.
+  const openPods = useEffectEvent(() => ws.openTab("pods") || ws.openView({ kind: "pods", title: t("Pods") }));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "d") {
@@ -117,7 +120,7 @@ function AppShell({ setupSummary, onSetupTipsClosed }: { setupSummary: SetupSumm
         if (!cfg) return;
         // The overlay draws every frame (its FPS meter): the idle scenario runs without it.
         setDiagnostics(cfg.scenario !== "idle");
-        setTimeout(() => void import("@/features/bench/runner").then(({ runBenchmark }) => runBenchmark(cfg, () => ws.openTab("pods") || ws.openView({ kind: "pods", title: t("Pods") }))), 500);
+        setTimeout(() => void import("@/features/bench/runner").then(({ runBenchmark }) => runBenchmark(cfg, openPods)), 500);
       });
     }
     return () => window.removeEventListener("keydown", onKey);

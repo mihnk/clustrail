@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { ArrowLeftRight, Box, KeyRound, Layers, Lock, Network, Search } from "lucide-react";
 import { useWorkspace } from "@/app/workspace";
@@ -78,6 +78,7 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
         };
       })),
     // While hidden every dependency reads `false`, so nothing recomputes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the `active &&` wrappers freeze the rows while the tab is hidden; each input is listed
     [active, active && clusters, active && allPods, active && ws.deployments, active && ws.nodes, active && ws.helmReleases, active && ws.gitops, active && ws.backendMeta],
   );
 
@@ -95,12 +96,15 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
     );
   }, [allRows, show, selected, group, status, query]);
 
-  const fix = (c: Cluster) => {
-    if (c.connection === "auth-expired") openView({ kind: "connections", title: "Connections" });
-    else connectCluster(c.id);
-  };
+  const fix = useCallback(
+    (c: Cluster) => {
+      if (c.connection === "auth-expired") openView({ kind: "connections", title: "Connections" });
+      else connectCluster(c.id);
+    },
+    [connectCluster, openView],
+  );
 
-  const columns = useMemo(() => clusterColumns(fix), [connectCluster, openView]);
+  const columns = useMemo(() => clusterColumns(fix), [fix]);
   const table = useReactTable({
     data: rows,
     columns,
@@ -115,7 +119,7 @@ export function ClustersWorkspace({ active }: { active: boolean }) {
     if (reveal?.kind !== "cluster") return;
     setSelectedId(reveal.id);
     setInspectorOpen(true);
-  }, [reveal?.seq]);
+  }, [reveal]); // a new object only when something is revealed
 
   const connected = clusters.filter((c) => c.connection === "connected").length;
   // Workloads that exist (same namespace and name) in at least two selected clusters, most clusters first.

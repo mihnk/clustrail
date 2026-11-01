@@ -86,6 +86,7 @@ export function CreateResourceWorkspace({ tab }: { tab: WorkspaceTab; active: bo
       ed.dispose();
       model.dispose();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the editor owns the text once built; text only seeds a rebuild (a theme change keeps what was typed)
   }, [ws.theme]);
 
   if (!backend) {

@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
   useReactTable,
   type SortingState,
@@ -66,7 +66,6 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     clusterById,
     density,
     theme,
-    tabs,
     openTab,
     deployments,
     deletePod,
@@ -215,7 +214,7 @@ export function PodsWorkspace({ active }: { active: boolean }) {
         actions: pod.staleSeconds !== undefined ? actions.map((a) => ({ ...a, disabled: true })) : actions,
       };
     },
-    [pods, clusterById, deployments, confirm, deletePod, restartDeployment, openTab, openView, revealResource, tabs],
+    [pods, clusterById, deployments, confirm, deletePod, restartDeployment, openView, revealResource],
   );
 
   // "/" focuses the filter while this tab is active.
@@ -275,7 +274,8 @@ export function PodsWorkspace({ active }: { active: boolean }) {
   }, [pods]);
 
   // A resource picked elsewhere (command palette, links): select it and make sure filters don't hide it.
-  useEffect(() => {
+  // Runs when something is revealed; reads the rows and filters as they are then.
+  const onReveal = useEffectEvent(() => {
     if (reveal?.kind === "filter" && reveal.id.startsWith("pods:")) {
       clearFilters();
       setQuery(reveal.id.slice("pods:".length));
@@ -285,7 +285,8 @@ export function PodsWorkspace({ active }: { active: boolean }) {
     if (!rows.some((p) => p.id === reveal.id)) clearFilters();
     setSelectedId(reveal.id);
     setInspectorOpen(true);
-  }, [reveal?.seq]);
+  });
+  useEffect(() => onReveal(), [reveal]); // a new object only when something is revealed
 
   const checkedPods = checked.size === 0 ? [] : pods.filter((p) => checked.has(p.id));
   const bulkDelete = () => {

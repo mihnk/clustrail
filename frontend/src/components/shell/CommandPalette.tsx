@@ -172,7 +172,7 @@ export function CommandPalette({ open, onOpenChange, onOpenKinds }: { open: bool
       run: () => ws.setTheme(ws.theme === "dark" ? "light" : "dark"),
     });
     return items;
-  }, [ws, confirm, open]);
+  }, [ws, confirm, open, onOpenKinds]);
 
   const results = useMemo(() => {
     const words = query.toLocaleLowerCase(locale()).split(/\s+/).filter(Boolean);

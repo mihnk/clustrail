@@ -38,9 +38,10 @@ export function MetricsChart({
     return () => ro.disconnect();
   }, []);
 
+  const sized = width > 0;
   useEffect(() => {
     const el = wrapRef.current;
-    if (!el || width === 0) return;
+    if (!el || !sized) return;
     const css = getComputedStyle(el);
     const token = (name: string) => css.getPropertyValue(name).trim();
     const accent = token("--accent");
@@ -111,7 +112,8 @@ export function MetricsChart({
       plotRef.current = null;
     };
     // Width changes are handled by setSize below without rebuilding the plot.
-  }, [series, height, themeKey, width === 0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the plot is built once it has a width; later widths go through setSize
+  }, [series, height, themeKey, sized]);
 
   useEffect(() => {
     if (width > 0) plotRef.current?.setSize({ width, height });

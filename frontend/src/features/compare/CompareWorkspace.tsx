@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContentStable } from "@/lib/useContentStable";
 import { ArrowLeftRight, Check, ChevronDown, ChevronRight, Code, KeyRound, Layers, Plus, X } from "lucide-react";
 import { useWorkspace, type WorkspaceTab } from "@/app/workspace";
 import {
@@ -60,6 +61,7 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
     const known = ids.map((id) => ws.clusterById(id)).filter((c): c is Cluster => !!c);
     // Lower environments on the left, so the reference reads "staging → prod".
     return known.sort((a, b) => ENV_ORDER[a.env] - ENV_ORDER[b.env]).slice(0, MAX_COLUMNS).map((c) => c.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the columns a tab opens with, chosen once
   }, []);
   const [clusterIds, setClusterIds] = useState<string[]>(initial);
   const [diffOnly, setDiffOnly] = useState(true);
@@ -102,22 +104,24 @@ export function CompareWorkspace({ tab, active }: { tab: WorkspaceTab; active: b
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- objectsKey names each object (cluster/namespace/name, revision); kind is fixed for the tab
   }, [objectsKey]);
-  const snaps = backend ? (remote?.snaps ?? []) : objects.filter((o) => !!o).map(snapshotFor);
+  // Rebuilt every render from the rows; the same object while its content is.
+  const snaps = useContentStable(backend ? (remote?.snaps ?? []) : objects.filter((o) => !!o).map(snapshotFor));
   const comparable = snaps.length >= 2 && snaps.length === clusters.length;
   const sections = useMemo(() => {
     if (!comparable) return [];
     const all = compareSnapshots(snaps);
     return include === "spec" ? all.filter((s) => !s.status) : all;
-  }, [comparable, JSON.stringify(snaps), include]);
+  }, [comparable, snaps, include]);
 
   // Objects are watched: a change in either cluster updates the comparison.
-  useEffect(() => setComparedAt(new Date()), [JSON.stringify(snaps)]);
+  useEffect(() => setComparedAt(new Date()), [snaps]);
 
   const counted = (s: DiffSection) => s.rows.filter((r) => r.kind !== "ref" && r.kind !== "status").length;
   const total = sections.reduce((n, s) => n + counted(s), 0);
   const identical = sections.reduce((n, s) => n + s.identical.length, 0);
-  const yamlDiff = useMemo(() => (comparable ? lineDiff(specYaml(snaps[0]!), specYaml(snaps[snaps.length - 1]!)) : []), [comparable, JSON.stringify(snaps)]);
+  const yamlDiff = useMemo(() => (comparable ? lineDiff(specYaml(snaps[0]!), specYaml(snaps[snaps.length - 1]!)) : []), [comparable, snaps]);
   const yamlHunks = useMemo(() => hunks(yamlDiff), [yamlDiff]);
   const yamlChanged = yamlDiff.filter((l) => l.op !== " ").length;
 

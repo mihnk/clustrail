@@ -89,7 +89,7 @@ function GenericDetail({ tab, kind }: { tab: WorkspaceTab; kind: string }) {
     return () => {
       cancelled = true;
     };
-  }, [tab.id]);
+  }, [tab.cluster, kind, ns, name]);
   if (!backend) {
     return (
       <EmptyState className="flex-1" icon={<Layers />} title={`${name} · ${kindName(kind)}`}>{t("Object details read the cluster’s API server, so they need the desktop app.")}</EmptyState>

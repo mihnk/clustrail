@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Code, ExternalLink, GitBranch, Layers, Lock, Pause, Play, RefreshCw, RotateCw, X } from "lucide-react";
 import type { Cluster } from "@/data/types";
 import type { Controller, GitOpsObject } from "@/data/gitops";
@@ -31,7 +31,9 @@ export function GitOpsInspector({
   onOpenYaml: (resource: { kind: string; name: string }) => void;
 }) {
   const [tab, setTab] = useState(o.drift.length ? "diff" : "overview");
-  useEffect(() => setTab(o.drift.length ? "diff" : "overview"), [o.id]);
+  // Another object: start on its diff if it drifted. Not again when the drift changes under the user.
+  const resetTab = useEffectEvent(() => setTab(o.drift.length ? "diff" : "overview"));
+  useEffect(() => resetTab(), [o.id]);
   const argo = o.tool === "Argo CD";
   const prot = cluster?.protected ?? false;
   const busy = o.appHealth === "Progressing" && o.reconciledSeconds < 5;

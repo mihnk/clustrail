@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { ArrowUpCircle, Code, Diff, History, Info, LifeBuoy, Lock, X } from "lucide-react";
 import type { Cluster } from "@/data/types";
 import { planFromManifests, rollbackPlan, type HelmRelease, type RollbackPlan } from "@/data/helm";
@@ -74,11 +74,13 @@ export function HelmInspector({
   const [valuesMode, setValuesMode] = useState<"user" | "computed">("user");
   const busy = r.status.startsWith("pending") && r.updatedSeconds < 60;
 
-  useEffect(() => {
+  // Another release: start where it needs attention. Not again when its status changes under the user.
+  const reset = useEffectEvent(() => {
     setTab(r.status === "failed" ? "history" : "overview");
     setTarget(lastGood?.rev ?? null);
     setShowDiff(false);
-  }, [r.id]);
+  });
+  useEffect(() => reset(), [r.id]);
 
   const targetRev = r.history.find((h) => h.rev === target);
   // Desktop: manifests, values and hooks as Helm stored them for each revision.

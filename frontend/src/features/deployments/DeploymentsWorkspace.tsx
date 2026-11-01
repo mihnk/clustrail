@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { ChevronDown, Columns3, Layers, Plus, Search, SearchX } from "lucide-react";
 import { useNamespaceFilter } from "@/app/namespaceFilter";
@@ -128,9 +128,10 @@ function ScopedDeployments({ cluster: clusterId, namespace }: { cluster: string;
     [rows, cluster, depsFor],
   );
 
-  useEffect(() => {
+  const followReveal = useEffectEvent(() => {
     if (reveal?.kind === "deployment" && rows.some((r) => r.id === reveal.id)) setSelectedId(reveal.id);
-  }, [reveal?.seq]);
+  });
+  useEffect(() => followReveal(), [reveal]); // a new object only when something is revealed
 
   const selected = rows.find((r) => r.id === selectedId) ?? null;
 
@@ -251,7 +252,8 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
     [rows, clusterById, depsFor],
   );
 
-  useEffect(() => {
+  // Runs when something is revealed; reads the rows as they are then.
+  const onReveal = useEffectEvent(() => {
     if (reveal?.kind === "deployment") {
       if (!rows.some((r) => r.id === reveal.id)) {
         setQuery("");
@@ -264,7 +266,8 @@ function DeploymentsExplorer({ active }: { active: boolean }) {
     } else if (reveal?.kind === "filter" && reveal.id.startsWith("deployments:")) {
       setQuery(reveal.id.slice("deployments:".length));
     }
-  }, [reveal?.seq]);
+  });
+  useEffect(() => onReveal(), [reveal]);
 
   useEffect(() => {
     if (!active) return;

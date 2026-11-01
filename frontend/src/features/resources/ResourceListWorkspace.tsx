@@ -101,8 +101,9 @@ function useGenericLists(clusters: string[], kind: string, active: boolean) {
     });
     setLists({});
     setErrors({});
-    if (!clusters.length) setLoading(false);
-    for (const c of clusters) {
+    const list = key ? key.split(",") : [];
+    if (!list.length) setLoading(false);
+    for (const c of list) {
       api
         .startListWatch(c, kind, "")
         .then((id) => {
@@ -122,7 +123,8 @@ function useGenericLists(clusters: string[], kind: string, active: boolean) {
       for (const id of ids.keys()) void api.stopListWatch(id);
     };
   }, [key, kind, active, tick]);
-  return { lists, errors, modes, loading, refresh: () => setTick((n) => n + 1) };
+  const refresh = useCallback(() => setTick((n) => n + 1), []);
+  return { lists, errors, modes, loading, refresh };
 }
 
 /** Any kind the cluster serves, with the API server's own columns (kubectl get). */
@@ -149,8 +151,13 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Columns come from the first cluster that answered; other clusters' cells are matched by column name.
-  const listed = connected.map((c) => lists[c]).filter((l): l is GenericList => !!l);
-  const columns = useMemo(() => (listed[0]?.columns ?? []).filter((c) => wide || c.priority === 0), [listed[0]?.columns, wide]);
+  const connectedKey = connected.join(",");
+  const listed = useMemo(
+    () => (connectedKey ? connectedKey.split(",") : []).map((c) => lists[c]).filter((l): l is GenericList => !!l),
+    [connectedKey, lists],
+  );
+  const firstColumns = listed[0]?.columns;
+  const columns = useMemo(() => (firstColumns ?? []).filter((c) => wide || c.priority === 0), [firstColumns, wide]);
   const namespaced = listed[0]?.namespaced ?? true;
   const multi = connected.length > 1;
 
@@ -168,7 +175,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
           ageSec: r.created ? Math.max(0, Math.round((now - Date.parse(r.created)) / 1000)) : -1,
         }));
     });
-  }, [lists, columns, deleted, clusterById]);
+  }, [listed, columns, deleted, clusterById]);
   const allNamespaces = useMemo(
     () => [...new Set(allRows.map((r) => r.namespace ?? "").filter((ns) => ns && !(hideSystem && SYSTEM_NAMESPACES.includes(ns))))].sort(),
     [allRows, hideSystem],
@@ -184,6 +191,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
     });
   }, [allRows, deferredQuery, namespaces, hideSystem]);
 
+  const hasRows = allRows.length > 0;
   const tableColumns = useMemo(() => {
     const col = createColumnHelper<Row>();
     const width = (i: number, name: string) => {
@@ -239,7 +247,8 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         cell: ({ getValue }) => <span className="font-mono text-meta text-fg-muted">{getValue() < 0 ? "—" : formatAge(getValue())}</span>,
       }),
     ];
-  }, [columns, namespaced, multi, allRows.length > 0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- widths come from the first rows that arrive; sizing them again on every update would shift the layout
+  }, [columns, namespaced, multi, hasRows]);
 
   const table = useReactTable({
     data: rows,
@@ -251,8 +260,11 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const command = (r: Row, verb: string) =>
-    `kubectl --context ${clusterById(r.cluster)?.context ?? r.cluster} ${verb} ${kubectlResource(kind)} ${r.name}${r.namespace ? ` -n ${r.namespace}` : ""}`;
+  const command = useCallback(
+    (r: Row, verb: string) =>
+      `kubectl --context ${clusterById(r.cluster)?.context ?? r.cluster} ${verb} ${kubectlResource(kind)} ${r.name}${r.namespace ? ` -n ${r.namespace}` : ""}`,
+    [clusterById, kind],
+  );
 
   // A CronJob's SUSPEND column, where the server's table has it.
   const suspendIndex = columns.findIndex((c) => c.name.toLowerCase() === "suspend");
@@ -343,7 +355,7 @@ export function ResourceListWorkspace({ tab, active }: { tab: WorkspaceTab; acti
         },
       ];
     },
-    [clusterById, confirm, kind, ws, toast, workloadTarget, done, failed],
+    [clusterById, confirm, kind, ws, toast, workloadTarget, done, failed, command, refresh],
   );
 
   const rowActions = useCallback(

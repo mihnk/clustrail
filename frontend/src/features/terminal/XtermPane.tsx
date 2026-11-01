@@ -149,6 +149,7 @@ export const XtermPane = forwardRef<
       term.dispose();
       termRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a terminal lives for one session: its target, directory and scrollback are fixed for it
   }, [sessionId]);
 
   // Desktop: the exec stream, separate from the terminal so a reconnect keeps the scrollback.
@@ -198,6 +199,7 @@ export const XtermPane = forwardRef<
       remote.current = NO_REMOTE;
       if (execId && !ended) void api.closeExec(execId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one shell process per session and connection; the session's target does not change
   }, [sessionId, connection]);
 
   useEffect(() => {

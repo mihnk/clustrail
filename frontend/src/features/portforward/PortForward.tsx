@@ -69,7 +69,7 @@ function PortForwardDialog({ target }: { target: Target }) {
         if (p?.[0]) setPort(String(p[0].port));
       })
       .catch(() => setPorts([]));
-  }, []);
+  }, [target.cluster, target.kind, target.namespace, target.name]);
 
   const remote = Number(port);
   // Ports below 1024 need root on Linux; let the OS pick one instead.

@@ -161,7 +161,7 @@ export function HelmWorkspace({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (reveal?.kind === "filter" && reveal.id.startsWith("helm:")) setQuery(reveal.id.slice("helm:".length));
-  }, [reveal?.seq]);
+  }, [reveal]); // a new object only when something is revealed
 
   useEffect(() => {
     if (!active) return;

@@ -164,7 +164,7 @@ export function NodesWorkspace({ active }: { active: boolean }) {
     } else if (reveal?.kind === "filter" && reveal.id.startsWith("nodes:")) {
       setQuery(reveal.id.slice("nodes:".length).replace(/cluster:\S+/, "").trim());
     }
-  }, [reveal?.seq]);
+  }, [reveal]); // a new object only when something is revealed
 
   useEffect(() => {
     if (!active) return;

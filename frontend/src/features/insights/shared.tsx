@@ -31,12 +31,13 @@ export function usePerCluster<T>(load: (cluster: string) => Promise<T>, key: str
   const clustersKey = clusters.join(",");
 
   useEffect(() => {
-    if (!backend || !active || !clusters.length) return;
+    const list = clustersKey ? clustersKey.split(",") : [];
+    if (!backend || !active || !list.length) return;
     let cancelled = false;
     const run = () => {
       setLoading(true);
       void Promise.all(
-        clusters.map((c) =>
+        list.map((c) =>
           loadRef
             .current(c)
             .then((v) => {
@@ -135,11 +136,12 @@ export function useWarningCount(): number | null {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const key = clusters.join(",");
   useEffect(() => {
-    if (!backend || !clusters.length) return;
+    const list = key ? key.split(",") : [];
+    if (!backend || !list.length) return;
     let cancelled = false;
     const run = () => {
       if (document.visibilityState !== "visible") return;
-      for (const c of clusters) {
+      for (const c of list) {
         backend!
           .warningCount(c, 900)
           .then((n) => !cancelled && setCounts((m) => (m[c] === n ? m : { ...m, [c]: n })))

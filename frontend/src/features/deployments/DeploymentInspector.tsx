@@ -426,7 +426,7 @@ function DeploymentRelated({ d }: { d: DeploymentRow }) {
     return () => {
       cancelled = true;
     };
-  }, [d.id]);
+  }, [d.cluster, d.namespace, d.name]);
   if (rels === null) return <EmptyState title={tt("Finding related objects…")} />;
   if ("error" in rels) return <EmptyState title={tt("Could not read related objects")}>{rels.error}</EmptyState>;
   if (!rels.length) return <EmptyState title={tt("No related objects")}>{tt("No Service, HPA, PodDisruptionBudget or configuration references this Deployment.")}</EmptyState>;

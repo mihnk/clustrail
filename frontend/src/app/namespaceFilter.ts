@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { usePersistentState } from "./preferences";
 import { useWorkspace } from "./workspace";
 
@@ -17,7 +17,8 @@ export function useNamespaceFilter(): [Set<string> | null, (next: Set<string> | 
   const [namespaces, setNamespaces] = useState<Set<string> | null>(null);
   const previous = useRef<string[] | null>(null);
 
-  useEffect(() => {
+  // Runs when the selection changes; reads the policy's inputs as they are then.
+  const onSelection = useEffectEvent(() => {
     const before = previous.current;
     previous.current = selectedClusterIds;
     const added = before === null ? selectedClusterIds : selectedClusterIds.filter((id) => !before.includes(id));
@@ -29,7 +30,9 @@ export function useNamespaceFilter(): [Set<string> | null, (next: Set<string> | 
     // Remembered: the union of what was picked per cluster; one cluster with no choice means all.
     const sets = selectedClusterIds.map((id) => remembered[id]);
     setNamespaces(sets.length && sets.every(Boolean) ? new Set(sets.flat() as string[]) : null);
-  }, [selectedClusterIds.join(","), policy]);
+  });
+  const selection = selectedClusterIds.join(",");
+  useEffect(() => onSelection(), [selection, policy]);
 
   const set = (next: Set<string> | null) => {
     setNamespaces(next);

@@ -46,5 +46,5 @@ export function useBackendSync() {
       if (timer) clearTimeout(timer);
       off();
     };
-  }, []);
+  }, [toast]); // the toast API never changes: this runs once
 }

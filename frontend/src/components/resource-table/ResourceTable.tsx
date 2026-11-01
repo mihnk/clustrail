@@ -1,16 +1,5 @@
 import { usePersistentState } from "@/app/preferences";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { flexRender, type Column, type Row, type RowData, type Table } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
@@ -128,9 +117,10 @@ export function ResourceTable<T>({
 
   const [autoHide] = usePersistentState("settings.autoHideColumns", true);
   const visible = table.getVisibleLeafColumns();
+  const checkable = checked !== undefined;
   const columns = useMemo(
-    () => (autoHide ? fitColumns(visible, width - (checked !== undefined ? 20 + columnGap : 0), columnGap, paddingX, fillMin) : visible),
-    [autoHide, visible, width, columnGap, paddingX, fillMin, checked !== undefined],
+    () => (autoHide ? fitColumns(visible, width - (checkable ? 20 + columnGap : 0), columnGap, paddingX, fillMin) : visible),
+    [autoHide, visible, width, columnGap, paddingX, fillMin, checkable],
   );
   const autoHidden = useMemo(
     () => visible.filter((c) => !columns.includes(c)).map((c) => c.columnDef.meta?.label ?? c.id),
@@ -138,7 +128,8 @@ export function ResourceTable<T>({
   );
   const autoHiddenKey = autoHidden.join("|");
   // Report only when the set of hidden columns changes.
-  useEffect(() => onAutoHiddenChange?.(autoHidden), [autoHiddenKey]);
+  const reportAutoHidden = useEffectEvent(() => onAutoHiddenChange?.(autoHidden));
+  useEffect(() => reportAutoHidden(), [autoHiddenKey]);
 
   const bulk = checked !== undefined && onCheckedChange !== undefined;
   const gridTemplateColumns = (bulk ? "20px " : "") +
@@ -154,7 +145,8 @@ export function ResourceTable<T>({
     return [...frozenOrder.flatMap((id) => byId.get(id) ?? []), ...liveRows.filter((r) => !known.has(r.id))];
   }, [liveRows, frozenOrder]);
   const heldUpdates = frozenOrder ? rows.reduce((n, r, i) => n + (liveRows[i]?.id !== r.id ? 1 : 0), 0) : 0;
-  useEffect(() => onHeldUpdatesChange?.(heldUpdates), [heldUpdates]);
+  const reportHeldUpdates = useEffectEvent((n: number) => onHeldUpdatesChange?.(n));
+  useEffect(() => reportHeldUpdates(heldUpdates), [heldUpdates]);
   const items = useMemo<Item<T>[]>(() => {
     if (!grouping) return rows.map((row) => ({ kind: "row", row }));
     const byKey = new Map<string, Row<T>[]>(grouping.keys.map((k) => [k, []]));
@@ -180,7 +172,8 @@ export function ResourceTable<T>({
     [items],
   );
   const virtualizer = useVirtualizer({ count: items.length, getScrollElement: () => scrollRef.current, estimateSize, overscan: OVERSCAN, getItemKey });
-  useLayoutEffect(() => virtualizer.measure(), [rowHeight, grouping !== undefined, virtualizer]);
+  const grouped = grouping !== undefined;
+  useLayoutEffect(() => virtualizer.measure(), [rowHeight, grouped, virtualizer]);
 
   const selectedItem = useMemo(
     () => (selectedId === null ? -1 : items.findIndex((it) => it.kind === "row" && it.row.id === selectedId)),
@@ -296,9 +289,10 @@ export function ResourceTable<T>({
   };
 
   // Keep the selected row in view when the selection changes from outside (palette, links).
-  useEffect(() => {
+  const scrollToSelected = useEffectEvent(() => {
     if (selectedItem >= 0) virtualizer.scrollToIndex(selectedItem, { align: "auto" });
-  }, [selectedId]);
+  });
+  useEffect(() => scrollToSelected(), [selectedId]);
 
   const virtualItems = virtualizer.getVirtualItems();
   const activeRendered = virtualItems.some((v) => v.index === selectedItem);

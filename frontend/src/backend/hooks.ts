@@ -1,7 +1,7 @@
 // Data that views read on demand. In desktop mode it comes from the Go
 // backend; in a plain browser from the mock layer, so every view works in both.
-import { useEffect, useMemo, useState } from "react";
-import { backend, errorText } from "./client";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { backend, errorText, type DrainPlan } from "./client";
 import { getPodDetail } from "@/data/mock";
 import type { PodDetail, PodRow, ResourceEvent } from "@/data/types";
 import { drainPreflight, type DrainPreflight, type NodeRow } from "@/data/nodes";
@@ -26,6 +26,7 @@ export function usePodDetail(pod: PodRow | null): PodDetail | null {
       cancelled = true;
       clearTimeout(t);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key is the pod's identity and state: refetched when they change, not for every new pod object
   }, [key]);
   if (!backend) return mock;
   if (!pod) return null;
@@ -46,13 +47,11 @@ const stripHash = (pod: string) => pod.split("/").pop()!.replace(/-[a-z0-9]{5}$/
  */
 export function useDrainPreflight(node: NodeRow): DrainPreflight | null {
   const ws = useWorkspace();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mock data: one preflight per node
   const mock = useMemo(() => (backend ? null : drainPreflight(node)), [node.id]);
   const [remote, setRemote] = useState<DrainPreflight | null>(null);
-  useEffect(() => {
-    if (!backend) return;
-    let cancelled = false;
-    void backend.previewDrain(node.cluster, node.name, { force: true, deleteEmptyDir: true, timeoutSec: 300 }).then((plan) => {
-      if (cancelled) return;
+  // Capacity is read when the plan arrives, from the nodes as they are then.
+  const applyPlan = useEffectEvent((plan: DrainPlan) => {
       const blocked = new Set(plan.pdbBlocked ?? []);
       const special = new Set([...plan.emptyDir, ...plan.unmanaged, ...blocked]);
       const others = ws.nodes.filter((n) => n.cluster === node.cluster && n.id !== node.id && n.health === "healthy");
@@ -69,11 +68,17 @@ export function useDrainPreflight(node: NodeRow): DrainPreflight | null {
         },
         evictedRequests: { cpu: node.cpu.requests, memGiB: node.memoryGiB.requests },
       });
+  });
+  useEffect(() => {
+    if (!backend) return;
+    let cancelled = false;
+    void backend.previewDrain(node.cluster, node.name, { force: true, deleteEmptyDir: true, timeoutSec: 300 }).then((plan) => {
+      if (!cancelled) applyPlan(plan);
     });
     return () => {
       cancelled = true;
     };
-  }, [node.id]);
+  }, [node.cluster, node.name]);
   return backend ? remote : mock;
 }
 
@@ -120,6 +125,6 @@ export function useHelmRevision(cluster: string, namespace: string, name: string
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [key, cluster, namespace, name, rev]); // key is made of the others
   return state?.key === key ? state.value : null;
 }

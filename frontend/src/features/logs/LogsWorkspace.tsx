@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
   ChevronDown,
@@ -99,6 +99,11 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const [bufferSetting] = usePersistentState("logs.bufferLines", 100_000);
   // The per-stream buffer, lowered when many log tabs share Settings › Total log memory.
   const bufferLimit = useLogLineLimit(tab.id, bufferSetting);
+  // The running stream trims to the limit as it is now, not as it was when the stream started.
+  const limitRef = useRef(bufferLimit);
+  useEffect(() => {
+    limitRef.current = bufferLimit;
+  }, [bufferLimit]);
 
   const [maxPods] = usePersistentState("logs.maxPods", 30);
   // Desktop: what the stream follows; "Add source" appends, a source's × removes it. Mock: the checkout-api design.
@@ -111,7 +116,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
   const [sources, setSources] = useState<LogSource[]>(() => (backend ? [] : checkoutSources));
   // Sources are on unless turned off, so pods that join show up.
   const [disabled, setDisabled] = useState<Set<SourceTag>>(() => (backend ? new Set() : new Set(["D"])));
-  const isOn = (tag: SourceTag) => !disabled.has(tag);
+  const isOn = useCallback((tag: SourceTag) => !disabled.has(tag), [disabled]);
   const [containers, setContainers] = useState<Record<string, Set<string>>>(
     (): Record<string, Set<string>> => (backend ? {} : { A: new Set(["api"]), B: new Set(["api"]), C: new Set(["api"]), D: new Set(["api"]) }),
   );
@@ -196,8 +201,8 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       });
       const buf = buffer.current;
       buf.push(...lines);
-      if (buf.length > bufferLimit) {
-        const over = buf.length - bufferLimit;
+      if (buf.length > limitRef.current) {
+        const over = buf.length - limitRef.current;
         buf.splice(0, over);
         setDropped((d) => d + over);
       }
@@ -257,6 +262,7 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
       off();
       if (streamId) void api.stopLogs(streamId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- specsKey identifies specs (and the namespace comes from them or the tab); the limit is read through limitRef
   }, [specsKey, instance, range, tab.cluster, followNew, maxPods]);
 
   useEffect(() => {
@@ -310,7 +316,8 @@ export function LogsWorkspace({ tab, active }: { tab: WorkspaceTab; active: bool
         (l.event || containers[l.tag]?.has(l.container)) &&
         (!onlyMatching || !matcher || l.event || (matcher.lastIndex = 0, matcher.test(l.msg))),
     );
-  }, [version, visibleCount, disabled, containers, instance, onlyMatching, matcher, hideLeft, sources]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version: the buffer is a ref that grows in place, and version says it did
+  }, [version, visibleCount, disabled, containers, instance, onlyMatching, matcher, hideLeft, sources, isOn]);
 
   const matches = useMemo(() => {
     if (!matcher) return [];
