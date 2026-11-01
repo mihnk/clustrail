@@ -173,6 +173,48 @@ other reader moves to a counts or by-owner topic on the same hub. Measure
 it with `e2e/storm.spec.ts` at 50k, and WebKit memory with
 `hack/bench.sh`. Until then the issue stays open.
 
+### First load after these changes
+
+The store's selectors use batched React state, not `useSyncExternalStore`,
+because the latter always renders at the synchronous priority. A hidden
+Pods tab follows the store at most every 2 s, instead of freezing. A storm
+costs it little, and when it is shown its rows are at most 2 s old and
+appear at once.
+
+The first load is still slower in one place. Measured in the page from
+navigation start, 10k pods through the fake transport, interleaved runs:
+- up to the snapshot, the two versions are the same;
+- from the snapshot to painted rows, the median is 202 ms before these
+  changes and 318 ms after.
+
+A trace shows the Pods view rendering four times after the snapshot.
+Rows show only after the third commit, with 35 to 100 ms of scheduling
+between renders. Next step: make the snapshot reach the view in one
+render. Measure with the in-page timing (a MutationObserver on the
+grid's `aria-rowcount`), not the bench's `loadMs`: that one polls every
+50 ms, twice.
+
+### C5: start bundle (decision)
+
+| Start bundle | Size |
+|---|---|
+| Patch 70 | 998 → 756 KB |
+| Now | 770 KB, with the code added since |
+
+The 500 KB budget is not met. React DOM, Radix with Floating UI, the Wails
+runtime, tailwind-merge, the shell and the workspace are needed for the
+first screen and come to about 340 KB minified.
+
+Splitting the Pods view out as well brought the start bundle to 602 KB. It
+also delayed the first full table by about 120 ms, because the view
+waited for its own chunk. Pods stays in the start bundle: rows on screen
+matter more than bytes parsed from a local disk.
+
+What is left to try:
+- load the debug and port-forward dialogs only when they are first opened
+  (about 10 KB);
+- load the mock data only in the browser build (about 15 KB).
+
 ## Known bottlenecks
 
 See the results page for numbers. In order of impact:

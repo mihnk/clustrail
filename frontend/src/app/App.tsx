@@ -9,6 +9,8 @@ import { ClusterNavigation } from "@/components/shell/ClusterNavigation";
 import { NavigationRail } from "@/components/shell/NavigationRail";
 import { StatusBar } from "@/components/shell/StatusBar";
 import { EmptyState } from "@/components/EmptyState";
+// Pods, the view that opens first, stays in the start bundle: split out, its
+// first full table came 120 ms later (docs/performance-budgets.md, C5).
 import { PodsWorkspace } from "@/features/pods/PodsWorkspace";
 import { PortForwardHost } from "@/features/portforward/PortForward";
 import { DebugHost } from "@/features/debug/DebugDialogs";

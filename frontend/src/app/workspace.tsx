@@ -243,16 +243,26 @@ export function selectPods(all: readonly PodRow[], scope: PodScope): PodRow[] {
 
 /**
  * Pods from the selected clusters; filtering by view happens per tab.
- * Re-renders with pod changes while live; a hidden tab passes live = false
- * and keeps the rows it had, so pod frames cost it nothing until it is shown.
+ * Re-renders with every pod change while live. A hidden tab passes
+ * live = false and follows at most every HIDDEN_REFRESH_MS: a storm costs it
+ * little, and when it is shown its rows are at most that old and appear at
+ * once, then it follows live again.
  */
 export function useSelectedPods(live = true): PodRow[] {
   const { podScope } = useWorkspace();
-  const last = useRef<PodRow[]>(NO_PODS);
-  const all = usePodSelector((rows) => (live ? rows : last.current));
-  if (live) last.current = all;
+  const last = useRef<{ rows: PodRow[]; at: number }>({ rows: NO_PODS, at: 0 });
+  const all = usePodSelector((rows) => {
+    const now = performance.now();
+    if (live || now - last.current.at >= HIDDEN_REFRESH_MS || last.current.rows === NO_PODS) {
+      last.current = { rows, at: now };
+    }
+    return last.current.rows;
+  });
   return useMemo(() => selectPods(all, podScope), [all, podScope]);
 }
+
+/** How often a hidden tab's pods follow the store. */
+const HIDDEN_REFRESH_MS = 2000;
 
 const NO_PODS: PodRow[] = [];
 

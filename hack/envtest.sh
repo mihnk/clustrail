@@ -14,4 +14,4 @@ if [ -z "${KUBEBUILDER_ASSETS:-}" ]; then
 fi
 export SOAK_CYCLES=${SOAK_CYCLES:-30}
 go test -tags envtest -race -count=1 -timeout 30m -run 'TestChaos|TestSoak' -v ./internal/kube 2>&1 |
-  grep -vE '^[IWE][0-9]{4} |^20[0-9]{2}/' 
+  grep -vE '^[IWE][0-9]{4} |^20[0-9]{2}/'
