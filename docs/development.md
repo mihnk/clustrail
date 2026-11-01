@@ -65,6 +65,12 @@ go vet ./... && go test -race ./internal/...
 The Go tests run the informers, actions and Helm/GitOps readers against
 client-go's fake clientsets; no cluster is needed.
 
+Against a real API server (envtest: kube-apiserver and etcd, no kubelet),
+`hack/envtest.sh` runs the chaos cases and a soak (`SOAK_CYCLES`, 30 by
+default). The chaos cases cover a partition, 410 Gone, hanging requests,
+expired credentials and an API server restart. The soak fails on a leaked
+goroutine or heap growth. Results are in `docs/benchmarks/soak.md`.
+
 End-to-end tests run the production build in Chromium. Desktop mode is tested
 against a faked Wails transport answering from `frontend/e2e/fixtures/desktop.json`,
 which the Go converters produce:

@@ -44,6 +44,10 @@ const (
 	EventJob      = "clustrail:job"
 
 	flushInterval = 250 * time.Millisecond
+)
+
+// Probe timing (variables so the chaos tests can shorten them).
+var (
 	probeInterval = 15 * time.Second
 	// probeTimeout ends a probe that hangs.
 	probeTimeout = 10 * time.Second

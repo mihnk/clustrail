@@ -281,7 +281,8 @@ func (m *Manager) List() ClusterList {
 			continue
 		}
 		out.Clusters = append(out.Clusters, *c)
-		if conn := m.conns[name]; conn != nil {
+		// A connection still starting is writing these; it is read once started.
+		if conn := m.conns[name]; conn != nil && conn.started.Load() {
 			out.Forbidden = append(out.Forbidden, conn.forbidden...)
 			if conn.gitops != nil {
 				out.Controllers = append(out.Controllers, conn.gitops.controller(c.Env))
@@ -511,11 +512,18 @@ func (m *Manager) connect(id string, a *connectAttempt) {
 		}
 	})
 	// The region comes from node labels once the node cache filled.
+	// It ends with the connection, and never writes into a later one.
 	safeGo("cluster region", nil, func() {
 		for range 20 {
-			time.Sleep(500 * time.Millisecond)
+			select {
+			case <-conn.ctx.Done():
+				return
+			case <-time.After(500 * time.Millisecond):
+			}
 			if r := conn.region(); r != "" {
-				m.setState(id, func(c *Cluster) { c.Summary = ptr(info.Summary + " · " + r) })
+				if m.isCurrent(id, conn) {
+					m.setState(id, func(c *Cluster) { c.Summary = ptr(info.Summary + " · " + r) })
+				}
 				return
 			}
 		}
@@ -578,7 +586,9 @@ func (m *Manager) onConnState(id string, s ConnectionState, err error) {
 func (m *Manager) onProbe(id string, ms int, err error) {
 	m.mu.Lock()
 	cur := m.state[id]
-	wasStale := cur != nil && cur.Connection == Reconnecting
+	// A probe that answers clears a lost watch and an expired credential alike
+	// (an exec plugin renews the token on the next request).
+	wasStale := cur != nil && (cur.Connection == Reconnecting || cur.Connection == AuthExpired)
 	if err == nil {
 		m.attempts[id] = 0
 	}
@@ -602,6 +612,9 @@ func (m *Manager) onProbe(id string, ms int, err error) {
 	if wasStale || (cur != nil && (cur.LatencyMs == nil || *cur.LatencyMs != ms)) {
 		m.setState(id, func(c *Cluster) {
 			c.LatencyMs = ptr(ms)
+			if c.Connection == AuthExpired {
+				c.Connection, c.AuthHint = Reconnecting, nil
+			}
 			if c.Connection != Reconnecting {
 				return
 			}

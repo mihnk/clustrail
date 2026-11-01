@@ -61,6 +61,22 @@ jobs:
       - name: Fuzz
         run: FUZZTIME=15s hack/fuzz.sh
 
+  # A real kube-apiserver and etcd (no kubelet): the connection must recover
+  # from a partition, 410 Gone, hanging requests, expired credentials and an
+  # API server restart; 30 connect/disconnect cycles must leave no goroutine
+  # and no heap growth behind.
+  envtest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Chaos and soak
+        run: hack/envtest.sh
+
   e2e:
     runs-on: ubuntu-24.04
     steps:

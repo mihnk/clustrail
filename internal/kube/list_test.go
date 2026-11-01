@@ -17,6 +17,7 @@ func TestListWithAConnectedContextReturns(t *testing.T) {
 	m.state["test"].Context, m.state["test"].Env = "test", EnvProd
 	c.env = func() Environment { return m.envOf("test") }
 	c.gitops = newGitOpsWatcher(c)
+	c.started.Store(true) // connected: List reads a connection's details once it has started
 	done := make(chan ClusterList, 1)
 	go func() { done <- m.List() }()
 	select {

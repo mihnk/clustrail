@@ -300,3 +300,19 @@ func TestDecodeReleaseRefusesAGzipBomb(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// A watch whose answer never begins is ended, so its informer tries again.
+func TestAWatchThatNeverAnswersIsEnded(t *testing.T) {
+	old := headerDeadline
+	headerDeadline = 150 * time.Millisecond
+	t.Cleanup(func() { headerDeadline = old })
+	s := newSlowServer(t)
+	c, _ := budgetClient(t, s.URL)
+	start := time.Now()
+	if err := get(context.Background(), c, s.URL+"/block?watch=true"); err == nil {
+		t.Fatal("a watch that never answers must fail")
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("took %v", d)
+	}
+}

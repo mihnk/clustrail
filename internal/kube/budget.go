@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -37,6 +38,14 @@ const (
 
 // requestDeadline is the default deadline of a short request (tests shorten it).
 var requestDeadline = 60 * time.Second
+
+// headerDeadline is how long a long-running request (a watch, a followed
+// log) may wait for the server to start answering. The stream itself may
+// last for hours, but a watch whose response never begins (a connection
+// that hung while the network was down) would otherwise block its informer
+// for good while the probe, on a fresh connection, reports the cluster as
+// connected.
+var headerDeadline = 30 * time.Second
 
 type budgetKey struct{}
 
@@ -98,7 +107,7 @@ func acquire(ctx context.Context, ch chan struct{}) error {
 
 func (t *budgetTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if longRunning(req) {
-		return t.next.RoundTrip(req)
+		return roundTripWithHeaderDeadline(t.next, req)
 	}
 	ctx := req.Context()
 	cancel := context.CancelFunc(func() {})
@@ -137,6 +146,27 @@ func (t *budgetTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	// The slot is held until the body is read and closed: that is when the request is done.
 	resp.Body = &releasingBody{ReadCloser: resp.Body, release: release}
+	return resp, nil
+}
+
+// roundTripWithHeaderDeadline cancels req if no response arrives within
+// headerDeadline; once it does, the request lives as long as its context.
+func roundTripWithHeaderDeadline(next http.RoundTripper, req *http.Request) (*http.Response, error) {
+	if strings.EqualFold(req.Header.Get("Connection"), "upgrade") || req.Header.Get("Upgrade") != "" {
+		return next.RoundTrip(req) // exec, attach, port forwarding: their own dialers time out
+	}
+	ctx, cancel := context.WithCancel(req.Context())
+	timer := time.AfterFunc(headerDeadline, cancel)
+	resp, err := next.RoundTrip(req.WithContext(ctx))
+	if !timer.Stop() && err != nil {
+		cancel()
+		return nil, fmt.Errorf("no answer within %s: %w", headerDeadline, err)
+	}
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	resp.Body = &releasingBody{ReadCloser: resp.Body, release: cancel}
 	return resp, nil
 }
 

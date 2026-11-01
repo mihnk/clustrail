@@ -2,41 +2,31 @@ package kube
 
 import (
 	"context"
-	"runtime"
-	"strings"
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
-// goroutinesSettle waits until the number of goroutines is back to at most
-// base+slack, and fails with the stacks of the extra ones if it is not.
-func goroutinesSettle(t *testing.T, base, slack int) {
+// noLeaks fails with the stacks of goroutines started since base that are
+// still running, after giving them up to 10 s to end (issue D3: Go tests
+// fail on a leaked goroutine, whatever its count).
+func noLeaks(t *testing.T, base goleak.Option) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		runtime.GC()
-		n := runtime.NumGoroutine()
-		if n <= base+slack {
+		err := goleak.Find(base)
+		if err == nil {
 			return
 		}
 		if time.Now().After(deadline) {
-			buf := make([]byte, 1<<20)
-			stacks := string(buf[:runtime.Stack(buf, true)])
-			// Only the stacks that run Clustrail's code: the leak's owner.
-			var ours []string
-			for _, g := range strings.Split(stacks, "\n\n") {
-				if strings.Contains(g, "clustrail/internal") && !strings.Contains(g, "goroutinesSettle") && !strings.Contains(g, "testing.tRunner") {
-					ours = append(ours, g)
-				}
-			}
-			t.Fatalf("%d goroutines, %d at the start (+%d allowed); still running:\n%s", n, base, slack, strings.Join(ours, "\n\n"))
+			t.Fatal(err)
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -51,8 +41,7 @@ func TestConnectDisconnectLeavesNoGoroutines(t *testing.T) {
 	cancel()
 	warm.stop()
 	time.Sleep(200 * time.Millisecond)
-	runtime.GC()
-	base := runtime.NumGoroutine()
+	base := goleak.IgnoreCurrent()
 
 	for range 50 {
 		c, _, _ := newFakeConn(t, pod("a", nil), &corev1.Node{})
@@ -64,7 +53,7 @@ func TestConnectDisconnectLeavesNoGoroutines(t *testing.T) {
 		cancel()
 		c.stop()
 	}
-	goroutinesSettle(t, base, 3)
+	noLeaks(t, base)
 }
 
 // Opening and closing log streams leaves no follower or flush loop behind.
@@ -79,8 +68,7 @@ func TestLogStreamsLeaveNoGoroutines(t *testing.T) {
 	m := managerWith(c, false)
 	m.streams = streams{logs: map[string]*logStream{}, exec: map[string]*execSession{}}
 	time.Sleep(100 * time.Millisecond)
-	runtime.GC()
-	base := runtime.NumGoroutine()
+	base := goleak.IgnoreCurrent()
 	for range 100 {
 		id, err := m.StartLogs(LogsRequest{Cluster: "test", Namespace: "payments", Pods: []string{"a"}})
 		if err != nil {
@@ -88,7 +76,7 @@ func TestLogStreamsLeaveNoGoroutines(t *testing.T) {
 		}
 		m.StopLogs(id)
 	}
-	goroutinesSettle(t, base, 3)
+	noLeaks(t, base)
 }
 
 // Starting and stopping list watches leaves no watch, stream or timer behind.
@@ -107,8 +95,7 @@ func TestListWatchesLeaveNoGoroutines(t *testing.T) {
 	}
 	m.StopListWatch(id)
 	time.Sleep(200 * time.Millisecond)
-	runtime.GC()
-	base := runtime.NumGoroutine()
+	base := goleak.IgnoreCurrent()
 	for range 100 {
 		id, err := m.StartListWatch("test", "ConfigMap", "")
 		if err != nil {
@@ -116,5 +103,5 @@ func TestListWatchesLeaveNoGoroutines(t *testing.T) {
 		}
 		m.StopListWatch(id)
 	}
-	goroutinesSettle(t, base, 3)
+	noLeaks(t, base)
 }

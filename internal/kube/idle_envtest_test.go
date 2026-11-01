@@ -53,8 +53,23 @@ func freeTCPPort(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
+// envCluster is etcd and a kube-apiserver with a static admin token; the
+// API server can be stopped and started again on the same port.
+type envCluster struct {
+	t            *testing.T
+	bins, dir    string
+	cport, aport int
+	host         string
+	api          *exec.Cmd
+	extraAPIArgs []string
+}
+
 // startEnvtest starts etcd and kube-apiserver with a static admin token.
-func startEnvtest(t *testing.T, bins string) string {
+func startEnvtest(t *testing.T, bins string, extraAPIArgs ...string) string {
+	return startEnvCluster(t, bins, extraAPIArgs...).host
+}
+
+func startEnvCluster(t *testing.T, bins string, extraAPIArgs ...string) *envCluster {
 	dir := t.TempDir()
 	cport, pport, aport := freeTCPPort(t), freeTCPPort(t), freeTCPPort(t)
 	etcd := exec.Command(filepath.Join(bins, "etcd"), "--data-dir", filepath.Join(dir, "etcd"),
@@ -75,33 +90,50 @@ func startEnvtest(t *testing.T, bins string) string {
 	pub, _ := x509.MarshalPKIXPublicKey(&key.PublicKey)
 	_ = os.WriteFile(filepath.Join(dir, "sa.key"), pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}), 0o600)
 	_ = os.WriteFile(filepath.Join(dir, "sa.pub"), pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pub}), 0o600)
-	api := exec.Command(filepath.Join(bins, "kube-apiserver"),
-		"--etcd-servers", fmt.Sprintf("http://127.0.0.1:%d", cport),
-		"--cert-dir", filepath.Join(dir, "certs"), "--secure-port", strconv.Itoa(aport), "--bind-address", "127.0.0.1",
-		"--authorization-mode=RBAC", "--token-auth-file", filepath.Join(dir, "tokens.csv"),
+	e := &envCluster{t: t, bins: bins, dir: dir, cport: cport, aport: aport, host: fmt.Sprintf("https://127.0.0.1:%d", aport), extraAPIArgs: extraAPIArgs}
+	e.startAPI()
+	t.Cleanup(e.stopAPI)
+	return e
+}
+
+// startAPI starts the API server and waits until it is ready.
+func (e *envCluster) startAPI() {
+	t := e.t
+	args := []string{
+		"--etcd-servers", fmt.Sprintf("http://127.0.0.1:%d", e.cport),
+		"--cert-dir", filepath.Join(e.dir, "certs"), "--secure-port", strconv.Itoa(e.aport), "--bind-address", "127.0.0.1",
+		"--authorization-mode=RBAC", "--token-auth-file", filepath.Join(e.dir, "tokens.csv"),
 		"--service-account-issuer", "https://kubernetes.default.svc", "--service-cluster-ip-range", "10.0.0.0/24",
-		"--service-account-key-file", filepath.Join(dir, "sa.pub"), "--service-account-signing-key-file", filepath.Join(dir, "sa.key"),
-		"--disable-admission-plugins=ServiceAccount")
-	log, _ := os.Create(filepath.Join(dir, "apiserver.log"))
-	api.Stdout, api.Stderr = log, log
-	if err := api.Start(); err != nil {
+		"--service-account-key-file", filepath.Join(e.dir, "sa.pub"), "--service-account-signing-key-file", filepath.Join(e.dir, "sa.key"),
+		"--disable-admission-plugins=ServiceAccount",
+	}
+	e.api = exec.Command(filepath.Join(e.bins, "kube-apiserver"), append(args, e.extraAPIArgs...)...)
+	log, _ := os.OpenFile(filepath.Join(e.dir, "apiserver.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	e.api.Stdout, e.api.Stderr = log, log
+	if err := e.api.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = api.Process.Kill(); _ = api.Wait() })
-	host := fmt.Sprintf("https://127.0.0.1:%d", aport)
 	hc := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, Timeout: 2 * time.Second}
 	for deadline := time.Now().Add(90 * time.Second); time.Now().Before(deadline); time.Sleep(300 * time.Millisecond) {
-		req, _ := http.NewRequest(http.MethodGet, host+"/readyz", nil)
+		req, _ := http.NewRequest(http.MethodGet, e.host+"/readyz", nil)
 		req.Header.Set("Authorization", "Bearer admintoken")
 		if r, err := hc.Do(req); err == nil {
 			r.Body.Close()
 			if r.StatusCode == http.StatusOK {
-				return host
+				return
 			}
 		}
 	}
 	t.Fatal("kube-apiserver did not become ready")
-	return ""
+}
+
+// stopAPI kills the API server (etcd keeps the data).
+func (e *envCluster) stopAPI() {
+	if e.api != nil && e.api.Process != nil {
+		_ = e.api.Process.Kill()
+		_ = e.api.Wait()
+		e.api = nil
+	}
 }
 
 func TestIdleConnectedCluster(t *testing.T) {
