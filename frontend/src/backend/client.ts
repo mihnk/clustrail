@@ -491,6 +491,29 @@ export interface ExpiryReport {
   notes: string[];
 }
 
+// Secret editing (internal/kube/secret_edit.go).
+export interface SecretEditInfo {
+  resourceVersion: string;
+  type: string;
+  keys: { key: string; bytes: number }[];
+  immutable?: boolean;
+  warning?: string;
+}
+
+export interface SecretEditValue {
+  value: string;
+  binary?: boolean;
+}
+
+export interface SecretUpdate {
+  cluster: string;
+  namespace: string;
+  name: string;
+  resourceVersion: string;
+  set: Record<string, SecretEditValue>;
+  remove: string[];
+}
+
 // Attach and local shell (internal/kube/streams.go, localshell.go).
 export interface AttachInfo {
   id: string;
@@ -1031,6 +1054,8 @@ export const backendApi = {
   getObject: (cluster: string, kind: string, ns: string, name: string) => call<LiveObjectInfo>("GetObject", cluster, kind, ns, name),
   revealSecretKey: (cluster: string, ns: string, name: string, key: string) =>
     call<{ value: string; binary: boolean }>("RevealSecretKey", cluster, ns, name, key),
+  secretForEdit: (cluster: string, ns: string, name: string) => call<SecretEditInfo>("SecretForEdit", cluster, ns, name),
+  updateSecret: (u: SecretUpdate) => call<string>("UpdateSecret", u),
   applyYaml: (cluster: string, text: string, openedVersion: string, dryRun: boolean, force: boolean) =>
     call<ApplyResult>("ApplyYAML", cluster, text, openedVersion, dryRun, force),
 

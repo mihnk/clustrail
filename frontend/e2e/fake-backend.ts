@@ -121,6 +121,10 @@ function answer(d: ReturnType<typeof data>, method: string, args: Args): unknown
       return [{ kind: "CronJob", name: "my-cronjob", namespace: "default", status: args[2] ? "valid" : "created" }];
     case "RevealSecretKey":
       return { value: "hunter2", binary: false };
+    case "SecretForEdit":
+      return { resourceVersion: "1", type: "Opaque", keys: [{ key: "password", bytes: 7 }] };
+    case "UpdateSecret":
+      return "2";
     case "ListResources": {
       const [cluster, kind] = args as [string, string];
       if (kind === "Secret")

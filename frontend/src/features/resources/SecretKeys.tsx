@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, KeyRound, Pencil } from "lucide-react";
+import { useWorkspace } from "@/app/workspace";
+import { SecretEditor } from "./SecretEditor";
 import { backend, errorText } from "@/backend/client";
 import { Button, IconButton } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -36,9 +38,14 @@ export function SecretKeys({
   const kind = given ? type : (q.data?.secret?.type ?? type);
   const [shown, setShown] = useState<Record<string, { value: string; binary: boolean } | { error: string }>>({});
   const [copied, setCopied] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const readOnly = useWorkspace().clusterById(cluster)?.readOnly;
 
-  // Revealed values belong to one Secret.
-  useEffect(() => setShown({}), [cluster, namespace, name]);
+  // Revealed values and the editor belong to one Secret.
+  useEffect(() => {
+    setShown({});
+    setEditing(false);
+  }, [cluster, namespace, name]);
 
   const reveal = (key: string) => {
     if (!backend) return;
@@ -55,12 +62,32 @@ export function SecretKeys({
     });
 
   if (keys === null) return <p className="m-0 text-ui text-fg-muted">{t("Reading keys…")}</p>;
+  if (editing)
+    return (
+      <div className={className}>
+        <SecretEditor
+          cluster={cluster}
+          namespace={namespace}
+          name={name}
+          onDone={() => {
+            setEditing(false);
+            setShown({});
+            q.refresh();
+          }}
+        />
+      </div>
+    );
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <span className="flex items-center gap-1.5 text-meta text-fg-muted">
         <KeyRound className="size-3.5" aria-hidden />
         {t(keys.length === 1 ? "1 key" : "{n} keys", { n: keys.length })}
-        {kind ? ` · ${kind}` : ""}{" "}{t("· values hidden until you show one")}</span>
+        {kind ? ` · ${kind}` : ""}{" "}{t("· values hidden until you show one")}
+        <Button size="sm" variant="ghost" className="ml-auto" disabled={!backend || readOnly} title={readOnly ? t("Read-only context") : undefined} onClick={() => setEditing(true)}>
+          <Pencil aria-hidden />
+          {t("Edit")}
+        </Button>
+      </span>
       {keys.map((k) => {
         const v = shown[k.key];
         return (

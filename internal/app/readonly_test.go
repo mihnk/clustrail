@@ -19,7 +19,7 @@ var changesCluster = []string{
 	"RestartWorkload", "ScaleWorkload", "TriggerCronJob", "SetCronJobSuspended",
 	"UpgradeRelease", "RollbackRelease", "InstallRelease", "UninstallRelease",
 	"AddDebugContainer", "StartNodeShell", "StartPortForward", "StartExec", "StartAttach", "StartLocalShell",
-	"CreateObjects", "ApplyYAML", "DeleteResource",
+	"CreateObjects", "ApplyYAML", "DeleteResource", "UpdateSecret",
 	"RefreshGitOps", "SyncGitOps", "SetGitOpsSuspended",
 }
 
@@ -47,7 +47,7 @@ var allowedReadOnly = []string{
 	// Reading
 	"Namespaces", "PodDetail", "Events", "WhoCan", "WorkloadReplicas", "JobStatus", "ClusterWarnings", "AccessMatrix",
 	"WarningCount", "Expiry", "APIRemovals", "KnownAPIRemovals", "Quotas", "PodContainers", "HelmUpgradeSource", "ServiceChain", "Storage", "PodNetworkPolicies",
-	"CheckConnection", "GetObject", "RevealSecretKey", "PortForwards", "ForwardablePorts", "ResourceKinds",
+	"CheckConnection", "GetObject", "RevealSecretKey", "SecretForEdit", "PortForwards", "ForwardablePorts", "ResourceKinds",
 	"ListResources", "StartListWatch", "StopListWatch", "StartLogs", "StopLogs", "HelmRevision",
 	"DeploymentRelations",
 	// Planning: nothing is changed

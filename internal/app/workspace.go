@@ -207,6 +207,14 @@ func (w *Workspace) APIRemovals(cluster string) (kube.APIRemovalReport, error) {
 // KnownAPIRemovals is the removal table itself (Kubernetes' lifecycle tags).
 func (w *Workspace) KnownAPIRemovals() []kube.APIRemoval { return kube.KnownAPIRemovals() }
 
+// SecretForEdit reads a Secret's keys (no values) and what limits an edit.
+func (w *Workspace) SecretForEdit(cluster, ns, name string) (kube.SecretEditInfo, error) {
+	return w.m.SecretForEdit(cluster, ns, name)
+}
+
+// UpdateSecret saves changed, added and removed keys; refused on read-only contexts.
+func (w *Workspace) UpdateSecret(u kube.SecretUpdate) (string, error) { return w.m.UpdateSecret(u) }
+
 // StartAttach attaches to a container's main process; refused on read-only contexts.
 func (w *Workspace) StartAttach(req kube.ExecRequest) (kube.AttachInfo, error) {
 	return w.m.StartAttach(req)
