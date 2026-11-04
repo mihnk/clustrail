@@ -110,10 +110,18 @@ func TestLocalShellRunsWithTheContext(t *testing.T) {
 	}
 	m.store = store
 	m.streams = streams{logs: map[string]*logStream{}, exec: map[string]*execSession{}}
-	m.kc = &Kubeconfig{Merged: clientcmdapi.NewConfig()}
-	m.kc.Merged.Clusters["c"] = &clientcmdapi.Cluster{Server: "https://c:6443"}
-	m.kc.Merged.AuthInfos["u"] = &clientcmdapi.AuthInfo{Token: "t"}
-	m.kc.Merged.Contexts["ctx-a"] = &clientcmdapi.Context{Cluster: "c", AuthInfo: "u"}
+	// The test's own kubeconfig, whatever KUBECONFIG the machine running the
+	// tests has: the manager reloads when the files it was built from change.
+	kubeconfig := filepath.Join(cache, "kubeconfig")
+	raw := "apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster: {server: 'https://c:6443'}\nusers:\n- name: u\n  user: {token: t}\ncontexts:\n- name: ctx-a\n  context: {cluster: c, user: u}\n"
+	if err := os.WriteFile(kubeconfig, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KUBECONFIG", kubeconfig)
+	m.kc = LoadKubeconfig(nil)
+	if m.kc.Changed(nil) {
+		t.Fatal("a kubeconfig just loaded reads as changed")
+	}
 	m.state["test"].Context = "ctx-a"
 
 	// A leftover from a crash is removed at the next start.
@@ -131,7 +139,8 @@ func TestLocalShellRunsWithTheContext(t *testing.T) {
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
 		t.Fatal("stale kubeconfig kept")
 	}
-	if err := m.ExecInput(info.ID, "grep -c ctx-a \"$KUBECONFIG\"; stat -c %a \"$KUBECONFIG\" 2>/dev/null || stat -f %Lp \"$KUBECONFIG\"; exit 3\n"); err != nil {
+	// Markers the echoed input cannot contain: the typed text has the commands, not their results.
+	if err := m.ExecInput(info.ID, "echo \"CTX=$(grep -c 'current-context: ctx-a' \"$KUBECONFIG\")\"; echo \"MODE=$(stat -c %a \"$KUBECONFIG\" 2>/dev/null || stat -f %Lp \"$KUBECONFIG\")\"; echo \"KC=$KUBECONFIG\"; exit 3\n"); err != nil {
 		t.Fatal(err)
 	}
 	var out string
@@ -144,11 +153,15 @@ func TestLocalShellRunsWithTheContext(t *testing.T) {
 	if exit == nil || *exit != 3 {
 		t.Fatalf("exit = %v, output %q", exit, out)
 	}
-	if !strings.Contains(out, "\n3") && !strings.Contains(out, "3\r\n") {
+	if !strings.Contains(out, "CTX=1") {
 		t.Fatalf("the shell did not see the context in $KUBECONFIG: %q", out)
 	}
-	if !strings.Contains(out, "600") {
+	if !strings.Contains(out, "MODE=600") {
 		t.Fatalf("kubeconfig mode not 600: %q", out)
+	}
+	// $KUBECONFIG in the shell is the temporary file, not the test's (or the user's) own.
+	if !strings.Contains(out, "KC="+localShellDir()+string(filepath.Separator)+"kubeconfig-") {
+		t.Fatalf("$KUBECONFIG is not the temporary file under %s: %q", localShellDir(), out)
 	}
 	// The file is gone once the shell ended.
 	entries, _ := os.ReadDir(localShellDir())
